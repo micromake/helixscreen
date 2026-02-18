@@ -90,6 +90,19 @@ class ProbeOverlay : public OverlayBase {
     lv_subject_t probe_accuracy_result_{};
     lv_subject_t probe_accuracy_visible_{};
 
+    // Cartographer subjects
+    char probe_carto_coil_temp_buf_[32] = {};
+    lv_subject_t probe_carto_coil_temp_{};
+
+    // Beacon subjects
+    char probe_beacon_temp_buf_[32] = {};
+    lv_subject_t probe_beacon_temp_{};
+    char probe_beacon_temp_comp_status_buf_[32] = {};
+    lv_subject_t probe_beacon_temp_comp_status_{};
+
+    // Klicky subject (1 if klicky type detected, 0 otherwise)
+    lv_subject_t probe_is_klicky_{};
+
     // Widget/client references
     lv_obj_t* parent_screen_ = nullptr;
     MoonrakerAPI* api_ = nullptr;

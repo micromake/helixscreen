@@ -136,6 +136,30 @@ void ui_probe_overlay_register_callbacks() {
          }},
     });
 
+    // Cartographer controls
+    lv_xml_register_event_cb(nullptr, "on_carto_calibrate", [](lv_event_t* /*e*/) {
+        send_probe_gcode("CARTOGRAPHER_CALIBRATE", "Cartographer Calibrate");
+    });
+    lv_xml_register_event_cb(nullptr, "on_carto_touch_cal", [](lv_event_t* /*e*/) {
+        send_probe_gcode("CARTOGRAPHER_TOUCH_CALIBRATE", "Cartographer Touch Calibrate");
+    });
+
+    // Beacon controls
+    lv_xml_register_event_cb(nullptr, "on_beacon_calibrate", [](lv_event_t* /*e*/) {
+        send_probe_gcode("BEACON_CALIBRATE", "Beacon Calibrate");
+    });
+    lv_xml_register_event_cb(nullptr, "on_beacon_auto_cal", [](lv_event_t* /*e*/) {
+        send_probe_gcode("BEACON_AUTO_CALIBRATE", "Beacon Auto-Calibrate");
+    });
+
+    // Klicky controls
+    lv_xml_register_event_cb(nullptr, "on_klicky_deploy", [](lv_event_t* /*e*/) {
+        send_probe_gcode("ATTACH_PROBE", "Klicky Deploy");
+    });
+    lv_xml_register_event_cb(nullptr, "on_klicky_dock", [](lv_event_t* /*e*/) {
+        send_probe_gcode("DOCK_PROBE", "Klicky Dock");
+    });
+
     spdlog::trace("[Probe] Event callbacks registered");
 }
 
@@ -163,6 +187,19 @@ void ProbeOverlay::init_subjects() {
     UI_MANAGED_SUBJECT_STRING(probe_accuracy_result_, probe_accuracy_result_buf_, "",
                               "probe_accuracy_result", subjects_);
     UI_MANAGED_SUBJECT_INT(probe_accuracy_visible_, 0, "probe_accuracy_visible", subjects_);
+
+    // Cartographer subjects
+    UI_MANAGED_SUBJECT_STRING(probe_carto_coil_temp_, probe_carto_coil_temp_buf_, "--",
+                              "probe_carto_coil_temp", subjects_);
+
+    // Beacon subjects
+    UI_MANAGED_SUBJECT_STRING(probe_beacon_temp_, probe_beacon_temp_buf_, "--", "probe_beacon_temp",
+                              subjects_);
+    UI_MANAGED_SUBJECT_STRING(probe_beacon_temp_comp_status_, probe_beacon_temp_comp_status_buf_,
+                              "--", "probe_beacon_temp_comp_status", subjects_);
+
+    // Klicky detection subject
+    UI_MANAGED_SUBJECT_INT(probe_is_klicky_, 0, "probe_is_klicky", subjects_);
 
     subjects_initialized_ = true;
     spdlog::trace("[Probe] Subjects initialized");
@@ -296,6 +333,24 @@ void ProbeOverlay::update_display_subjects() {
     float z_offset = mgr.get_z_offset();
     snprintf(probe_z_offset_display_buf_, sizeof(probe_z_offset_display_buf_), "%.3fmm", z_offset);
     lv_subject_copy_string(&probe_z_offset_display_, probe_z_offset_display_buf_);
+
+    // Set Klicky detection flag for generic panel visibility binding
+    lv_subject_set_int(&probe_is_klicky_, sensor.type == ProbeSensorType::KLICKY ? 1 : 0);
+
+    // Cartographer coil temperature (placeholder until live query)
+    if (sensor.type == ProbeSensorType::CARTOGRAPHER) {
+        snprintf(probe_carto_coil_temp_buf_, sizeof(probe_carto_coil_temp_buf_), "--");
+        lv_subject_copy_string(&probe_carto_coil_temp_, probe_carto_coil_temp_buf_);
+    }
+
+    // Beacon sensor temperature (placeholder until live query)
+    if (sensor.type == ProbeSensorType::BEACON) {
+        snprintf(probe_beacon_temp_buf_, sizeof(probe_beacon_temp_buf_), "--");
+        lv_subject_copy_string(&probe_beacon_temp_, probe_beacon_temp_buf_);
+        snprintf(probe_beacon_temp_comp_status_buf_, sizeof(probe_beacon_temp_comp_status_buf_),
+                 "Unknown");
+        lv_subject_copy_string(&probe_beacon_temp_comp_status_, probe_beacon_temp_comp_status_buf_);
+    }
 }
 
 // ============================================================================
