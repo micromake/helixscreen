@@ -330,6 +330,18 @@ void ui_filament_path_canvas_set_heat_active(lv_obj_t* obj, bool active);
 void ui_filament_path_canvas_set_buffer_fault_state(lv_obj_t* obj, int state);
 
 /**
+ * @brief Set buffer element info (presence and state)
+ *
+ * Shows a small buffer/spring icon on the path between hub output and toolhead.
+ * Used for AFC TurtleNeck buffers and Happy Hare sync feedback (eSpooler).
+ *
+ * @param obj The filament_path_canvas widget
+ * @param present true to draw the buffer element
+ * @param state 0=neutral (even coil), 1=compressed (tight coil), 2=tension (stretched coil)
+ */
+void ui_filament_path_canvas_set_buffer_info(lv_obj_t* obj, bool present, int state);
+
+/**
  * @brief Set bypass entry filament color
  * @param obj The filament_path_canvas widget
  * @param color RGB color (0xRRGGBB) for bypass filament
