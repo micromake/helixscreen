@@ -106,35 +106,40 @@ static void register_color_picker_responsive_constants() {
  */
 static void register_color_picker_component_constants() {
     lv_display_t* display = lv_display_get_default();
-    int32_t hor_res = lv_display_get_horizontal_resolution(display);
     int32_t ver_res = lv_display_get_vertical_resolution(display);
-    int32_t greater_res = LV_MAX(hor_res, ver_res);
 
-    const char* swatch_size;
-    const char* sv_size;
-    const char* hue_height;
-    if (greater_res <= UI_BREAKPOINT_SMALL_MAX) {
-        swatch_size = "28";
-        sv_size = "140";
-        hue_height = "16";
-    } else if (greater_res <= UI_BREAKPOINT_MEDIUM_MAX) {
-        swatch_size = "32";
-        sv_size = "180";
-        hue_height = "20";
+    // Swatch size: smaller on compact screens
+    const char* swatch_size = ver_res <= UI_BREAKPOINT_SMALL_MAX ? "28" : "32";
+
+    // HSV picker: size proportionally to screen height
+    // On TINY (full-screen modal), chrome is ~142px (header+tabs+padding+dividers+buttons)
+    // On larger screens (modal popup), use ~38% of screen height
+    static char sv_buf[8];
+    static char hue_buf[8];
+    int32_t computed_sv;
+    if (ver_res <= UI_BREAKPOINT_TINY_MAX) {
+        // Full-screen: fill available vertical space
+        // Chrome: header(48) + divider(1) + tabs(36) + content pad(16) + spacer divider(1) + buttons(40)
+        constexpr int32_t chrome = 142;
+        int32_t available = ver_res - chrome;
+        // sv_size + gap(4) + hue_height, where hue = sv/8
+        computed_sv = (available - 4) * 8 / 9;
     } else {
-        swatch_size = "32";
-        sv_size = "180";
-        hue_height = "20";
+        computed_sv = ver_res * 38 / 100;
     }
+    computed_sv = LV_CLAMP(48, computed_sv, 240);
+    int32_t computed_hue = LV_MAX(computed_sv / 9, 8);
+    snprintf(sv_buf, sizeof(sv_buf), "%d", computed_sv);
+    snprintf(hue_buf, sizeof(hue_buf), "%d", computed_hue);
 
     lv_xml_component_scope_t* scope = lv_xml_component_get_scope("color_picker");
     if (scope) {
         lv_xml_register_const(scope, "swatch_size", swatch_size);
-        lv_xml_register_const(scope, "sv_size", sv_size);
-        lv_xml_register_const(scope, "hue_height", hue_height);
+        lv_xml_register_const(scope, "sv_size", sv_buf);
+        lv_xml_register_const(scope, "hue_height", hue_buf);
         spdlog::debug("[Color Picker] Registered swatch_size={}, sv_size={}, hue_height={} "
-                      "for screen {}px",
-                      swatch_size, sv_size, hue_height, greater_res);
+                      "for height {}px",
+                      swatch_size, sv_buf, hue_buf, ver_res);
     }
 }
 

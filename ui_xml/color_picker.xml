@@ -467,6 +467,10 @@
       </lv_obj>
     </lv_obj>
 
+    <!-- Flex spacer to push buttons to bottom on TINY (full-screen) -->
+    <lv_obj flex_grow="1" scrollable="false">
+      <bind_flag_if_not_eq subject="ui_breakpoint" flag="hidden" ref_value="0"/>
+    </lv_obj>
     <!-- Horizontal divider above buttons -->
     <divider_horizontal/>
     <!-- Action buttons row -->
