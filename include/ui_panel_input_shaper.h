@@ -113,6 +113,11 @@ class InputShaperPanel : public OverlayBase {
      */
     void cleanup() override;
 
+    /**
+     * @brief Null widget pointers after destroy-on-close
+     */
+    void on_ui_destroyed() override;
+
     //
     // === Public API ===
     //

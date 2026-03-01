@@ -1,0 +1,70 @@
+<?xml version="1.0"?>
+<!-- Copyright (C) 2025-2026 356C LLC -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Material Temperature Settings Overlay -->
+<!-- Two-view overlay: scrollable material list → edit form for a selected material -->
+<component>
+  <view name="material_temps_overlay"
+        extends="overlay_panel" width="#overlay_panel_width_full" title="Material Temperatures" title_tag="Material Temperatures"
+        bg_color="#screen_bg">
+    <!-- Content Area -->
+    <lv_obj name="overlay_content" width="100%" flex_grow="1" style_pad_top="0" style_pad_left="#space_lg" style_pad_right="#space_lg" style_pad_bottom="#space_lg" scrollable="false" flex_flow="column">
+      <!-- Column header (fixed, doesn't scroll) -->
+      <lv_obj name="material_list_header" width="100%" height="content" scrollable="false" flex_flow="row"
+              style_pad_left="#space_sm" style_pad_right="#space_sm" style_pad_top="#space_sm" style_pad_bottom="#space_xs" style_pad_gap="0">
+        <bind_flag_if_not_eq subject="material_editing" flag="hidden" ref_value="0"/>
+        <text_muted text="Material" text_tag="Material" flex_grow="1"/>
+        <text_muted text="Nozzle / Bed" text_tag="Nozzle / Bed"/>
+      </lv_obj>
+      <divider_horizontal name="material_list_divider">
+        <bind_flag_if_not_eq subject="material_editing" flag="hidden" ref_value="0"/>
+      </divider_horizontal>
+      <!-- ================================================================== -->
+      <!-- LIST VIEW (shown when not editing) -->
+      <!-- ================================================================== -->
+      <lv_obj name="material_list_view" width="100%" flex_grow="1" scrollable="true" flex_flow="column" style_pad_all="0" style_pad_gap="0">
+        <bind_flag_if_not_eq subject="material_editing" flag="hidden" ref_value="0"/>
+        <!-- Populated programmatically with material rows -->
+      </lv_obj>
+      <!-- ================================================================== -->
+      <!-- EDIT VIEW (shown when editing a material) -->
+      <!-- ================================================================== -->
+      <lv_obj name="material_edit_view" width="100%" flex_grow="1" scrollable="false" flex_flow="column" style_pad_all="0">
+        <bind_flag_if_eq subject="material_editing" flag="hidden" ref_value="0"/>
+        <!-- Material name heading -->
+        <text_heading name="edit_material_name" bind_text="material_edit_name" style_pad_bottom="#space_sm"/>
+        <!-- Default values hint -->
+        <text_small name="edit_defaults_hint" bind_text="material_edit_defaults" style_text_color="#text_secondary" style_pad_bottom="#space_lg"/>
+        <!-- Nozzle Min / Nozzle Max / Bed Temp (three-column row) -->
+        <lv_obj width="100%" flex_flow="row" style_pad_all="0" style_pad_gap="#space_lg" scrollable="false">
+          <!-- Nozzle Min column -->
+          <lv_obj flex_grow="1" flex_flow="column" style_pad_all="0" scrollable="false">
+            <text_body style_pad_bottom="#space_xs" text="Nozzle Min (°C)" text_tag="Nozzle Min (°C)"/>
+            <text_input name="edit_nozzle_min" width="120" input_type="number" max_length="4"/>
+          </lv_obj>
+          <!-- Nozzle Max column -->
+          <lv_obj flex_grow="1" flex_flow="column" style_pad_all="0" scrollable="false">
+            <text_body style_pad_bottom="#space_xs" text="Nozzle Max (°C)" text_tag="Nozzle Max (°C)"/>
+            <text_input name="edit_nozzle_max" width="120" input_type="number" max_length="4"/>
+          </lv_obj>
+          <!-- Bed Temp column -->
+          <lv_obj flex_grow="1" flex_flow="column" style_pad_all="0" scrollable="false">
+            <text_body style_pad_bottom="#space_xs" text="Bed Temp (°C)" text_tag="Bed Temp (°C)"/>
+            <text_input name="edit_bed_temp" width="120" input_type="number" max_length="4"/>
+          </lv_obj>
+        </lv_obj>
+        <!-- Flex spacer pushes buttons to bottom -->
+        <lv_obj width="1" flex_grow="1" scrollable="false" style_pad_all="0"/>
+        <!-- Button row -->
+        <lv_obj width="100%" flex_flow="row" style_pad_all="0" style_pad_gap="#space_md" scrollable="false">
+          <ui_button name="btn_reset_defaults" variant="secondary" text="Reset to Default" text_tag="Reset to Default" flex_grow="1">
+            <event_cb trigger="clicked" callback="on_material_reset_defaults"/>
+          </ui_button>
+          <ui_button name="btn_save_material" variant="primary" text="Save" text_tag="Save" flex_grow="1">
+            <event_cb trigger="clicked" callback="on_material_save"/>
+          </ui_button>
+        </lv_obj>
+      </lv_obj>
+    </lv_obj>
+  </view>
+</component>

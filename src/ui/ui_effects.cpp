@@ -3,6 +3,7 @@
 
 #include "ui_effects.h"
 
+#include "backdrop_blur.h"
 #include "display_settings_manager.h"
 #include "theme_manager.h"
 
@@ -82,12 +83,58 @@ void create_ripple(lv_obj_t* parent, lv_coord_t x, lv_coord_t y, int start_size,
     lv_anim_start(&fade_anim);
 }
 
+void flash_object(lv_obj_t* obj, int32_t duration_ms) {
+    if (!obj) {
+        return;
+    }
+
+    if (!helix::DisplaySettingsManager::instance().get_animations_enabled()) {
+        return;
+    }
+
+    // Flash bright red and scale up from center, then ease back to normal
+    lv_obj_set_style_text_color(obj, lv_color_hex(0xFF3333), 0);
+
+    // Set transform pivot to center so scaling is symmetrical
+    lv_obj_set_style_transform_pivot_x(obj, LV_PCT(50), 0);
+    lv_obj_set_style_transform_pivot_y(obj, LV_PCT(50), 0);
+
+    // Animate scale from 1.5x → 1.0x (256 = 100% in LVGL scale units)
+    lv_anim_t scale_anim;
+    lv_anim_init(&scale_anim);
+    lv_anim_set_var(&scale_anim, obj);
+    lv_anim_set_values(&scale_anim, 384, 256);
+    lv_anim_set_duration(&scale_anim, duration_ms);
+    lv_anim_set_path_cb(&scale_anim, lv_anim_path_ease_out);
+    lv_anim_set_exec_cb(&scale_anim, [](void* var, int32_t scale) {
+        auto* o = static_cast<lv_obj_t*>(var);
+        lv_obj_set_style_transform_scale(o, scale, 0);
+    });
+    lv_anim_set_completed_cb(&scale_anim, [](lv_anim_t* a) {
+        auto* o = static_cast<lv_obj_t*>(a->var);
+        lv_obj_remove_local_style_prop(o, LV_STYLE_TRANSFORM_SCALE_X, LV_PART_MAIN);
+        lv_obj_remove_local_style_prop(o, LV_STYLE_TRANSFORM_SCALE_Y, LV_PART_MAIN);
+        lv_obj_remove_local_style_prop(o, LV_STYLE_TRANSFORM_PIVOT_X, LV_PART_MAIN);
+        lv_obj_remove_local_style_prop(o, LV_STYLE_TRANSFORM_PIVOT_Y, LV_PART_MAIN);
+        lv_obj_remove_local_style_prop(o, LV_STYLE_TEXT_COLOR, LV_PART_MAIN);
+    });
+    lv_anim_start(&scale_anim);
+}
+
 lv_obj_t* create_fullscreen_backdrop(lv_obj_t* parent, lv_opa_t opacity) {
     if (!parent) {
         spdlog::error("[UI Effects] Cannot create backdrop: parent is null");
         return nullptr;
     }
 
+    // Try blurred backdrop first (snapshot + blur + image widget)
+    lv_obj_t* blurred = create_blurred_backdrop(parent, opacity);
+    if (blurred) {
+        spdlog::trace("[UI Effects] Created blurred backdrop with opacity {}", opacity);
+        return blurred;
+    }
+
+    // Fallback: plain dark rectangle
     lv_obj_t* backdrop = lv_obj_create(parent);
     lv_obj_set_size(backdrop, LV_PCT(100), LV_PCT(100));
     lv_obj_align(backdrop, LV_ALIGN_CENTER, 0, 0);
@@ -99,7 +146,7 @@ lv_obj_t* create_fullscreen_backdrop(lv_obj_t* parent, lv_opa_t opacity) {
     lv_obj_add_flag(backdrop, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_remove_flag(backdrop, LV_OBJ_FLAG_SCROLLABLE);
 
-    spdlog::trace("[UI Effects] Created fullscreen backdrop with opacity {}", opacity);
+    spdlog::trace("[UI Effects] Created plain backdrop with opacity {}", opacity);
     return backdrop;
 }
 

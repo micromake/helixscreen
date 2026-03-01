@@ -26,6 +26,9 @@ ifneq ($(UNAME_S),Darwin)
     # Linux: may need DRM/input libraries
     ifeq ($(DISPLAY_BACKEND),drm)
         SPLASH_LDFLAGS += -ldrm -linput
+        ifeq ($(ENABLE_OPENGLES),yes)
+            SPLASH_LDFLAGS += -lEGL -lGLESv2 -lgbm -ldl
+        endif
     endif
 endif
 
@@ -73,9 +76,9 @@ $(BUILD_DIR)/splash/ui_notification_stub.o: tools/ui_notification_stub.cpp $(LIB
 # Dependencies: splash object, display library, LVGL objects (compiled from source), fonts
 # Note: Use --whole-archive for DISPLAY_LIB to prevent LTO from stripping create_auto()
 # which is called internally through create() but not directly referenced.
-$(SPLASH_BIN): $(SPLASH_OBJ) $(DISPLAY_LIB) $(LVGL_OBJS) $(THORVG_OBJS) $(FONT_OBJS) $(SPLASH_EXTRA_OBJS) | $(BUILD_DIR)/bin
+$(SPLASH_BIN): $(SPLASH_OBJ) $(DISPLAY_LIB) $(LVGL_OBJS) $(LVGL_OPENGLES_OBJS) $(THORVG_OBJS) $(FONT_OBJS) $(SPLASH_EXTRA_OBJS) | $(BUILD_DIR)/bin
 	@echo "[LD] $@"
-	$(Q)$(CXX) $(SPLASH_OBJ) -Wl,--whole-archive $(DISPLAY_LIB) -Wl,--no-whole-archive $(LVGL_OBJS) $(THORVG_OBJS) $(FONT_OBJS) $(SPLASH_EXTRA_OBJS) -o $@ $(SPLASH_LDFLAGS)
+	$(Q)$(CXX) $(SPLASH_OBJ) -Wl,--whole-archive $(DISPLAY_LIB) -Wl,--no-whole-archive $(LVGL_OBJS) $(LVGL_OPENGLES_OBJS) $(THORVG_OBJS) $(FONT_OBJS) $(SPLASH_EXTRA_OBJS) -o $@ $(SPLASH_LDFLAGS)
 
 # Create build directories
 $(BUILD_DIR)/splash $(BUILD_DIR)/bin:

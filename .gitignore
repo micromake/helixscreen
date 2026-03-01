@@ -71,6 +71,8 @@ IMPLEMENTATION_PLAN.md
 
 # Claude plugin local config
 .claude/*.local.md
+.claude/worktrees/
+.claude-recall/.gitignore
 
 # OpenCode local state
 .opencode/state/
@@ -128,4 +130,5 @@ config/helixconfig.json.voronv2
 .telemetry-data/
 .env.telemetry
 config/crash_report.txt
+config/crash.txt
 config/tool_spools.json

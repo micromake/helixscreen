@@ -153,6 +153,8 @@ AmsSystemInfo AmsBackendAfc::get_system_info() const {
     info.current_slot = system_info_.current_slot;
     info.current_tool = system_info_.current_tool;
     info.pending_target_slot = system_info_.pending_target_slot;
+    info.current_toolchange = system_info_.current_toolchange;
+    info.number_of_toolchanges = system_info_.number_of_toolchanges;
     info.filament_loaded = system_info_.filament_loaded;
     info.supports_endless_spool = system_info_.supports_endless_spool;
     info.supports_tool_mapping = system_info_.supports_tool_mapping;
@@ -489,7 +491,7 @@ void AmsBackendAfc::handle_status_update(const nlohmann::json& notification) {
             }
         }
 
-        // Parse unit-level Klipper objects (AFC_BoxTurtle, AFC_OpenAMS)
+        // Parse unit-level Klipper objects (AFC_BoxTurtle, AFC_OpenAMS, AFC_vivid)
         for (auto& unit_info : unit_infos_) {
             if (params.contains(unit_info.klipper_key) &&
                 params[unit_info.klipper_key].is_object()) {
@@ -523,15 +525,22 @@ void AmsBackendAfc::parse_afc_state(const nlohmann::json& afc_data,
         int slot_index = slots_.index_of(loaded_lane);
         if (slot_index >= 0) {
             system_info_.current_slot = slot_index;
+            // Derive current_tool from slot's mapped tool
+            int mapped = slots_.tool_for_slot(slot_index);
+            if (mapped >= 0) {
+                system_info_.current_tool = mapped;
+                spdlog::trace("[AMS AFC] Derived current_tool T{} from slot {}", mapped,
+                              slot_index);
+            }
             spdlog::trace("[AMS AFC] Current lane: {} (slot {})", loaded_lane,
                           system_info_.current_slot);
         }
     }
 
-    // Parse current tool
+    // Explicit current_tool from firmware overrides derived value
     if (afc_data.contains("current_tool") && afc_data["current_tool"].is_number_integer()) {
         system_info_.current_tool = afc_data["current_tool"].get<int>();
-        spdlog::trace("[AMS AFC] Current tool: {}", system_info_.current_tool);
+        spdlog::trace("[AMS AFC] Current tool (explicit): {}", system_info_.current_tool);
     }
 
     // Parse filament loaded state — try explicit field first, derive from current_load
@@ -547,6 +556,7 @@ void AmsBackendAfc::parse_afc_state(const nlohmann::json& afc_data,
         // current_load went null (unloaded) — clear filament state
         system_info_.filament_loaded = false;
         system_info_.current_slot = -1;
+        system_info_.current_tool = -1;
         spdlog::trace("[AMS AFC] Filament unloaded (current_load=null)");
     }
 
@@ -566,6 +576,18 @@ void AmsBackendAfc::parse_afc_state(const nlohmann::json& afc_data,
         system_info_.operation_detail = state_str;
         spdlog::trace("[AMS AFC] Current state: {} ({})", ams_action_to_string(system_info_.action),
                       state_str);
+    }
+
+    // Parse tool change progress (AFC tracks swap count during multi-color prints)
+    if (afc_data.contains("current_toolchange") &&
+        afc_data["current_toolchange"].is_number_integer()) {
+        system_info_.current_toolchange = afc_data["current_toolchange"].get<int>();
+        spdlog::trace("[AMS AFC] Current toolchange: {}", system_info_.current_toolchange);
+    }
+    if (afc_data.contains("number_of_toolchanges") &&
+        afc_data["number_of_toolchanges"].is_number_integer()) {
+        system_info_.number_of_toolchanges = afc_data["number_of_toolchanges"].get<int>();
+        spdlog::trace("[AMS AFC] Total toolchanges: {}", system_info_.number_of_toolchanges);
     }
 
     // Parse message object for operation detail, error events, and toast notifications
@@ -669,11 +691,17 @@ void AmsBackendAfc::parse_afc_state(const nlohmann::json& afc_data,
                     info.name = unit_str.substr(space_pos + 1);
                     // AFC convention: Klipper object prefix is "AFC_" + type with underscores
                     // removed. Known mappings: "Box_Turtle" → "AFC_BoxTurtle", "OpenAMS" →
-                    // "AFC_OpenAMS" If this convention breaks for future types, use an explicit
-                    // mapping table.
-                    std::string klipper_type = info.type;
-                    klipper_type.erase(std::remove(klipper_type.begin(), klipper_type.end(), '_'),
-                                       klipper_type.end());
+                    // "AFC_OpenAMS". Exception: "ViViD" → "AFC_vivid" (Klipper filename is
+                    // lowercase, doesn't follow the strip-underscore convention).
+                    std::string klipper_type;
+                    if (info.type == "ViViD") {
+                        klipper_type = "vivid";
+                    } else {
+                        klipper_type = info.type;
+                        klipper_type.erase(
+                            std::remove(klipper_type.begin(), klipper_type.end(), '_'),
+                            klipper_type.end());
+                    }
                     info.klipper_key = "AFC_" + klipper_type + " " + info.name;
                     unit_infos_.push_back(std::move(info));
                     spdlog::debug("[AMS AFC] Parsed string unit: type='{}' name='{}' key='{}'",
@@ -1213,17 +1241,18 @@ void AmsBackendAfc::parse_afc_unit_object(AfcUnitInfo& unit_info, const nlohmann
                   unit_info.hubs.size(), unit_info.buffers.size(),
                   path_topology_to_string(unit_info.topology));
 
-    // Only reorganize when ALL unit_infos_ have received their lane data.
-    // Unit objects may arrive in separate status updates; reorganizing on partial
-    // data creates transient incorrect unit structures visible in the UI.
-    bool all_have_lanes = !unit_infos_.empty();
+    // Reorganize when we have enough unit data. Don't block all units
+    // if one unit's Klipper object data hasn't arrived yet.
+    int units_with_lanes = 0;
     for (const auto& ui : unit_infos_) {
-        if (ui.lanes.empty()) {
-            all_have_lanes = false;
-            break;
+        if (!ui.lanes.empty()) {
+            units_with_lanes++;
         }
     }
-    if (all_have_lanes) {
+    // Reorganize when at least 2 units have data (multi-unit partial),
+    // or when all units have data (single unit case or complete arrival)
+    if (units_with_lanes >= 2 ||
+        units_with_lanes == static_cast<int>(unit_infos_.size())) {
         rebuild_unit_map_from_klipper();
     }
 }
@@ -1325,8 +1354,9 @@ void AmsBackendAfc::detect_afc_version() {
                             helix::ui::async_call(
                                 [](void* data) {
                                     auto* m = static_cast<std::string*>(data);
-                                    helix::ui::modal_show_alert("AFC Version Warning", m->c_str(),
-                                                                ModalSeverity::Warning, "OK");
+                                    helix::ui::modal_show_alert(lv_tr("AFC Version Warning"),
+                                                                m->c_str(), ModalSeverity::Warning,
+                                                                lv_tr("OK"));
                                     delete m;
                                 },
                                 msg);
@@ -1428,7 +1458,7 @@ void AmsBackendAfc::query_initial_state() {
         objects_to_query["AFC_extruder extruder"] = nullptr;
     }
 
-    // Add unit-level Klipper objects (AFC_BoxTurtle, AFC_OpenAMS)
+    // Add unit-level Klipper objects (AFC_BoxTurtle, AFC_OpenAMS, AFC_vivid)
     for (const auto& unit_info : unit_infos_) {
         objects_to_query[unit_info.klipper_key] = nullptr;
     }
@@ -1852,7 +1882,18 @@ AmsError AmsBackendAfc::load_filament(int slot_index) {
         }
     }
 
-    // Send CHANGE_TOOL LANE={name} command
+    // Toolchanger mode: use AFC_SELECT_TOOL with extruder name
+    if (num_extruders_ > 1) {
+        const auto* entry = slots_.get(slot_index);
+        int tool = entry ? entry->info.mapped_tool : slot_index;
+        if (tool >= 0 && tool < static_cast<int>(extruders_.size())) {
+            std::string cmd = "AFC_SELECT_TOOL TOOL=" + extruders_[tool].name;
+            spdlog::info("[AMS AFC] Loading slot {} via toolchanger: {}", slot_index, cmd);
+            return execute_gcode(cmd);
+        }
+    }
+
+    // Standard mode: CHANGE_TOOL LANE={name}
     std::ostringstream cmd;
     cmd << "CHANGE_TOOL LANE=" << lane_name;
 
@@ -1873,6 +1914,11 @@ AmsError AmsBackendAfc::unload_filament() {
             return AmsError(AmsResult::WRONG_STATE, "No filament loaded", "No filament to unload",
                             "Load filament first");
         }
+    }
+
+    if (num_extruders_ > 1) {
+        spdlog::info("[AMS AFC] Unloading via toolchanger: AFC_UNSELECT_TOOL");
+        return execute_gcode("AFC_UNSELECT_TOOL");
     }
 
     spdlog::info("[AMS AFC] Unloading filament");
@@ -1922,12 +1968,17 @@ AmsError AmsBackendAfc::change_tool(int tool_number) {
         }
     }
 
-    // Send T{n} command for standard tool change
-    std::ostringstream cmd;
-    cmd << "T" << tool_number;
+    std::string cmd;
+    if (num_extruders_ > 1 && tool_number < static_cast<int>(extruders_.size())) {
+        // Toolchanger mode: use AFC_SELECT_TOOL with extruder name
+        cmd = "AFC_SELECT_TOOL TOOL=" + extruders_[tool_number].name;
+    } else {
+        // Standard mode: use T{n}
+        cmd = "T" + std::to_string(tool_number);
+    }
 
-    spdlog::info("[AMS AFC] Tool change to T{}", tool_number);
-    return execute_gcode(cmd.str());
+    spdlog::info("[AMS AFC] Tool change: {}", cmd);
+    return execute_gcode(cmd);
 }
 
 // ============================================================================

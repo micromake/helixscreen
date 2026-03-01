@@ -168,6 +168,10 @@ class PrintSelectListView {
     int cached_row_height_ = 0;
     int cached_row_gap_ = 0;
 
+    // === Cached Spacer Heights (avoid redundant lv_obj_set_height → relayout) ===
+    int last_leading_height_ = -1;
+    int last_trailing_height_ = -1;
+
     // === Callbacks ===
     FileClickCallback on_file_click_;
     MetadataFetchCallback on_metadata_fetch_;

@@ -51,6 +51,7 @@
 #include "moonraker_file_transfer_api.h"
 #include "moonraker_history_api.h"
 #include "moonraker_job_api.h"
+#include "moonraker_queue_api.h"
 #include "moonraker_motion_api.h"
 #include "moonraker_rest_api.h"
 #include "moonraker_spoolman_api.h"
@@ -270,6 +271,20 @@ class MoonrakerAPI {
      * @param on_error Error callback
      */
     void restart_moonraker(SuccessCallback on_success, ErrorCallback on_error);
+
+    /**
+     * @brief Shut down the host machine
+     * @param on_success Success callback
+     * @param on_error Error callback
+     */
+    void machine_shutdown(SuccessCallback on_success, ErrorCallback on_error);
+
+    /**
+     * @brief Reboot the host machine
+     * @param on_success Success callback
+     * @param on_error Error callback
+     */
+    void machine_reboot(SuccessCallback on_success, ErrorCallback on_error);
 
     // ========================================================================
     // Query Operations
@@ -623,6 +638,18 @@ class MoonrakerAPI {
         return *file_api_;
     }
 
+    /**
+     * @brief Get Queue API for job queue operations
+     *
+     * All queue methods (get_queue_status, start_queue, pause_queue,
+     * add_job, remove_jobs) are available through this accessor.
+     *
+     * @return Reference to MoonrakerQueueAPI
+     */
+    MoonrakerQueueAPI& queue() {
+        return *queue_api_;
+    }
+
   private:
     // Data members MUST be declared BEFORE sub-API unique_ptrs.
     // C++ destroys members in reverse declaration order, so data members
@@ -644,7 +671,7 @@ class MoonrakerAPI {
     void launch_http_thread(std::function<void()> func);
 
     mutable std::mutex http_threads_mutex_;
-    std::list<std::thread> http_threads_;
+    std::list<std::pair<std::thread, std::shared_ptr<std::atomic<bool>>>> http_threads_;
     std::atomic<bool> shutting_down_{false};
 
   protected:
@@ -658,5 +685,6 @@ class MoonrakerAPI {
     std::unique_ptr<MoonrakerMotionAPI> motion_api_;              ///< Motion control API
     std::unique_ptr<MoonrakerRestAPI> rest_api_;                  ///< REST endpoint & WLED API
     std::unique_ptr<MoonrakerSpoolmanAPI> spoolman_api_;   ///< Spoolman filament tracking API
+    std::unique_ptr<MoonrakerQueueAPI> queue_api_;         ///< Job queue API
     std::unique_ptr<MoonrakerTimelapseAPI> timelapse_api_; ///< Timelapse & webcam API
 };

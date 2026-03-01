@@ -27,6 +27,7 @@ else
     # Linux: framebuffer and DRM for embedded, SDL for desktop
     DISPLAY_API_SRCS += src/api/display_backend_fbdev.cpp
     DISPLAY_API_SRCS += src/api/display_backend_drm.cpp
+    DISPLAY_API_SRCS += src/api/drm_rotation_strategy.cpp
     ifndef CROSS_COMPILE
         # Native Linux desktop also gets SDL
         DISPLAY_API_SRCS += src/api/display_backend_sdl.cpp

@@ -148,8 +148,19 @@ void PrintExcludeObjectManager::handle_object_long_press(const char* object_name
 
     // Configure and show the modal
     exclude_modal_.set_object_name(object_name);
-    exclude_modal_.set_on_confirm([this]() { handle_exclude_confirmed(); });
-    exclude_modal_.set_on_cancel([this]() { handle_exclude_cancelled(); });
+    std::weak_ptr<std::atomic<bool>> weak_alive = alive_;
+    exclude_modal_.set_on_confirm([this, weak_alive]() {
+        auto alive = weak_alive.lock();
+        if (!alive || !alive->load())
+            return;
+        handle_exclude_confirmed();
+    });
+    exclude_modal_.set_on_cancel([this, weak_alive]() {
+        auto alive = weak_alive.lock();
+        if (!alive || !alive->load())
+            return;
+        handle_exclude_cancelled();
+    });
 
     std::string message = "Stop printing \"" + std::string(object_name) +
                           "\"?\n\nThis cannot be undone after 5 seconds.";

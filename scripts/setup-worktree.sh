@@ -35,7 +35,7 @@ usage() {
     echo "Strategy:"
     echo "  - Clones build/obj/ from main tree (APFS copy-on-write — instant, zero disk)"
     echo "  - Symlinks lib/ from main tree (all submodule sources + generated headers)"
-    echo "  - Symlinks compiled libraries (libhv.a, libTinyGL.a) and PCH"
+    echo "  - Symlinks compiled libraries (libhv.a) and PCH"
     echo "  - Copies compile_commands.json with rewritten paths for clangd"
     echo "  - Symlinks node_modules and .venv for font/python tools"
     echo "  - Uses .git/info/exclude for clean git status"
@@ -247,7 +247,7 @@ fi
 # These are expensive to build and rarely change
 echo -e "${CYAN}Symlinking compiled libraries from main tree...${RESET}"
 
-MAIN_LIBS=("libhv.a" "libTinyGL.a")
+MAIN_LIBS=("libhv.a")
 for lib in "${MAIN_LIBS[@]}"; do
     MAIN_LIB="$MAIN_TREE/build/lib/$lib"
     WORKTREE_LIB="$WORKTREE_PATH/build/lib/$lib"

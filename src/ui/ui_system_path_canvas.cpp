@@ -1261,155 +1261,185 @@ lv_obj_t* ui_system_path_canvas_create(lv_obj_t* parent) {
 
 void ui_system_path_canvas_set_unit_count(lv_obj_t* obj, int count) {
     auto* data = get_data(obj);
-    if (data) {
-        data->unit_count = LV_CLAMP(count, 0, SystemPathData::MAX_UNITS);
-        lv_obj_invalidate(obj);
-    }
+    if (!data)
+        return;
+    int clamped = LV_CLAMP(count, 0, SystemPathData::MAX_UNITS);
+    if (data->unit_count == clamped)
+        return;
+    data->unit_count = clamped;
+    lv_obj_invalidate(obj);
 }
 
 void ui_system_path_canvas_set_unit_x(lv_obj_t* obj, int unit_index, int32_t center_x) {
     auto* data = get_data(obj);
-    if (data && unit_index >= 0 && unit_index < SystemPathData::MAX_UNITS) {
-        data->unit_x_positions[unit_index] = center_x;
-        lv_obj_invalidate(obj);
-    }
+    if (!data || unit_index < 0 || unit_index >= SystemPathData::MAX_UNITS)
+        return;
+    if (data->unit_x_positions[unit_index] == center_x)
+        return;
+    data->unit_x_positions[unit_index] = center_x;
+    lv_obj_invalidate(obj);
 }
 
 void ui_system_path_canvas_set_active_unit(lv_obj_t* obj, int unit_index) {
     auto* data = get_data(obj);
-    if (data) {
-        data->active_unit = unit_index;
-        lv_obj_invalidate(obj);
-    }
+    if (!data || data->active_unit == unit_index)
+        return;
+    data->active_unit = unit_index;
+    lv_obj_invalidate(obj);
 }
 
 void ui_system_path_canvas_set_active_color(lv_obj_t* obj, uint32_t color) {
     auto* data = get_data(obj);
-    if (data) {
-        data->active_color = color;
-        lv_obj_invalidate(obj);
-    }
+    if (!data || data->active_color == color)
+        return;
+    data->active_color = color;
+    lv_obj_invalidate(obj);
 }
 
 void ui_system_path_canvas_set_filament_loaded(lv_obj_t* obj, bool loaded) {
     auto* data = get_data(obj);
-    if (data) {
-        data->filament_loaded = loaded;
-        lv_obj_invalidate(obj);
-    }
+    if (!data || data->filament_loaded == loaded)
+        return;
+    data->filament_loaded = loaded;
+    lv_obj_invalidate(obj);
 }
 
 void ui_system_path_canvas_set_status_text(lv_obj_t* obj, const char* text) {
     auto* data = get_data(obj);
-    if (data) {
-        if (text) {
-            snprintf(data->status_text, sizeof(data->status_text), "%s", text);
-        } else {
-            data->status_text[0] = '\0';
-        }
-        lv_obj_invalidate(obj);
-    }
+    if (!data)
+        return;
+    const char* new_text = text ? text : "";
+    if (strcmp(data->status_text, new_text) == 0)
+        return;
+    snprintf(data->status_text, sizeof(data->status_text), "%s", new_text);
+    lv_obj_invalidate(obj);
 }
 
 void ui_system_path_canvas_set_bypass(lv_obj_t* obj, bool has_bypass, bool bypass_active,
                                       uint32_t bypass_color) {
     auto* data = get_data(obj);
-    if (data) {
-        data->has_bypass = has_bypass;
-        data->bypass_active = bypass_active;
-        data->bypass_color = bypass_color;
-        lv_obj_invalidate(obj);
-    }
+    if (!data)
+        return;
+    if (data->has_bypass == has_bypass && data->bypass_active == bypass_active &&
+        data->bypass_color == bypass_color)
+        return;
+    data->has_bypass = has_bypass;
+    data->bypass_active = bypass_active;
+    data->bypass_color = bypass_color;
+    lv_obj_invalidate(obj);
 }
 
 void ui_system_path_canvas_set_unit_hub_sensor(lv_obj_t* obj, int unit_index, bool has_sensor,
                                                bool triggered) {
     auto* data = get_data(obj);
-    if (data && unit_index >= 0 && unit_index < SystemPathData::MAX_UNITS) {
-        data->unit_has_hub_sensor[unit_index] = has_sensor;
-        data->unit_hub_triggered[unit_index] = triggered;
-        lv_obj_invalidate(obj);
-    }
+    if (!data || unit_index < 0 || unit_index >= SystemPathData::MAX_UNITS)
+        return;
+    if (data->unit_has_hub_sensor[unit_index] == has_sensor &&
+        data->unit_hub_triggered[unit_index] == triggered)
+        return;
+    data->unit_has_hub_sensor[unit_index] = has_sensor;
+    data->unit_hub_triggered[unit_index] = triggered;
+    lv_obj_invalidate(obj);
 }
 
 void ui_system_path_canvas_set_toolhead_sensor(lv_obj_t* obj, bool has_toolhead_sensor,
                                                bool toolhead_sensor_triggered) {
     auto* data = get_data(obj);
-    if (data) {
-        data->has_toolhead_sensor = has_toolhead_sensor;
-        data->toolhead_sensor_triggered = toolhead_sensor_triggered;
-        lv_obj_invalidate(obj);
-    }
+    if (!data)
+        return;
+    if (data->has_toolhead_sensor == has_toolhead_sensor &&
+        data->toolhead_sensor_triggered == toolhead_sensor_triggered)
+        return;
+    data->has_toolhead_sensor = has_toolhead_sensor;
+    data->toolhead_sensor_triggered = toolhead_sensor_triggered;
+    lv_obj_invalidate(obj);
 }
 
 void ui_system_path_canvas_set_unit_tools(lv_obj_t* obj, int unit_index, int tool_count,
                                           int first_tool) {
     auto* data = get_data(obj);
-    if (data && unit_index >= 0 && unit_index < SystemPathData::MAX_UNITS) {
-        data->unit_tool_count[unit_index] = tool_count;
-        data->unit_first_tool[unit_index] = first_tool;
-        lv_obj_invalidate(obj);
-    }
+    if (!data || unit_index < 0 || unit_index >= SystemPathData::MAX_UNITS)
+        return;
+    if (data->unit_tool_count[unit_index] == tool_count &&
+        data->unit_first_tool[unit_index] == first_tool)
+        return;
+    data->unit_tool_count[unit_index] = tool_count;
+    data->unit_first_tool[unit_index] = first_tool;
+    lv_obj_invalidate(obj);
 }
 
 void ui_system_path_canvas_set_unit_topology(lv_obj_t* obj, int unit_index, int topology) {
     auto* data = get_data(obj);
-    if (data && unit_index >= 0 && unit_index < SystemPathData::MAX_UNITS) {
-        data->unit_topology[unit_index] = topology;
-        lv_obj_invalidate(obj);
-    }
+    if (!data || unit_index < 0 || unit_index >= SystemPathData::MAX_UNITS)
+        return;
+    if (data->unit_topology[unit_index] == topology)
+        return;
+    data->unit_topology[unit_index] = topology;
+    lv_obj_invalidate(obj);
 }
 
 void ui_system_path_canvas_set_total_tools(lv_obj_t* obj, int total_tools) {
     auto* data = get_data(obj);
-    if (data) {
-        data->total_tools = LV_CLAMP(total_tools, 0, SystemPathData::MAX_TOOLS);
-        if (!data->has_virtual_numbers) {
-            for (int i = 0; i < data->total_tools; ++i) {
-                snprintf(data->tool_labels[i], sizeof(data->tool_labels[i]), "T%d", i);
-            }
+    if (!data)
+        return;
+    int clamped = LV_CLAMP(total_tools, 0, SystemPathData::MAX_TOOLS);
+    if (data->total_tools == clamped)
+        return;
+    data->total_tools = clamped;
+    if (!data->has_virtual_numbers) {
+        for (int i = 0; i < data->total_tools; ++i) {
+            snprintf(data->tool_labels[i], sizeof(data->tool_labels[i]), "T%d", i);
         }
-        lv_obj_invalidate(obj);
     }
+    lv_obj_invalidate(obj);
 }
 
 void ui_system_path_canvas_set_active_tool(lv_obj_t* obj, int tool_index) {
     auto* data = get_data(obj);
-    if (data) {
-        data->active_tool = tool_index;
-        lv_obj_invalidate(obj);
-    }
+    if (!data || data->active_tool == tool_index)
+        return;
+    data->active_tool = tool_index;
+    lv_obj_invalidate(obj);
 }
 
 void ui_system_path_canvas_set_current_tool(lv_obj_t* obj, int tool_index) {
     auto* data = get_data(obj);
-    if (data) {
-        data->current_tool = tool_index;
-        if (tool_index >= 0) {
-            snprintf(data->current_tool_label, sizeof(data->current_tool_label), "T%d", tool_index);
-        } else {
-            data->current_tool_label[0] = '\0';
-        }
-        lv_obj_invalidate(obj);
+    if (!data || data->current_tool == tool_index)
+        return;
+    data->current_tool = tool_index;
+    if (tool_index >= 0) {
+        snprintf(data->current_tool_label, sizeof(data->current_tool_label), "T%d", tool_index);
+    } else {
+        data->current_tool_label[0] = '\0';
     }
+    lv_obj_invalidate(obj);
 }
 
 void ui_system_path_canvas_set_tool_virtual_numbers(lv_obj_t* obj, const int* numbers, int count) {
     auto* data = get_data(obj);
-    if (data) {
-        int n = LV_MIN(count, SystemPathData::MAX_TOOLS);
-        for (int i = 0; i < n; ++i) {
-            data->tool_virtual_number[i] = numbers[i];
-            snprintf(data->tool_labels[i], sizeof(data->tool_labels[i]), "T%d", numbers[i]);
+    if (!data)
+        return;
+    int n = LV_MIN(count, SystemPathData::MAX_TOOLS);
+    bool changed = (data->has_virtual_numbers != (n > 0));
+    if (!changed) {
+        for (int i = 0; i < n && !changed; ++i) {
+            if (data->tool_virtual_number[i] != numbers[i])
+                changed = true;
         }
-        // Clear remaining entries
-        for (int i = n; i < SystemPathData::MAX_TOOLS; ++i) {
-            data->tool_virtual_number[i] = i;
-            snprintf(data->tool_labels[i], sizeof(data->tool_labels[i]), "T%d", i);
-        }
-        data->has_virtual_numbers = (n > 0);
-        lv_obj_invalidate(obj);
     }
+    if (!changed)
+        return;
+    for (int i = 0; i < n; ++i) {
+        data->tool_virtual_number[i] = numbers[i];
+        snprintf(data->tool_labels[i], sizeof(data->tool_labels[i]), "T%d", numbers[i]);
+    }
+    // Clear remaining entries
+    for (int i = n; i < SystemPathData::MAX_TOOLS; ++i) {
+        data->tool_virtual_number[i] = i;
+        snprintf(data->tool_labels[i], sizeof(data->tool_labels[i]), "T%d", i);
+    }
+    data->has_virtual_numbers = (n > 0);
+    lv_obj_invalidate(obj);
 }
 
 void ui_system_path_canvas_set_bypass_has_spool(lv_obj_t* obj, bool has_spool) {

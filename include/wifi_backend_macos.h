@@ -83,6 +83,16 @@ class WifiBackendMacOS : public WifiBackend {
     std::string connecting_password_;
     bool connection_in_progress_;
 
+    bool supports_5ghz_cached_{true}; ///< Cached 5GHz support (default true for macOS)
+
+    /**
+     * @brief Resolve 5GHz support by querying CWInterface supportedWLANChannels
+     *
+     * Queries the WiFi interface for supported channels and checks for 5GHz band.
+     * Sets supports_5ghz_cached_ accordingly. Defaults to true on any error.
+     */
+    void resolve_5ghz_support();
+
     // ========================================================================
     // System Validation
     // ========================================================================

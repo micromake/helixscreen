@@ -3,15 +3,18 @@
 
 #include "ui_panel_filament.h"
 
+#include "ui_ams_edit_modal.h"
 #include "ui_callback_helpers.h"
 #include "ui_component_keypad.h"
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
 #include "ui_icon.h"
 #include "ui_nav_manager.h"
+#include "ui_overlay_temp_graph.h"
 #include "ui_panel_ams.h"
 #include "ui_panel_ams_overview.h"
 #include "ui_panel_temp_control.h"
+#include "ui_spool_canvas.h"
 #include "ui_subject_registry.h"
 #include "ui_temperature_utils.h"
 #include "ui_update_queue.h"
@@ -101,6 +104,8 @@ FilamentPanel::FilamentPanel(PrinterState& printer_state, MoonrakerAPI* api)
         {"on_filament_cooldown", on_cooldown_clicked},
         // Extruder selector dropdown
         {"on_extruder_dropdown_changed", on_extruder_dropdown_changed},
+        // External spool edit
+        {"on_external_spool_edit", on_external_spool_edit_clicked},
     });
 
     // Subscribe to PrinterState temperatures using bundle pattern
@@ -203,12 +208,18 @@ void FilamentPanel::init_subjects() {
         UI_MANAGED_SUBJECT_INT(purge_25mm_active_subject_, 0, "filament_purge_25mm_active",
                                subjects_);
 
+        // Card title subject (dynamic: "Multi-Filament" or "External Spool")
+        std::strncpy(card_title_buf_, lv_tr("Multi-Filament"), sizeof(card_title_buf_) - 1);
+        UI_MANAGED_SUBJECT_STRING(card_title_subject_, card_title_buf_, card_title_buf_,
+                                  "filament_card_title", subjects_);
+
         spdlog::debug("[{}] temp={}/{}°C, material={}", get_name(), nozzle_current_, nozzle_target_,
                       selected_material_);
     });
 }
 
 void FilamentPanel::deinit_subjects() {
+    external_spool_observer_.reset();
     deinit_subjects_base(subjects_);
 }
 
@@ -242,16 +253,25 @@ void FilamentPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
     nozzle_current_label_ = lv_obj_find_by_name(panel_, "nozzle_current_temp");
     bed_current_label_ = lv_obj_find_by_name(panel_, "bed_current_temp");
 
-    // Find temp layout widgets for dynamic sizing when AMS is hidden
-    temp_group_ = lv_obj_find_by_name(panel_, "temp_group");
+    // Find temp graph for dynamic sizing when bottom card changes
     temp_graph_card_ = lv_obj_find_by_name(panel_, "temp_graph_card");
 
     // Find multi-filament card widgets
     ams_status_card_ = lv_obj_find_by_name(panel_, "ams_status_card");
+    ams_card_header_row_ = lv_obj_find_by_name(panel_, "ams_card_header_row");
     extruder_selector_group_ = lv_obj_find_by_name(panel_, "extruder_selector_group");
     extruder_dropdown_ = lv_obj_find_by_name(panel_, "extruder_dropdown");
     btn_manage_slots_ = lv_obj_find_by_name(panel_, "btn_manage_slots");
     ams_manage_row_ = lv_obj_find_by_name(panel_, "ams_manage_row");
+
+    // Find external spool row widgets
+    external_spool_row_ = lv_obj_find_by_name(panel_, "external_spool_row");
+    external_spool_container_ = lv_obj_find_by_name(panel_, "external_spool_container");
+    external_spool_material_label_ = lv_obj_find_by_name(panel_, "external_spool_material_label");
+    external_spool_color_label_ = lv_obj_find_by_name(panel_, "external_spool_color_label");
+
+    // Setup external spool display (creates canvas, wires observer)
+    setup_external_spool_display();
 
     // Populate extruder dropdown and set card visibility
     populate_extruder_dropdown();
@@ -265,26 +285,26 @@ void FilamentPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
                                             self->update_multi_filament_card_visibility();
                                         });
 
-    // Subscribe to AMS type to expand temp graph when no AMS present
+    // Subscribe to AMS type to adjust graph sizing and card visibility
     ams_type_observer_ = observe_int_sync<FilamentPanel>(
         AmsState::instance().get_ams_type_subject(), this, [](FilamentPanel* self, int ams_type) {
-            if (!self->temp_group_ || !self->temp_graph_card_)
-                return;
-
             bool has_ams = (ams_type != 0);
+            bool multi_tool = helix::ToolState::instance().is_multi_tool();
+            bool card_has_ams_row = has_ams || multi_tool;
 
-            if (has_ams) {
-                // AMS visible: standard 120px graph
-                lv_obj_set_height(self->temp_graph_card_, 120);
-                lv_obj_set_flex_grow(self->temp_group_, 0);
-                lv_obj_set_flex_grow(self->temp_graph_card_, 0);
-            } else {
-                // AMS hidden: expand graph to fill available space
-                lv_obj_set_flex_grow(self->temp_group_, 1);
-                lv_obj_set_flex_grow(self->temp_graph_card_, 1);
+            // Adjust temp graph sizing based on whether bottom card shows the taller AMS row
+            if (self->temp_graph_card_) {
+                if (card_has_ams_row) {
+                    // AMS/multi-tool row is taller: standard 120px graph
+                    lv_obj_set_height(self->temp_graph_card_, 120);
+                    lv_obj_set_flex_grow(self->temp_graph_card_, 0);
+                } else {
+                    // External spool row is compact: expand graph to fill space
+                    lv_obj_set_flex_grow(self->temp_graph_card_, 1);
+                }
             }
 
-            // Update multi-filament card visibility (AMS state changed)
+            // Update card row visibility (AMS state changed)
             self->update_multi_filament_card_visibility();
         });
 
@@ -310,6 +330,21 @@ void FilamentPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
         } else {
             spdlog::warn("[{}] temp_graph_container not found in XML", get_name());
         }
+    }
+
+    // Make the graph card clickable to open the unified temp graph overlay
+    if (temp_graph_card_) {
+        lv_obj_add_flag(temp_graph_card_, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(
+            temp_graph_card_,
+            [](lv_event_t* e) {
+                auto* self = static_cast<FilamentPanel*>(lv_event_get_user_data(e));
+                if (self) {
+                    get_global_temp_graph_overlay().open(TempGraphOverlay::Mode::GraphOnly,
+                                                         self->parent_screen_);
+                }
+            },
+            LV_EVENT_CLICKED, this);
     }
 
     // AMS mini status widget is now created declaratively via XML <ams_mini_status/>
@@ -345,7 +380,8 @@ void FilamentPanel::update_status() {
         update_status_icon("check", "success");
     } else if (nozzle_target_ >= min_extrude_temp_) {
         // Heating in progress
-        std::snprintf(status_buf_, sizeof(status_buf_), "Heating to %d°C...", nozzle_target_);
+        std::snprintf(status_buf_, sizeof(status_buf_), lv_tr("Heating to %d°C..."),
+                      nozzle_target_);
         lv_subject_copy_string(&status_subject_, status_buf_);
         update_status_icon("flash", "warning");
         return; // Already updated, exit early
@@ -859,24 +895,150 @@ void FilamentPanel::update_multi_filament_card_visibility() {
     bool has_ams = (lv_subject_get_int(AmsState::instance().get_ams_type_subject()) != 0);
     bool multi_tool = helix::ToolState::instance().is_multi_tool();
 
-    // Card visible when AMS present or multi-tool
-    if (has_ams || multi_tool) {
-        lv_obj_remove_flag(ams_status_card_, LV_OBJ_FLAG_HIDDEN);
-    } else {
-        lv_obj_add_flag(ams_status_card_, LV_OBJ_FLAG_HIDDEN);
-    }
+    // Card is ALWAYS visible
+    lv_obj_remove_flag(ams_status_card_, LV_OBJ_FLAG_HIDDEN);
 
-    // AMS row visible only when AMS backend is present
+    // AMS manage row visible when AMS or multi-tool
     if (ams_manage_row_) {
-        if (has_ams) {
+        if (has_ams || multi_tool) {
             lv_obj_remove_flag(ams_manage_row_, LV_OBJ_FLAG_HIDDEN);
         } else {
             lv_obj_add_flag(ams_manage_row_, LV_OBJ_FLAG_HIDDEN);
         }
     }
 
-    spdlog::debug("[{}] Multi-filament card: ams={}, multi_tool={}", get_name(), has_ams,
-                  multi_tool);
+    bool external_spool_mode = !has_ams && !multi_tool;
+
+    // External spool row visible when no AMS and no multi-tool
+    if (external_spool_row_) {
+        if (external_spool_mode) {
+            lv_obj_remove_flag(external_spool_row_, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(external_spool_row_, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
+    // Header row (icon + title) hidden in external spool mode
+    if (ams_card_header_row_) {
+        if (external_spool_mode) {
+            lv_obj_add_flag(ams_card_header_row_, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_remove_flag(ams_card_header_row_, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
+    // Update card title dynamically (for AMS/multi-tool modes)
+    const char* title = external_spool_mode ? lv_tr("External Spool") : lv_tr("Multi-Filament");
+    std::strncpy(card_title_buf_, title, sizeof(card_title_buf_) - 1);
+    card_title_buf_[sizeof(card_title_buf_) - 1] = '\0';
+    lv_subject_copy_string(&card_title_subject_, card_title_buf_);
+
+    spdlog::debug("[{}] Multi-filament card: ams={}, multi_tool={}, title={}", get_name(), has_ams,
+                  multi_tool, title);
+}
+
+void FilamentPanel::setup_external_spool_display() {
+    if (!external_spool_container_)
+        return;
+
+    // Create 48x48 spool canvas inside the container
+    external_spool_canvas_ = ui_spool_canvas_create(external_spool_container_, 48);
+    if (!external_spool_canvas_) {
+        spdlog::warn("[{}] Failed to create external spool canvas", get_name());
+        return;
+    }
+
+    // Set initial state from AmsState
+    update_external_spool_from_state();
+
+    // Observe external spool color changes to reactively update display
+    external_spool_observer_ = observe_int_sync<FilamentPanel>(
+        AmsState::instance().get_external_spool_color_subject(), this,
+        [](FilamentPanel* self, int /*color_int*/) { self->update_external_spool_from_state(); });
+
+    spdlog::debug("[{}] External spool display initialized", get_name());
+}
+
+void FilamentPanel::update_external_spool_from_state() {
+    if (!external_spool_canvas_)
+        return;
+
+    auto ext = AmsState::instance().get_external_spool_info();
+    if (ext.has_value()) {
+        ui_spool_canvas_set_color(external_spool_canvas_, lv_color_hex(ext->color_rgb));
+        float fill =
+            (ext->total_weight_g > 0) ? ext->remaining_weight_g / ext->total_weight_g : 1.0f;
+        ui_spool_canvas_set_fill_level(external_spool_canvas_, fill);
+
+        // Update labels with material info
+        if (external_spool_material_label_) {
+            std::string mat_text;
+            if (!ext->brand.empty() && !ext->material.empty()) {
+                mat_text = ext->brand + " " + ext->material;
+            } else if (!ext->material.empty()) {
+                mat_text = ext->material;
+            } else {
+                mat_text = "Unknown";
+            }
+            lv_label_set_text(external_spool_material_label_, mat_text.c_str());
+        }
+        if (external_spool_color_label_) {
+            // Build second line: color name + remaining weight in grams
+            std::string detail;
+            if (!ext->color_name.empty()) {
+                detail = ext->color_name;
+            }
+            if (ext->remaining_weight_g > 0) {
+                char weight_str[16];
+                snprintf(weight_str, sizeof(weight_str), "%.0fg", ext->remaining_weight_g);
+                if (!detail.empty()) {
+                    detail += " · ";
+                }
+                detail += weight_str;
+            }
+            lv_label_set_text(external_spool_color_label_, detail.c_str());
+        }
+    } else {
+        // No spool assigned - show muted empty spool
+        ui_spool_canvas_set_color(external_spool_canvas_, lv_color_hex(0x505050));
+        ui_spool_canvas_set_fill_level(external_spool_canvas_, 0.0f);
+
+        if (external_spool_material_label_) {
+            lv_label_set_text(external_spool_material_label_, lv_tr("No spool assigned"));
+        }
+        if (external_spool_color_label_) {
+            lv_label_set_text(external_spool_color_label_, lv_tr("Tap to assign"));
+        }
+    }
+    ui_spool_canvas_redraw(external_spool_canvas_);
+}
+
+void FilamentPanel::show_external_spool_edit_modal() {
+    if (!parent_screen_) {
+        spdlog::warn("[{}] Cannot show edit modal - no parent screen", get_name());
+        return;
+    }
+
+    if (!edit_modal_) {
+        edit_modal_ = std::make_unique<helix::ui::AmsEditModal>();
+    }
+
+    auto ext = AmsState::instance().get_external_spool_info();
+    SlotInfo initial_info = ext.value_or(SlotInfo{});
+    initial_info.slot_index = -2;
+    initial_info.global_index = -2;
+
+    edit_modal_->set_completion_callback([](const helix::ui::AmsEditModal::EditResult& result) {
+        if (result.saved) {
+            AmsState::instance().set_external_spool_info(result.slot_info);
+            NOTIFY_INFO("External spool updated");
+        }
+    });
+    edit_modal_->show_for_slot(parent_screen_, -2, initial_info, api_);
+}
+
+void FilamentPanel::on_external_spool_edit_clicked(lv_event_t* /*e*/) {
+    get_global_filament_panel().show_external_spool_edit_modal();
 }
 
 void FilamentPanel::populate_extruder_dropdown() {
@@ -884,7 +1046,8 @@ void FilamentPanel::populate_extruder_dropdown() {
         return;
 
     auto& ts = helix::ToolState::instance();
-    if (!ts.is_multi_tool()) {
+    bool has_ams = (lv_subject_get_int(AmsState::instance().get_ams_type_subject()) != 0);
+    if (!ts.is_multi_tool() || !has_ams) {
         if (extruder_selector_group_)
             lv_obj_add_flag(extruder_selector_group_, LV_OBJ_FLAG_HIDDEN);
         if (btn_manage_slots_)
@@ -892,7 +1055,7 @@ void FilamentPanel::populate_extruder_dropdown() {
         return;
     }
 
-    // Multi-tool: show dropdown group, hide Manage button
+    // Multi-tool with AMS: show dropdown group, hide Manage button
     if (extruder_selector_group_)
         lv_obj_remove_flag(extruder_selector_group_, LV_OBJ_FLAG_HIDDEN);
     if (btn_manage_slots_)
@@ -927,12 +1090,19 @@ void FilamentPanel::handle_extruder_changed() {
     if (selected == ts.active_tool_index())
         return;
 
-    spdlog::info("[{}] User selected extruder T{}", get_name(), selected);
+    if (selected < 0 || selected >= static_cast<int>(ts.tools().size())) {
+        spdlog::warn("[{}] Invalid extruder index {}", get_name(), selected);
+        return;
+    }
 
-    ts.request_tool_change(
-        selected, api_, [selected]() { NOTIFY_SUCCESS("Switched to T{}", selected); },
-        [this](const std::string& err) {
-            NOTIFY_ERROR("Tool change failed: {}", err);
+    const auto& extruder_name = ts.tools()[selected].extruder_name.value_or("extruder");
+    std::string gcode = ::fmt::format("ACTIVATE_EXTRUDER EXTRUDER={}", extruder_name);
+    spdlog::info("[{}] User selected extruder T{}: {}", get_name(), selected, gcode);
+
+    api_->execute_gcode(
+        gcode, [selected]() { NOTIFY_SUCCESS("Switched to T{}", selected); },
+        [this](const MoonrakerError& error) {
+            NOTIFY_ERROR("Tool change failed: {}", error.user_message());
             // Revert dropdown to actual active tool on UI thread
             helix::ui::async_call(
                 [](void* ctx) {

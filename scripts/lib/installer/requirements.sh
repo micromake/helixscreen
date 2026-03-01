@@ -63,10 +63,10 @@ install_runtime_deps() {
 
     log_info "Checking runtime dependencies for display/input..."
 
-    # Required libraries for DRM display and libinput
-    # Note: GPU libs (libgles2, libegl1, libgbm1) not needed - using software rendering
+    # Required libraries for DRM display, libinput, and GPU rendering (EGL/OpenGL ES)
+    # GPU libs are needed for DRM+EGL hardware-accelerated rendering on Pi
     # Note: OpenSSL is statically linked for Pi builds, no runtime libssl needed
-    local deps="libdrm2 libinput10"
+    local deps="libdrm2 libinput10 libgbm1 libegl1 libgles2"
     local missing=""
 
     for dep in $deps; do
@@ -111,7 +111,7 @@ check_disk_space() {
 
     # Get available space in MB
     local available_mb
-    if [ "$platform" = "ad5m" ] || [ "$platform" = "k1" ]; then
+    if [ "$platform" = "ad5m" ] || [ "$platform" = "ad5x" ] || [ "$platform" = "k1" ]; then
         # BusyBox df output format: blocks are in KB by default
         available_mb=$(df "$check_dir" 2>/dev/null | tail -1 | awk '{print int($4/1024)}')
     else
@@ -158,7 +158,7 @@ check_klipper_ecosystem() {
 
     # Only relevant for embedded platforms with local Klipper
     case "$platform" in
-        ad5m|k1) ;;
+        ad5m|ad5x|k1) ;;
         *) return 0 ;;
     esac
 
@@ -295,6 +295,18 @@ verify_binary_deps() {
             # Re-check after attempted fixes
             missing_libs=$(ldd "$binary" 2>/dev/null | grep "not found" || true)
             if [ -n "$missing_libs" ]; then
+                # Check if fbdev fallback binary exists and is loadable
+                local fallback="${INSTALL_DIR}/bin/helix-screen-fbdev"
+                if [ -x "$fallback" ]; then
+                    local fb_missing
+                    fb_missing=$(ldd "$fallback" 2>/dev/null | grep "not found" || true)
+                    if [ -z "$fb_missing" ]; then
+                        log_warn "DRM binary has missing GL libraries -- fbdev fallback will be used"
+                        log_warn "Install GPU libraries for hardware acceleration: sudo apt install libgbm1 libegl1 libgles2"
+                        return 0
+                    fi
+                fi
+                # No usable fallback — original error behavior
                 log_error "Could not resolve all missing libraries:"
                 echo "$missing_libs" | while IFS= read -r line; do
                     log_error "  $line"

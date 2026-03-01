@@ -49,7 +49,7 @@ Comprehensive settings for appearance, input, printer configuration, and more.
 ## First-Run Wizard
 <img src="images/screenshot-wizard-wifi.png" alt="Setup Wizard" width="800"/>
 
-Guided 8-step setup with WiFi configuration and auto-discovery of printer components.
+Guided 13-step setup with WiFi configuration and auto-discovery of printer capabilities.
 
 ---
 

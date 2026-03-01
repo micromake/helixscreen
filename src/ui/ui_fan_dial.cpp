@@ -62,6 +62,10 @@ FanDial::FanDial(lv_obj_t* parent, const std::string& name, const std::string& f
     if (fan_icon_) {
         lv_obj_set_style_transform_pivot_x(fan_icon_, LV_PCT(50), 0);
         lv_obj_set_style_transform_pivot_y(fan_icon_, LV_PCT(50), 0);
+
+        // Make the fan icon clickable (for opening the fan overlay)
+        lv_obj_add_flag(fan_icon_, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(fan_icon_, on_icon_clicked, LV_EVENT_CLICKED, this);
     }
 
     // Add event callbacks with this pointer as user data
@@ -91,6 +95,18 @@ FanDial::~FanDial() {
     lv_anim_delete(this, label_anim_exec_cb);
     // Stop fan icon spin animation (uses icon obj as var, not this)
     stop_spin(fan_icon_);
+
+    // Remove event callbacks to prevent stale 'this' dispatch if events
+    // are still pending in the LVGL event queue after widget deletion
+    if (arc_)
+        lv_obj_remove_event_cb(arc_, on_arc_value_changed);
+    if (btn_off_)
+        lv_obj_remove_event_cb(btn_off_, on_off_clicked);
+    if (btn_on_)
+        lv_obj_remove_event_cb(btn_on_, on_on_clicked);
+    if (fan_icon_)
+        lv_obj_remove_event_cb(fan_icon_, on_icon_clicked);
+
     spdlog::trace("[FanDial] Destroyed '{}'", name_);
 }
 
@@ -99,8 +115,9 @@ FanDial::FanDial(FanDial&& other) noexcept
       fan_icon_(other.fan_icon_), btn_off_(other.btn_off_), btn_on_(other.btn_on_),
       name_(std::move(other.name_)), fan_id_(std::move(other.fan_id_)),
       current_speed_(other.current_speed_), on_speed_changed_(std::move(other.on_speed_changed_)),
-      syncing_(other.syncing_), last_user_input_(other.last_user_input_) {
-    // Clear the source pointers
+      on_icon_clicked_(std::move(other.on_icon_clicked_)), syncing_(other.syncing_),
+      last_user_input_(other.last_user_input_) {
+    // Clear the source pointers so other's destructor is a no-op
     other.root_ = nullptr;
     other.arc_ = nullptr;
     other.speed_label_ = nullptr;
@@ -108,9 +125,11 @@ FanDial::FanDial(FanDial&& other) noexcept
     other.btn_off_ = nullptr;
     other.btn_on_ = nullptr;
 
+    // Re-target label animation var from old instance to this one
+    lv_anim_delete(&other, label_anim_exec_cb);
+
     // Update event callback user_data to point to this instance
     if (arc_) {
-        // Remove old callbacks and add new ones with updated user_data
         lv_obj_remove_event_cb(arc_, on_arc_value_changed);
         lv_obj_add_event_cb(arc_, on_arc_value_changed, LV_EVENT_VALUE_CHANGED, this);
     }
@@ -122,11 +141,26 @@ FanDial::FanDial(FanDial&& other) noexcept
         lv_obj_remove_event_cb(btn_on_, on_on_clicked);
         lv_obj_add_event_cb(btn_on_, on_on_clicked, LV_EVENT_CLICKED, this);
     }
+    if (fan_icon_) {
+        lv_obj_remove_event_cb(fan_icon_, on_icon_clicked);
+        lv_obj_add_event_cb(fan_icon_, on_icon_clicked, LV_EVENT_CLICKED, this);
+    }
 }
 
 FanDial& FanDial::operator=(FanDial&& other) noexcept {
     if (this != &other) {
-        // Clean up current resources (child widgets are destroyed with root_)
+        // Clean up current resources: stop animations and remove callbacks first
+        lv_anim_delete(this, label_anim_exec_cb);
+        stop_spin(fan_icon_);
+        if (arc_)
+            lv_obj_remove_event_cb(arc_, on_arc_value_changed);
+        if (btn_off_)
+            lv_obj_remove_event_cb(btn_off_, on_off_clicked);
+        if (btn_on_)
+            lv_obj_remove_event_cb(btn_on_, on_on_clicked);
+        if (fan_icon_)
+            lv_obj_remove_event_cb(fan_icon_, on_icon_clicked);
+        // Child widgets are destroyed with root_
         helix::ui::safe_delete(root_);
 
         // Move resources
@@ -140,10 +174,15 @@ FanDial& FanDial::operator=(FanDial&& other) noexcept {
         fan_id_ = std::move(other.fan_id_);
         current_speed_ = other.current_speed_;
         on_speed_changed_ = std::move(other.on_speed_changed_);
+        on_icon_clicked_ = std::move(other.on_icon_clicked_);
         syncing_ = other.syncing_;
         last_user_input_ = other.last_user_input_;
 
-        // Clear source pointers
+        // Stop animations on the source before clearing its pointers
+        lv_anim_delete(&other, label_anim_exec_cb);
+        stop_spin(other.fan_icon_);
+
+        // Clear source pointers so other's destructor is a no-op
         other.root_ = nullptr;
         other.arc_ = nullptr;
         other.speed_label_ = nullptr;
@@ -151,7 +190,7 @@ FanDial& FanDial::operator=(FanDial&& other) noexcept {
         other.btn_off_ = nullptr;
         other.btn_on_ = nullptr;
 
-        // Update event callback user_data
+        // Update event callback user_data to point to this instance
         if (arc_) {
             lv_obj_remove_event_cb(arc_, on_arc_value_changed);
             lv_obj_add_event_cb(arc_, on_arc_value_changed, LV_EVENT_VALUE_CHANGED, this);
@@ -163,6 +202,10 @@ FanDial& FanDial::operator=(FanDial&& other) noexcept {
         if (btn_on_) {
             lv_obj_remove_event_cb(btn_on_, on_on_clicked);
             lv_obj_add_event_cb(btn_on_, on_on_clicked, LV_EVENT_CLICKED, this);
+        }
+        if (fan_icon_) {
+            lv_obj_remove_event_cb(fan_icon_, on_icon_clicked);
+            lv_obj_add_event_cb(fan_icon_, on_icon_clicked, LV_EVENT_CLICKED, this);
         }
     }
     return *this;
@@ -216,6 +259,16 @@ int FanDial::get_speed() const {
 
 void FanDial::set_on_speed_changed(SpeedCallback callback) {
     on_speed_changed_ = std::move(callback);
+}
+
+void FanDial::set_on_icon_clicked(IconClickCallback callback) {
+    on_icon_clicked_ = std::move(callback);
+}
+
+void FanDial::handle_icon_clicked() {
+    if (on_icon_clicked_) {
+        on_icon_clicked_(fan_id_);
+    }
 }
 
 void FanDial::update_button_states(int percent) {
@@ -385,6 +438,55 @@ void FanDial::handle_on_clicked() {
 // Fan Icon Spin Animation
 // ============================================================================
 
+void FanDial::set_read_only(bool read_only) {
+    if (!arc_)
+        return;
+
+    if (read_only) {
+        // Disable arc interaction
+        lv_obj_remove_flag(arc_, LV_OBJ_FLAG_CLICKABLE);
+
+        // Hide the knob
+        lv_obj_set_style_bg_opa(arc_, LV_OPA_TRANSP, LV_PART_KNOB);
+        lv_obj_set_style_shadow_opa(arc_, LV_OPA_TRANSP, LV_PART_KNOB);
+
+        // Muted indicator color (matches fan_status_card.xml)
+        lv_color_t muted = theme_manager_get_color("text_muted");
+        lv_obj_set_style_arc_color(arc_, muted, LV_PART_INDICATOR);
+
+        // Hide Off/On buttons, show "Auto" label instead
+        if (btn_off_)
+            lv_obj_add_flag(btn_off_, LV_OBJ_FLAG_HIDDEN);
+        if (btn_on_)
+            lv_obj_add_flag(btn_on_, LV_OBJ_FLAG_HIDDEN);
+
+        // Add "Auto" indicator in the button row
+        lv_obj_t* btn_row = lv_obj_find_by_name(root_, "button_row");
+        if (btn_row) {
+            lv_obj_t* auto_label = lv_label_create(btn_row);
+            lv_label_set_text(auto_label, lv_tr("Auto"));
+            lv_obj_set_style_text_color(auto_label, theme_manager_get_color("text_muted"), 0);
+            const lv_font_t* font = theme_manager_get_font("font_xs");
+            if (font)
+                lv_obj_set_style_text_font(auto_label, font, 0);
+        }
+
+        // Clear the speed callback so no commands are sent
+        on_speed_changed_ = nullptr;
+    } else {
+        lv_obj_add_flag(arc_, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_style_bg_opa(arc_, LV_OPA_COVER, LV_PART_KNOB);
+        lv_color_t primary = theme_manager_get_color("primary");
+        lv_obj_set_style_arc_color(arc_, primary, LV_PART_INDICATOR);
+        if (btn_off_)
+            lv_obj_remove_flag(btn_off_, LV_OBJ_FLAG_HIDDEN);
+        if (btn_on_)
+            lv_obj_remove_flag(btn_on_, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    spdlog::debug("[FanDial] '{}' set_read_only({})", name_, read_only);
+}
+
 void FanDial::refresh_animation() {
     update_fan_animation(current_speed_);
 }
@@ -419,6 +521,7 @@ void FanDial::start_spin(lv_obj_t* icon, int speed_pct) {
 DEFINE_EVENT_TRAMPOLINE_SIMPLE(FanDial, on_arc_value_changed, handle_arc_changed)
 DEFINE_EVENT_TRAMPOLINE_SIMPLE(FanDial, on_off_clicked, handle_off_clicked)
 DEFINE_EVENT_TRAMPOLINE_SIMPLE(FanDial, on_on_clicked, handle_on_clicked)
+DEFINE_EVENT_TRAMPOLINE_SIMPLE(FanDial, on_icon_clicked, handle_icon_clicked)
 
 // ============================================================================
 // XML Callback Registration

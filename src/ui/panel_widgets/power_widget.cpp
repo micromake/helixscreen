@@ -5,29 +5,31 @@
 
 #include "ui_event_safety.h"
 #include "ui_icon.h"
-#include "ui_nav_manager.h"
 #include "ui_panel_power.h"
 #include "ui_update_queue.h"
 
+#include "app_globals.h"
 #include "moonraker_api.h"
+#include "observer_factory.h"
 #include "panel_widget_manager.h"
 #include "panel_widget_registry.h"
+#include "printer_state.h"
 
 #include <spdlog/spdlog.h>
 
 #include <set>
 
-namespace {
-const bool s_registered = [] {
-    helix::register_widget_factory("power", []() {
-        auto* api = helix::PanelWidgetManager::instance().shared_resource<MoonrakerAPI>();
-        return std::make_unique<helix::PowerWidget>(api);
-    });
-    return true;
-}();
-} // namespace
-
 namespace helix {
+
+void register_power_widget() {
+    register_widget_factory("power", []() {
+        auto* api = PanelWidgetManager::instance().shared_resource<MoonrakerAPI>();
+        return std::make_unique<PowerWidget>(api);
+    });
+
+    // Register XML event callbacks at startup (before any XML is parsed)
+    lv_xml_register_event_cb(nullptr, "power_toggle_cb", PowerWidget::power_toggle_cb);
+}
 
 PowerWidget::PowerWidget(MoonrakerAPI* api) : api_(api) {}
 
@@ -49,31 +51,37 @@ void PowerWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
         spdlog::warn("[PowerWidget] Could not find 'power_icon' in widget XML");
     }
 
-    // Register XML event callbacks
-    lv_xml_register_event_cb(nullptr, "power_toggle_cb", power_toggle_cb);
-    lv_xml_register_event_cb(nullptr, "power_long_press_cb", power_long_press_cb);
+    // Observe power_device_count to refresh state when devices are discovered.
+    // Fires immediately on add (triggers initial refresh), so no separate call needed.
+    std::weak_ptr<bool> weak_alive = alive_;
+    power_count_observer_ = helix::ui::observe_int_sync<PowerWidget>(
+        get_printer_state().get_power_device_count_subject(), this,
+        [weak_alive](PowerWidget* self, int /*count*/) {
+            if (weak_alive.expired())
+                return;
+            self->refresh_power_state();
+        });
+}
 
+void PowerWidget::on_activate() {
     refresh_power_state();
 }
 
 void PowerWidget::detach() {
     *alive_ = false;
+
+    // Nullify widget pointers BEFORE resetting observers (matches LedWidget pattern)
     if (widget_obj_) {
         lv_obj_set_user_data(widget_obj_, nullptr);
     }
     widget_obj_ = nullptr;
     parent_screen_ = nullptr;
     power_icon_ = nullptr;
+
+    power_count_observer_.reset();
 }
 
 void PowerWidget::handle_power_toggle() {
-    // Suppress click that follows a long-press gesture
-    if (power_long_pressed_) {
-        power_long_pressed_ = false;
-        spdlog::debug("[PowerWidget] Power click suppressed (follows long-press)");
-        return;
-    }
-
     spdlog::info("[PowerWidget] Power button clicked");
 
     if (!api_) {
@@ -109,17 +117,6 @@ void PowerWidget::handle_power_toggle() {
     // Optimistically update icon state
     power_on_ = new_state;
     update_power_icon(power_on_);
-}
-
-void PowerWidget::handle_power_long_press() {
-    spdlog::info("[PowerWidget] Power long-press: opening power panel overlay");
-
-    auto& panel = get_global_power_panel();
-    lv_obj_t* overlay = panel.get_or_create_overlay(parent_screen_);
-    if (overlay) {
-        power_long_pressed_ = true; // Suppress the click that follows long-press
-        NavigationManager::instance().push_overlay(overlay);
-    }
 }
 
 void PowerWidget::update_power_icon(bool is_on) {
@@ -169,40 +166,25 @@ void PowerWidget::refresh_power_state() {
         });
 }
 
+static PowerWidget* find_power_widget_ancestor(lv_obj_t* target) {
+    lv_obj_t* parent = lv_obj_get_parent(target);
+    while (parent) {
+        const char* name = lv_obj_get_name(parent);
+        if (name && strcmp(name, "panel_widget_power") == 0) {
+            return static_cast<PowerWidget*>(lv_obj_get_user_data(parent));
+        }
+        parent = lv_obj_get_parent(parent);
+    }
+    return nullptr;
+}
+
 void PowerWidget::power_toggle_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[PowerWidget] power_toggle_cb");
-    auto* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    auto* self = static_cast<PowerWidget*>(lv_obj_get_user_data(target));
-    if (!self) {
-        lv_obj_t* parent = lv_obj_get_parent(target);
-        while (parent && !self) {
-            self = static_cast<PowerWidget*>(lv_obj_get_user_data(parent));
-            parent = lv_obj_get_parent(parent);
-        }
-    }
+    auto* self = find_power_widget_ancestor(static_cast<lv_obj_t*>(lv_event_get_current_target(e)));
     if (self) {
         self->handle_power_toggle();
     } else {
         spdlog::warn("[PowerWidget] power_toggle_cb: could not recover widget instance");
-    }
-    LVGL_SAFE_EVENT_CB_END();
-}
-
-void PowerWidget::power_long_press_cb(lv_event_t* e) {
-    LVGL_SAFE_EVENT_CB_BEGIN("[PowerWidget] power_long_press_cb");
-    auto* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    auto* self = static_cast<PowerWidget*>(lv_obj_get_user_data(target));
-    if (!self) {
-        lv_obj_t* parent = lv_obj_get_parent(target);
-        while (parent && !self) {
-            self = static_cast<PowerWidget*>(lv_obj_get_user_data(parent));
-            parent = lv_obj_get_parent(parent);
-        }
-    }
-    if (self) {
-        self->handle_power_long_press();
-    } else {
-        spdlog::warn("[PowerWidget] power_long_press_cb: could not recover widget instance");
     }
     LVGL_SAFE_EVENT_CB_END();
 }

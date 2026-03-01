@@ -265,6 +265,14 @@ class AmsState {
     }
 
     /**
+     * @brief Get system logo path subject
+     * @return Subject holding logo image path (e.g., "A:assets/images/ams/ercf_64.png")
+     */
+    lv_subject_t* get_ams_system_logo_subject() {
+        return &ams_system_logo_;
+    }
+
+    /**
      * @brief Get current slot subject
      * @return Subject holding current slot index (-1 if none)
      */
@@ -300,6 +308,23 @@ class AmsState {
      */
     lv_subject_t* get_current_tool_text_subject() {
         return &ams_current_tool_text_;
+    }
+
+    /**
+     * @brief Get toolchange visibility subject (1=visible, 0=hidden)
+     * Non-zero when the filament backend (AFC, Happy Hare) reports expected tool changes.
+     */
+    lv_subject_t* get_toolchange_visible_subject() {
+        return &toolchange_visible_;
+    }
+
+    /**
+     * @brief Get toolchange text subject ("2 / 5" formatted)
+     * 1-based display: current_toolchange+1 of number_of_toolchanges.
+     * Empty string when not applicable.
+     */
+    lv_subject_t* get_toolchange_text_subject() {
+        return &toolchange_text_;
     }
 
     /**
@@ -694,6 +719,17 @@ class AmsState {
     void sync_current_loaded_from_backend();
 
     /**
+     * @brief Update "Currently Loaded" display subjects using pre-fetched system info
+     *
+     * Avoids redundant get_system_info() call when the caller already has the info
+     * (e.g., from sync_from_backend()). The provided info is used for the primary
+     * backend (index 0); secondary backends are queried as needed.
+     *
+     * @param primary_info Pre-fetched system info from the primary backend
+     */
+    void sync_current_loaded_from_backend(const AmsSystemInfo& primary_info);
+
+    /**
      * @brief Set action detail text directly (for UI-managed states)
      *
      * Used when UI is managing a process (like preheat) that the backend
@@ -778,8 +814,19 @@ class AmsState {
      */
     void bump_slots_version();
 
+    /**
+     * @brief Reset Spoolman circuit breaker state (for testing only)
+     *
+     * Clears failure counters, debounce timestamps, and notification flags
+     * so each test starts from a clean state.
+     */
+    void reset_spoolman_circuit_breaker();
+
   private:
     friend class AmsStateTestAccess;
+
+    /** @brief Set "Currently Loaded" subjects to default/empty state with guards */
+    void set_current_loaded_defaults();
 
     AmsState();
     ~AmsState();
@@ -836,6 +883,16 @@ class AmsState {
     lv_timer_t* spoolman_poll_timer_ = nullptr;
     int spoolman_poll_refcount_ = 0;
 
+    // Spoolman circuit breaker / debounce state
+    static constexpr int SPOOLMAN_CB_FAILURE_THRESHOLD = 3;   ///< Consecutive failures to trip
+    static constexpr uint32_t SPOOLMAN_CB_BACKOFF_MS = 30000; ///< Backoff when tripped (30s)
+    static constexpr uint32_t SPOOLMAN_DEBOUNCE_MS = 5000;    ///< Min interval between refreshes
+    uint32_t spoolman_last_refresh_ms_ = 0;                   ///< Tick of last actual refresh
+    int spoolman_consecutive_failures_ = 0;      ///< Failure counter for circuit breaker
+    uint32_t spoolman_cb_tripped_at_ms_ = 0;     ///< Tick when circuit breaker tripped
+    bool spoolman_cb_open_ = false;              ///< True = circuit breaker is open (blocking)
+    bool spoolman_unavailable_notified_ = false; ///< True = toast already shown this outage
+
     // Subject manager for automatic cleanup
     SubjectManager subjects_;
 
@@ -861,8 +918,15 @@ class AmsState {
     char action_detail_buf_[64];
     lv_subject_t ams_system_name_;
     char system_name_buf_[32];
+    lv_subject_t ams_system_logo_;
+    char system_logo_buf_[64];
     lv_subject_t ams_current_tool_text_;
     char ams_current_tool_text_buf_[16]; // "T0" to "T15" or "---"
+
+    // Tool change progress (AFC multi-color prints)
+    lv_subject_t toolchange_visible_; // 1 when swaps expected, 0 otherwise
+    lv_subject_t toolchange_text_;    // "2 / 5" formatted display
+    char toolchange_text_buf_[32]{};  // Buffer for formatted text
 
     // Filament path visualization subjects
     lv_subject_t path_topology_;

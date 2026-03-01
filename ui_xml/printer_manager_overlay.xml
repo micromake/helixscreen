@@ -167,7 +167,7 @@
                 scrollable="false" style_border_width="0">
           <bind_flag_if_eq subject="printer_has_z_tilt" flag="hidden" ref_value="0"/>
           <icon src="swap_vertical" size="xs" variant="success"/>
-          <text_small text="Z-Tilt"/>
+          <text_small text="Z-Tilt" translation_tag="Z-Tilt"/>
         </lv_obj>
 
         <!-- Firmware Retraction -->
@@ -273,7 +273,7 @@
           <bind_flag_if_eq subject="printer_has_speaker" flag="hidden" ref_value="0"/>
           <event_cb trigger="clicked" callback="pm_chip_speaker_clicked"/>
           <icon src="volume_high" size="xs" variant="success"/>
-          <text_small text="Speaker"/>
+          <text_small text="Speaker" translation_tag="Speaker"/>
         </lv_obj>
 
         <!-- Nozzle Clean -->

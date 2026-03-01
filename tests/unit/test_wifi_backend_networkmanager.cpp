@@ -100,7 +100,7 @@ TEST_CASE("NM backend: split_nmcli_fields", "[network][nm][parsing]") {
     }
 
     SECTION("Other backslash escapes pass through") {
-        // nmcli also escapes backslashes as \\ but we only unescape \: and \\
+        // nmcli also escapes backslashes but we only unescape \: and backslash
         auto fields = backend.split_nmcli_fields("path\\\\dir:value");
         REQUIRE(fields.size() == 2);
         CHECK(fields[0] == "path\\dir");

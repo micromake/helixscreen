@@ -17,6 +17,7 @@
 #include "app_constants.h"
 #include "app_globals.h"
 #include "filament_database.h"
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "observer_factory.h"
 #include "printer_state.h"
@@ -233,20 +234,26 @@ void TempControlPanel::on_target_changed(HeaterType type, int target_centi) {
     update_display(type);
     update_status(type);
 
+    if (!subjects_initialized_) {
+        return;
+    }
+
     float target_deg = centi_to_degrees_f(target_centi);
     bool show_target = (target_centi > 0);
 
-    if (h.graph && h.series_id >= 0) {
+    if (ui_temp_graph_is_valid(h.graph) && h.series_id >= 0) {
         ui_temp_graph_set_series_target(h.graph, h.series_id, target_deg, show_target);
         spdlog::trace("[TempPanel] {} target line: {:.1f}°C (visible={})", heater_label(type),
                       target_deg, show_target);
     }
 
     // Also update mini combined graph target line (nozzle/bed only)
-    if (type == HeaterType::Nozzle && mini_graph_ && mini_nozzle_series_id_ >= 0) {
+    if (type == HeaterType::Nozzle && ui_temp_graph_is_valid(mini_graph_) &&
+        mini_nozzle_series_id_ >= 0) {
         ui_temp_graph_set_series_target(mini_graph_, mini_nozzle_series_id_, target_deg,
                                         show_target);
-    } else if (type == HeaterType::Bed && mini_graph_ && mini_bed_series_id_ >= 0) {
+    } else if (type == HeaterType::Bed && ui_temp_graph_is_valid(mini_graph_) &&
+               mini_bed_series_id_ >= 0) {
         ui_temp_graph_set_series_target(mini_graph_, mini_bed_series_id_, target_deg, show_target);
     }
 }
@@ -295,13 +302,13 @@ void TempControlPanel::update_status(HeaterType type) {
         // Sensor-only heaters (e.g., chamber without active heater) just show "Monitoring"
         snprintf(h.status_buf.data(), h.status_buf.size(), "Monitoring");
     } else if (h.target > 0 && h.current < h.target - TEMP_TOLERANCE_CENTI) {
-        snprintf(h.status_buf.data(), h.status_buf.size(), "Heating to %d°C...", target_deg);
+        snprintf(h.status_buf.data(), h.status_buf.size(), lv_tr("Heating to %d°C..."), target_deg);
     } else if (h.target > 0 && h.current >= h.target - TEMP_TOLERANCE_CENTI) {
         snprintf(h.status_buf.data(), h.status_buf.size(), "At target temperature");
     } else if (h.target == 0 && h.current > h.cooling_threshold_centi) {
         snprintf(h.status_buf.data(), h.status_buf.size(), "Cooling down");
     } else {
-        snprintf(h.status_buf.data(), h.status_buf.size(), "Idle");
+        snprintf(h.status_buf.data(), h.status_buf.size(), "%s", lv_tr("Idle"));
     }
 
     lv_subject_copy_string(&h.status_subject, h.status_buf.data());
@@ -352,7 +359,7 @@ void TempControlPanel::update_graphs(HeaterType type, float temp_deg, int64_t no
     auto& h = heaters_[idx(type)];
 
     for (const auto& reg : h.temp_graphs) {
-        if (reg.graph && reg.series_id >= 0) {
+        if (ui_temp_graph_is_valid(reg.graph) && reg.series_id >= 0) {
             ui_temp_graph_update_series_with_time(reg.graph, reg.series_id, temp_deg, now_ms);
         }
     }
@@ -398,7 +405,7 @@ void TempControlPanel::init_subjects() {
         UI_MANAGED_SUBJECT_STRING_N(h.display_subject, h.display_buf.data(), h.display_buf.size(),
                                     h.display_buf.data(), display_names[i], subjects_);
         UI_MANAGED_SUBJECT_STRING_N(h.status_subject, h.status_buf.data(), h.status_buf.size(),
-                                    "Idle", status_names[i], subjects_);
+                                    lv_tr("Idle"), status_names[i], subjects_);
         UI_MANAGED_SUBJECT_INT(h.heating_subject, 0, heating_names[i], subjects_);
     }
 
@@ -410,8 +417,10 @@ void TempControlPanel::deinit_subjects() {
     if (!subjects_initialized_) {
         return;
     }
-    subjects_.deinit_all();
+    // Set flag BEFORE deinit to prevent deferred callbacks from accessing
+    // torn-down subjects during cleanup
     subjects_initialized_ = false;
+    subjects_.deinit_all();
     spdlog::debug("[TempPanel] Subjects deinitialized");
 }
 
@@ -1058,8 +1067,16 @@ void TempControlPanel::select_extruder(const std::string& name) {
         return;
     }
 
+    if (!subjects_initialized_) {
+        return;
+    }
+
     spdlog::info("[TempPanel] Switching extruder: {} -> {}", active_extruder_name_, name);
     active_extruder_name_ = name;
+
+    // Sync the global active extruder subjects (extruder_temp/extruder_target)
+    // so XML-bound elements (temp_display, nozzle_icon) update to the selected tool
+    printer_state_.set_active_extruder(name);
 
     auto& nozzle = heaters_[idx(HeaterType::Nozzle)];
 
@@ -1105,6 +1122,10 @@ void TempControlPanel::rebuild_extruder_segments() {
 }
 
 void TempControlPanel::rebuild_extruder_segments_impl() {
+    if (!subjects_initialized_) {
+        return;
+    }
+
     auto& nozzle = heaters_[idx(HeaterType::Nozzle)];
     auto* selector = lv_obj_find_by_name(nozzle.panel, "extruder_selector");
     if (!selector) {
@@ -1246,6 +1267,9 @@ void TempControlPanel::setup_mini_combined_graph(lv_obj_t* container) {
 
     lv_obj_t* chart = ui_temp_graph_get_chart(mini_graph_);
     lv_obj_set_size(chart, lv_pct(100), lv_pct(100));
+    // Allow taps to bubble up to the parent card's click handler
+    lv_obj_remove_flag(chart, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(chart, LV_OBJ_FLAG_EVENT_BUBBLE);
     ui_temp_graph_set_temp_range(mini_graph_, 0.0f, 150.0f);
     ui_temp_graph_set_point_count(mini_graph_, MINI_GRAPH_POINTS);
     ui_temp_graph_set_y_axis(mini_graph_, 50.0f, true);

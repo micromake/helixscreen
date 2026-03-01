@@ -69,7 +69,7 @@ MoonrakerRestAPI::~MoonrakerRestAPI() {
     // Signal shutdown and wait for HTTP threads with timeout
     shutting_down_.store(true);
 
-    std::list<std::thread> threads_to_join;
+    std::list<std::pair<std::thread, std::shared_ptr<std::atomic<bool>>>> threads_to_join;
     {
         std::lock_guard<std::mutex> lock(http_threads_mutex_);
         threads_to_join = std::move(http_threads_);
@@ -85,7 +85,7 @@ MoonrakerRestAPI::~MoonrakerRestAPI() {
     constexpr auto kJoinTimeout = std::chrono::seconds(2);
     constexpr auto kPollInterval = std::chrono::milliseconds(10);
 
-    for (auto& t : threads_to_join) {
+    for (auto& [t, _] : threads_to_join) {
         if (!t.joinable()) {
             continue;
         }
@@ -123,7 +123,23 @@ void MoonrakerRestAPI::launch_http_thread(std::function<void()> func) {
         return;
     }
 
-    http_threads_.emplace_back([func = std::move(func)]() { func(); });
+    // Prune completed threads to prevent unbounded list growth
+    for (auto it = http_threads_.begin(); it != http_threads_.end();) {
+        if (it->second->load()) {
+            it->first.join();
+            it = http_threads_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    auto done = std::make_shared<std::atomic<bool>>(false);
+    http_threads_.emplace_back(
+        std::thread([func = std::move(func), done]() {
+            func();
+            done->store(true);
+        }),
+        done);
 }
 
 // ============================================================================

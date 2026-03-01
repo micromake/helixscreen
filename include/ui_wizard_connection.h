@@ -197,6 +197,10 @@ class WizardConnectionStep {
     std::atomic<bool> cleanup_called_{false};        ///< Guards async callbacks after navigation
     std::atomic<uint64_t> connection_generation_{0}; ///< Invalidates stale callbacks
 
+    /// Shared alive token for mDNS callback safety — prevents use-after-free when
+    /// queued callbacks fire after wizard destruction (prestonbrown/helixscreen#193)
+    std::shared_ptr<std::atomic<bool>> m_alive = std::make_shared<std::atomic<bool>>(true);
+
     // Auto-probe state for localhost detection (atomic for cross-thread access)
     std::atomic<AutoProbeState> auto_probe_state_{AutoProbeState::IDLE};
     bool auto_probe_attempted_ = false; // Main thread only

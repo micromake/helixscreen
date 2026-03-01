@@ -147,7 +147,7 @@
                 <temp_display name="nozzle_temp_display"
                               size="md" show_target="true" bind_current="extruder_temp" bind_target="extruder_target"
                               event_cb="on_nozzle_temp_clicked"/>
-                <icon src="pencil" size="xs" variant="secondary" clickable="false" event_bubble="true"/>
+                <icon src="pencil" size="xs" variant="tertiary" clickable="false" event_bubble="true"/>
               </lv_obj>
             </lv_obj>
             <text_small name="nozzle_status"
@@ -176,7 +176,7 @@
                 <temp_display name="bed_temp_display"
                               size="md" show_target="true" bind_current="bed_temp" bind_target="bed_target"
                               event_cb="on_bed_temp_clicked"/>
-                <icon src="pencil" size="xs" variant="secondary" clickable="false" event_bubble="true"/>
+                <icon src="pencil" size="xs" variant="tertiary" clickable="false" event_bubble="true"/>
               </lv_obj>
             </lv_obj>
             <text_small name="bed_status"
@@ -186,10 +186,13 @@
             <!-- Chamber section (visible only if printer has chamber sensor) -->
             <lv_obj name="chamber_section"
                     width="100%" flex_flow="row" style_flex_main_place="space_between" style_flex_cross_place="center"
-                    hidden="true">
+                    clickable="true" hidden="true">
+              <event_cb trigger="clicked" callback="on_chamber_temp_clicked"/>
               <bind_flag_if_eq subject="printer_has_chamber_sensor" flag="hidden" ref_value="0"/>
-              <text_small text="Chamber:" translation_tag="Chamber:"/>
-              <temp_display name="chamber_temp_display" size="md" show_target="false" bind_current="chamber_temp"/>
+              <text_small text="Chamber:" translation_tag="Chamber:" clickable="false" event_bubble="true"/>
+              <temp_display name="chamber_temp_display"
+                            size="md" show_target="false" bind_current="chamber_temp" clickable="false"
+                            event_bubble="true"/>
             </lv_obj>
             <!-- Secondary temperature sensors list (populated dynamically) -->
             <lv_obj name="secondary_temps_list"
@@ -318,8 +321,8 @@
         </lv_obj>
         <!-- Home row: label + homing buttons inline -->
         <lv_obj width="100%"
-                height="content" style_pad_all="0" scrollable="false" flex_flow="row"
-                style_flex_cross_place="center" style_pad_gap="#space_xs">
+                height="content" style_pad_all="0" scrollable="false" flex_flow="row" style_flex_cross_place="center"
+                style_pad_gap="#space_xs">
           <text_small text="Home" translation_tag="Home" style_min_width="40"/>
           <ui_button name="btn_home_all"
                      width="0" height="#button_height_sm" text="All" translation_tag="All" flex_grow="1"
@@ -373,8 +376,8 @@
             <!-- QGL button - visible only if printer has quad_gantry_level -->
             <ui_button name="btn_qgl"
                        width="0" height="#button_height_sm" flex_grow="1" text="Quad Gantry Level"
-                       translation_tag="Quad Gantry Level" variant="secondary" hidden="true"
-                       style_text_font="#font_xs" long_mode="wrap">
+                       translation_tag="Quad Gantry Level" variant="secondary" hidden="true" style_text_font="#font_xs"
+                       long_mode="wrap">
               <bind_flag_if_eq subject="printer_has_qgl" flag="hidden" ref_value="0"/>
               <bind_state_if_eq subject="print_active" state="disabled" ref_value="1"/>
               <bind_state_if_eq subject="controls_operation_in_progress" state="disabled" ref_value="1"/>
@@ -383,8 +386,8 @@
             <!-- Z-Tilt button - visible only if printer has z_tilt_adjust -->
             <ui_button name="btn_z_tilt"
                        width="0" height="#button_height_sm" flex_grow="1" text="Z-Tilt Adjust"
-                       translation_tag="Z-Tilt Adjust" variant="secondary" hidden="true"
-                       style_text_font="#font_xs" long_mode="wrap">
+                       translation_tag="Z-Tilt Adjust" variant="secondary" hidden="true" style_text_font="#font_xs"
+                       long_mode="wrap">
               <bind_flag_if_eq subject="printer_has_z_tilt" flag="hidden" ref_value="0"/>
               <bind_state_if_eq subject="print_active" state="disabled" ref_value="1"/>
               <bind_state_if_eq subject="controls_operation_in_progress" state="disabled" ref_value="1"/>

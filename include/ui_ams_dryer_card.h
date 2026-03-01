@@ -97,6 +97,9 @@ class AmsDryerCard {
     static void register_callbacks_static();
 
   private:
+    // === Lifecycle Guard ===
+    bool active_ = false; // Set true after setup, false before cleanup; prevents use-after-free
+
     // === Widget References ===
     lv_obj_t* dryer_card_ = nullptr;
     lv_obj_t* dryer_modal_ = nullptr;

@@ -5,13 +5,17 @@
 #include "ams_state.h"
 #include "app_globals.h"
 #include "filament_sensor_manager.h"
+#include "humidity_sensor_manager.h"
 #include "led/led_controller.h"
 #include "moonraker_api.h"
 #include "moonraker_client.h"
+#include "runtime_config.h"
 #include "spdlog/spdlog.h"
 #include "standard_macros.h"
 #include "temperature_sensor_manager.h"
 #include "tool_state.h"
+#include "width_sensor_manager.h"
+#include "width_sensor_types.h"
 
 #include <sstream>
 #include <vector>
@@ -105,6 +109,29 @@ void init_subsystems_from_hardware(const PrinterDiscovery& hardware, MoonrakerAP
     auto& tsm = helix::sensors::TemperatureSensorManager::instance();
     tsm.discover(hardware.sensors());
 
+    // Initialize humidity sensor manager
+    // Humidity sensors (bme280, htu21d) are discovered from the full objects list
+    auto& hsm = helix::sensors::HumiditySensorManager::instance();
+    hsm.discover(hardware.printer_objects());
+
+    // Initialize width sensor manager
+    // Width sensors (hall/tsl1401cl filament width) are discovered from Klipper objects
+    if (hardware.has_width_sensors()) {
+        auto& wsm = helix::sensors::WidthSensorManager::instance();
+        wsm.discover(hardware.width_sensor_objects());
+        // In mock mode, auto-assign the first sensor to FLOW_COMPENSATION role
+        // so the diameter subject gets a meaningful value for UI testing
+        if (get_runtime_config()->should_mock_sensors()) {
+            auto sensors = wsm.get_sensors();
+            if (!sensors.empty()) {
+                wsm.set_sensor_role(sensors.front().klipper_name,
+                                    helix::sensors::WidthSensorRole::FLOW_COMPENSATION);
+            }
+        }
+        spdlog::debug("[PrinterDiscovery] Discovered {} width sensors",
+                      hardware.width_sensor_objects().size());
+    }
+
     // Initialize multi-extruder temperature tracking
     auto& printer_state = get_printer_state();
     printer_state.init_extruders(hardware.heaters());
@@ -122,6 +149,13 @@ void init_subsystems_from_hardware(const PrinterDiscovery& hardware, MoonrakerAP
     }
     led_ctrl.discover_from_hardware(hardware);
     led_ctrl.discover_wled_strips();
+
+    // Set tracked LED early so the subscription response populates subjects correctly.
+    // LedWidget::bind_led() will also call this (idempotent) when it attaches later.
+    const auto& strips = led_ctrl.selected_strips();
+    if (!strips.empty()) {
+        printer_state.set_tracked_led(strips.front());
+    }
 
     spdlog::info("[PrinterDiscovery] Subsystem initialization complete");
 }

@@ -4,8 +4,11 @@
 #include "ui_bed_mesh.h"
 
 #include "ui_fonts.h"
+#include "ui_update_queue.h"
 #include "ui_utils.h"
 
+#include "bed_mesh_overlays.h"
+#include "bed_mesh_render_thread.h"
 #include "bed_mesh_renderer.h"
 #include "helix-xml/src/xml/lv_xml.h"
 #include "helix-xml/src/xml/lv_xml_parser.h"
@@ -17,6 +20,7 @@
 #include <spdlog/spdlog.h>
 
 using namespace helix;
+using helix::mesh::BedMeshRenderThread;
 
 #include <cstdlib>
 #include <cstring>
@@ -39,7 +43,75 @@ typedef struct {
     // Deferred redraw state (for panels created while hidden)
     bool had_valid_size;    // Has widget ever had non-zero dimensions
     bool mesh_data_pending; // Mesh data was set before widget had valid size
+
+    // Async rendering (background thread produces pre-rendered frames)
+    std::unique_ptr<BedMeshRenderThread> render_thread;
+    bool async_mode = false;
+
+    // Persistent blit buffer for async mode.
+    // lv_draw_image() defers the actual draw — the src pointer must remain valid
+    // until LVGL's SW draw unit processes the task.  A stack-local lv_draw_buf_t
+    // would be destroyed before the task runs, causing "Failed to open image".
+    // We copy the render thread's front buffer here (under the swap lock) and
+    // keep the lv_draw_buf_t pointing to it across frames.
+    lv_draw_buf_t blit_draw_buf{};
+    std::vector<uint8_t> blit_pixel_data;
+    int blit_width = 0;
+    int blit_height = 0;
 } bed_mesh_widget_data_t;
+
+/**
+ * Fetch theme colors needed for off-screen buffer rendering.
+ * Must be called on the main thread where theme_manager_get_color is safe.
+ */
+static bed_mesh_render_colors_t fetch_theme_colors() {
+    bed_mesh_render_colors_t colors{};
+
+    lv_color_t bg = theme_manager_get_color("graph_bg");
+    colors.bg_r = bg.red;
+    colors.bg_g = bg.green;
+    colors.bg_b = bg.blue;
+
+    lv_color_t grid = theme_manager_get_color("elevated_bg");
+    colors.grid_r = grid.red;
+    colors.grid_g = grid.green;
+    colors.grid_b = grid.blue;
+
+    return colors;
+}
+
+/**
+ * Draw a placeholder when the async render thread has not yet produced a frame.
+ * Shows a dark background with centered "Rendering..." text.
+ */
+static void draw_async_placeholder(lv_layer_t* layer, const lv_area_t* coords, int width,
+                                   int height) {
+    // Dark background rectangle (same color as normal mesh background)
+    lv_draw_rect_dsc_t rect_dsc;
+    lv_draw_rect_dsc_init(&rect_dsc);
+    rect_dsc.bg_color = theme_manager_get_color("graph_bg");
+    rect_dsc.bg_opa = LV_OPA_COVER;
+    lv_draw_rect(layer, &rect_dsc, coords);
+
+    // Centered "Rendering..." label
+    lv_draw_label_dsc_t label_dsc;
+    lv_draw_label_dsc_init(&label_dsc);
+    label_dsc.color = lv_color_white();
+    label_dsc.font = &noto_sans_14;
+    label_dsc.opa = LV_OPA_60;
+    label_dsc.align = LV_TEXT_ALIGN_CENTER;
+    label_dsc.text = "Rendering...";
+
+    // Center the label area within the widget
+    const int label_w = 120;
+    const int label_h = 20;
+    lv_area_t label_area;
+    label_area.x1 = coords->x1 + (width - label_w) / 2;
+    label_area.y1 = coords->y1 + (height - label_h) / 2;
+    label_area.x2 = label_area.x1 + label_w;
+    label_area.y2 = label_area.y1 + label_h;
+    lv_draw_label(layer, &label_dsc, &label_area);
+}
 
 /**
  * Draw event handler - renders bed mesh using DRAW_POST pattern
@@ -71,7 +143,81 @@ static void bed_mesh_draw_cb(lv_event_t* e) {
         return;
     }
 
-    // Render mesh directly to layer (matches G-code viewer pattern)
+    // Async mode: blit pre-rendered buffer from render thread
+    if (data->async_mode && data->render_thread) {
+        // Lock the front buffer and copy into persistent blit buffer.
+        // lv_draw_image() defers the actual draw — by the time LVGL's SW draw
+        // unit processes the task, a stack-local lv_draw_buf_t would be destroyed.
+        // We copy the pixel data into widget-owned storage so the lv_draw_buf_t
+        // and its backing memory remain valid until the next draw callback.
+        {
+            auto locked = data->render_thread->lock_ready_buffer();
+            if (locked) {
+                const auto* buf = locked.buffer;
+                uint32_t data_size = (uint32_t)(buf->stride() * buf->height());
+
+                // Reallocate persistent buffer if dimensions changed
+                if (data->blit_width != buf->width() || data->blit_height != buf->height()) {
+                    data->blit_pixel_data.resize(data_size);
+                    data->blit_width = buf->width();
+                    data->blit_height = buf->height();
+                }
+
+                // Copy pixels under the swap lock
+                std::memcpy(data->blit_pixel_data.data(), buf->data(), data_size);
+
+                // (Re)initialize the persistent draw buf pointing to our copy
+                lv_draw_buf_init(&data->blit_draw_buf, (uint32_t)buf->width(),
+                                 (uint32_t)buf->height(), LV_COLOR_FORMAT_ARGB8888,
+                                 (uint32_t)buf->stride(), data->blit_pixel_data.data(), data_size);
+
+                spdlog::trace("[bed_mesh] Async blit {}x{} ({:.1f}ms render)", buf->width(),
+                              buf->height(), data->render_thread->last_render_time_ms());
+            }
+        } // swap lock released — blit_pixel_data is our own copy, safe to use
+
+        if (data->blit_width > 0 && data->blit_height > 0) {
+            lv_draw_image_dsc_t img_dsc;
+            lv_draw_image_dsc_init(&img_dsc);
+            img_dsc.src = &data->blit_draw_buf;
+
+            lv_area_t area;
+            area.x1 = widget_coords.x1;
+            area.y1 = widget_coords.y1;
+            area.x2 = widget_coords.x1 + data->blit_width - 1;
+            area.y2 = widget_coords.y1 + data->blit_height - 1;
+
+            lv_draw_image(layer, &img_dsc, &area);
+        } else {
+            // No frame ready yet — draw placeholder
+            draw_async_placeholder(layer, &widget_coords, width, height);
+
+            // Schedule a re-invalidation so we pick up the ready buffer next frame
+            helix::ui::queue_widget_update(obj, [](lv_obj_t* w) { lv_obj_invalidate(w); });
+        }
+
+        // Render axis labels and tick marks on the main thread.
+        // These require the LVGL font engine and cannot run in the background.
+        // render_to_buffer() sets layer_offset=(0,0) for buffer-local rendering,
+        // but axis labels are drawn via LVGL's draw API which uses absolute screen
+        // coordinates.  Temporarily set the layer offset to the widget's screen
+        // position so projected 3D→2D coordinates land at the correct screen location.
+        {
+            std::lock_guard<std::mutex> lock(data->render_thread->render_mutex());
+            int saved_offset_x, saved_offset_y;
+            bed_mesh_renderer_get_layer_offset(data->renderer, &saved_offset_x, &saved_offset_y);
+            bed_mesh_renderer_set_layer_offset(data->renderer, widget_coords.x1, widget_coords.y1);
+
+            helix::mesh::render_axis_labels(layer, data->renderer, width, height);
+            helix::mesh::render_numeric_axis_ticks(layer, data->renderer, width, height);
+
+            bed_mesh_renderer_set_layer_offset(data->renderer, saved_offset_x, saved_offset_y);
+        }
+
+        return; // Skip synchronous render path
+    }
+
+    // Synchronous render path (original behavior)
     if (!bed_mesh_renderer_render(data->renderer, layer, width, height, widget_coords.x1,
                                   widget_coords.y1)) {
         return;
@@ -119,8 +265,15 @@ static void bed_mesh_press_cb(lv_event_t* e) {
     data->is_dragging = true;
     data->last_drag_pos = point;
 
-    // Update renderer dragging state for fast solid-color rendering
-    bed_mesh_renderer_set_dragging(data->renderer, true);
+    // Update renderer dragging state for fast solid-color rendering.
+    // In async mode, lock the render mutex to prevent concurrent access
+    // with the background render thread.
+    if (data->async_mode && data->render_thread) {
+        std::lock_guard<std::mutex> lock(data->render_thread->render_mutex());
+        bed_mesh_renderer_set_dragging(data->renderer, true);
+    } else {
+        bed_mesh_renderer_set_dragging(data->renderer, true);
+    }
 
     spdlog::trace("[bed_mesh] Press at ({}, {}), switching to solid", point.x, point.y);
 }
@@ -171,7 +324,12 @@ static void bed_mesh_pressing_cb(lv_event_t* e) {
                      (int)state);
         data->is_dragging = false;
         if (data->renderer) {
-            bed_mesh_renderer_set_dragging(data->renderer, false);
+            if (data->async_mode && data->render_thread) {
+                std::lock_guard<std::mutex> lock(data->render_thread->render_mutex());
+                bed_mesh_renderer_set_dragging(data->renderer, false);
+            } else {
+                bed_mesh_renderer_set_dragging(data->renderer, false);
+            }
         }
         lv_obj_invalidate(obj); // Trigger redraw with gradient
         return;
@@ -203,12 +361,22 @@ static void bed_mesh_pressing_cb(lv_event_t* e) {
         if (data->rotation_z < 0)
             data->rotation_z += 360;
 
-        // Update renderer rotation
+        // Update renderer rotation.
+        // In async mode, lock the render mutex to prevent concurrent access
+        // with the background render thread, then request a new frame.
         if (data->renderer) {
-            bed_mesh_renderer_set_rotation(data->renderer, data->rotation_x, data->rotation_z);
+            if (data->async_mode && data->render_thread) {
+                std::lock_guard<std::mutex> lock(data->render_thread->render_mutex());
+                bed_mesh_renderer_set_rotation(data->renderer, data->rotation_x, data->rotation_z);
+            } else {
+                bed_mesh_renderer_set_rotation(data->renderer, data->rotation_x, data->rotation_z);
+            }
         }
 
-        // Trigger redraw
+        // Trigger redraw (async mode: request new frame from render thread)
+        if (data->async_mode && data->render_thread) {
+            data->render_thread->request_render();
+        }
         lv_obj_invalidate(obj);
 
         data->last_drag_pos = point;
@@ -239,8 +407,17 @@ static void bed_mesh_release_cb(lv_event_t* e) {
     // 3D mode: end drag gesture
     data->is_dragging = false;
 
-    // Update renderer dragging state for high-quality gradient rendering
-    bed_mesh_renderer_set_dragging(data->renderer, false);
+    // Update renderer dragging state for high-quality gradient rendering.
+    // In async mode, lock the render mutex to prevent concurrent access.
+    if (data->async_mode && data->render_thread) {
+        {
+            std::lock_guard<std::mutex> lock(data->render_thread->render_mutex());
+            bed_mesh_renderer_set_dragging(data->renderer, false);
+        }
+        data->render_thread->request_render();
+    } else {
+        bed_mesh_renderer_set_dragging(data->renderer, false);
+    }
 
     // Force immediate redraw to switch back to gradient rendering
     lv_obj_invalidate(obj);
@@ -280,6 +457,15 @@ static void bed_mesh_size_changed_cb(lv_event_t* e) {
         }
     }
 
+    // Restart render thread with new dimensions if in async mode
+    if (data && data->async_mode && data->render_thread && width > 0 && height > 0) {
+        data->render_thread->stop();
+        data->render_thread->set_colors(fetch_theme_colors());
+        data->render_thread->start(width, height);
+        data->render_thread->request_render();
+        spdlog::debug("[bed_mesh] Restarted async render thread for new size {}x{}", width, height);
+    }
+
     // Trigger redraw with new dimensions
     lv_obj_invalidate(obj);
 }
@@ -296,6 +482,12 @@ static void bed_mesh_delete_cb(lv_event_t* e) {
     lv_obj_set_user_data(obj, nullptr);
 
     if (data) {
+        // Stop render thread before destroying renderer (thread holds renderer pointer)
+        if (data->render_thread) {
+            data->render_thread.reset();
+            spdlog::trace("[bed_mesh] Stopped render thread");
+        }
+
         // Destroy renderer
         if (data->renderer) {
             bed_mesh_renderer_destroy(data->renderer);
@@ -443,6 +635,11 @@ bool ui_bed_mesh_set_data(lv_obj_t* widget, const float* const* mesh, int rows, 
         return false;
     }
 
+    // Reset adaptive quality state since new mesh may render differently
+    if (data->render_thread) {
+        data->render_thread->reset_quality();
+    }
+
     // Check if widget has valid dimensions yet
     int width = lv_obj_get_width(widget);
     int height = lv_obj_get_height(widget);
@@ -525,7 +722,16 @@ void ui_bed_mesh_redraw(lv_obj_t* widget) {
         return;
     }
 
-    // Trigger DRAW_POST event by invalidating widget
+    // In async mode, request a new frame from the render thread.
+    // The thread's frame-ready callback will invalidate the widget when done.
+    bed_mesh_widget_data_t* data = (bed_mesh_widget_data_t*)lv_obj_get_user_data(widget);
+    if (data && data->async_mode && data->render_thread) {
+        data->render_thread->request_render();
+        spdlog::debug("[bed_mesh] Async redraw requested");
+        return;
+    }
+
+    // Synchronous path: trigger DRAW_POST event by invalidating widget
     lv_obj_invalidate(widget);
 
     spdlog::debug("[bed_mesh] Redraw requested");
@@ -580,7 +786,7 @@ void ui_bed_mesh_set_render_mode(lv_obj_t* widget, BedMeshRenderMode mode) {
     }
 
     bed_mesh_renderer_set_render_mode(data->renderer, mode);
-    lv_obj_invalidate(widget); // Redraw with new mode
+    ui_bed_mesh_redraw(widget); // Redraw with new mode (handles async)
 }
 
 /**
@@ -597,7 +803,7 @@ void ui_bed_mesh_set_zero_plane_visible(lv_obj_t* widget, bool visible) {
     }
 
     bed_mesh_renderer_set_zero_plane_visible(data->renderer, visible);
-    lv_obj_invalidate(widget); // Redraw with updated plane visibility
+    ui_bed_mesh_redraw(widget); // Redraw with updated plane visibility (handles async)
 }
 
 /**
@@ -617,4 +823,85 @@ void ui_bed_mesh_set_z_display_offset(lv_obj_t* widget, double offset_mm) {
     }
 
     bed_mesh_renderer_set_z_display_offset(data->renderer, offset_mm);
+}
+
+/**
+ * Enable or disable async rendering mode
+ */
+void ui_bed_mesh_set_async_mode(lv_obj_t* widget, bool enabled) {
+    if (!widget) {
+        return;
+    }
+
+    bed_mesh_widget_data_t* data = (bed_mesh_widget_data_t*)lv_obj_get_user_data(widget);
+    if (!data || !data->renderer) {
+        return;
+    }
+
+    if (enabled == data->async_mode) {
+        return; // Already in requested mode
+    }
+
+    if (enabled) {
+        int width = lv_obj_get_width(widget);
+        int height = lv_obj_get_height(widget);
+
+        data->async_mode = true;
+        data->render_thread = std::make_unique<BedMeshRenderThread>();
+        data->render_thread->set_renderer(data->renderer);
+        data->render_thread->set_colors(fetch_theme_colors());
+
+        // Set callback to invalidate widget when frame ready (from render thread).
+        // queue_widget_update() guards with lv_obj_is_valid(), so if the widget
+        // is deleted before the queued callback fires, it is silently skipped.
+        data->render_thread->set_frame_ready_callback([widget]() {
+            helix::ui::queue_widget_update(widget, [](lv_obj_t* w) { lv_obj_invalidate(w); });
+        });
+
+        if (width > 0 && height > 0) {
+            data->render_thread->start(width, height);
+            data->render_thread->request_render();
+        }
+
+        spdlog::info("[bed_mesh] Async rendering enabled ({}x{})", width, height);
+    } else {
+        data->render_thread.reset(); // Stops and destroys
+        data->async_mode = false;
+        lv_obj_invalidate(widget); // Redraw synchronously
+        spdlog::info("[bed_mesh] Async rendering disabled");
+    }
+}
+
+/**
+ * Check if async rendering mode is enabled
+ */
+bool ui_bed_mesh_is_async_mode(lv_obj_t* widget) {
+    if (!widget) {
+        return false;
+    }
+
+    bed_mesh_widget_data_t* data = (bed_mesh_widget_data_t*)lv_obj_get_user_data(widget);
+    if (!data) {
+        return false;
+    }
+
+    return data->async_mode;
+}
+
+/**
+ * Request the render thread to produce a new frame
+ */
+void ui_bed_mesh_request_async_render(lv_obj_t* widget) {
+    if (!widget) {
+        return;
+    }
+
+    bed_mesh_widget_data_t* data = (bed_mesh_widget_data_t*)lv_obj_get_user_data(widget);
+    if (!data) {
+        return;
+    }
+
+    if (data->async_mode && data->render_thread) {
+        data->render_thread->request_render();
+    }
 }

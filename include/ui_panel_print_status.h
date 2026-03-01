@@ -13,6 +13,7 @@
 #include "ui_save_z_offset_modal.h"
 
 #include "overlay_base.h"
+#include "print_lifecycle_state.h"
 #include "printer_state.h"
 #include "subject_managed_panel.h"
 #include "ui/temperature_observer_bundle.h"
@@ -36,18 +37,7 @@ class PrintStatusPanel;
  * speed/flow, and provides pause/tune/cancel buttons.
  */
 
-/**
- * @brief Print state machine states
- */
-enum class PrintState {
-    Idle,      ///< No active print
-    Preparing, ///< Running pre-print operations (homing, leveling, etc.)
-    Printing,  ///< Actively printing
-    Paused,    ///< Print paused
-    Complete,  ///< Print finished successfully
-    Cancelled, ///< Print cancelled by user
-    Error      ///< Print failed with error
-};
+// PrintState enum is now in print_lifecycle_state.h
 
 class PrintStatusPanel : public OverlayBase {
   public:
@@ -114,6 +104,30 @@ class PrintStatusPanel : public OverlayBase {
      */
     void cleanup() override;
 
+    /**
+     * @brief Push the print status overlay with lazy creation and destroy-on-close
+     *
+     * All call sites should use this instead of manually pushing the overlay.
+     * Handles lazy creation, NavigationManager registration, and destroy-on-close
+     * callback registration. The widget tree is destroyed when the overlay closes
+     * to free memory (~400-800KB); subjects survive for re-creation.
+     *
+     * @param parent_screen Parent screen for overlay creation
+     * @return true if overlay was pushed successfully
+     */
+    static bool push_overlay(lv_obj_t* parent_screen);
+
+  protected:
+    /**
+     * @brief Called after destroy_overlay_ui() deletes the widget tree
+     *
+     * Nulls all widget pointers, resets widget-dependent state (exclude manager,
+     * resize registration), and cancels any in-flight animations. Does NOT
+     * destroy subjects or observers on live PrinterState subjects.
+     */
+    void on_ui_destroyed() override;
+
+  public:
     //
     // === Legacy Compatibility ===
     //
@@ -216,7 +230,7 @@ class PrintStatusPanel : public OverlayBase {
      * @return Current PrintState
      */
     PrintState get_state() const {
-        return current_state_;
+        return lifecycle_.state();
     }
 
     //
@@ -237,7 +251,7 @@ class PrintStatusPanel : public OverlayBase {
      * @return Progress 0-100
      */
     int get_progress() const {
-        return current_progress_;
+        return lifecycle_.progress();
     }
 
     /**
@@ -316,26 +330,14 @@ class PrintStatusPanel : public OverlayBase {
     /// Shutdown guard for async callbacks - set false in destructor
     /// Captured by lambdas to prevent use-after-free on shutdown [L012]
     std::shared_ptr<std::atomic<bool>> m_alive = std::make_shared<std::atomic<bool>>(true);
-    PrintState current_state_ = PrintState::Idle;
-    int current_progress_ = 0;
+
+    /// Pure-logic state machine (no LVGL deps) — owns all print state variables
+    PrintLifecycleState lifecycle_;
 
     // Thumbnail loading state
     std::string current_print_filename_; ///< Full path to current print file (for metadata fetch)
     std::string cached_thumbnail_path_;  ///< Local cache path for downloaded thumbnail
     uint32_t thumbnail_load_generation_ = 0; ///< Generation counter for async callback safety
-    int current_layer_ = 0;
-    int total_layers_ = 0;
-    int elapsed_seconds_ = 0;
-    int remaining_seconds_ = 0;
-    int preprint_remaining_seconds_ = 0;
-    int preprint_elapsed_seconds_ =
-        0; ///< Pre-print elapsed time (used only during Preparing state)
-    int nozzle_current_ = 0;
-    int nozzle_target_ = 0;
-    int bed_current_ = 0;
-    int bed_target_ = 0;
-    int speed_percent_ = 100;
-    int flow_percent_ = 100;
 
     // Child widgets
     lv_obj_t* progress_bar_ = nullptr;
@@ -356,6 +358,12 @@ class PrintStatusPanel : public OverlayBase {
     // Set in set_filename(), consumed in on_activate() - avoids downloading
     // large files unless user actually navigates to print status panel
     std::string pending_gcode_filename_;
+
+    // Track what G-code file we've already requested to load (deduplication).
+    // Unlike loaded_thumbnail_filename_ which guards thumbnail loads, this guards
+    // the expensive async G-code download. Set when load_gcode_for_viewing() is
+    // called or deferred; cleared when print ends or a different file is loaded.
+    std::string requested_gcode_filename_;
 
     // Track whether G-code was successfully loaded into the viewer
     // When false (memory check failed), don't switch to viewer mode on state changes
@@ -392,8 +400,6 @@ class PrintStatusPanel : public OverlayBase {
     //
 
     TempControlPanel* temp_control_panel_ = nullptr;
-    lv_obj_t* nozzle_temp_panel_ = nullptr;
-    lv_obj_t* bed_temp_panel_ = nullptr;
 
     // Light/timelapse controls (extracted Phase 2 functionality)
     PrintLightTimelapseControls light_timelapse_controls_;
@@ -419,7 +425,8 @@ class PrintStatusPanel : public OverlayBase {
     void animate_print_error();     ///< Error animation when print fails
     void cleanup_temp_gcode();      ///< Remove temp G-code file downloaded for viewing
     void apply_filament_color_override(
-        uint32_t color_rgb); ///< Apply AMS/Spoolman filament color to gcode viewer
+        uint32_t color_rgb);            ///< Apply AMS/Spoolman filament color to gcode viewer
+    bool build_and_apply_tool_colors(); ///< Build per-tool AMS color map and apply to viewer
 
     static void format_time(int seconds, char* buf, size_t buf_size);
 
@@ -441,6 +448,7 @@ class PrintStatusPanel : public OverlayBase {
 
     static void on_nozzle_card_clicked(lv_event_t* e);
     static void on_bed_card_clicked(lv_event_t* e);
+    static void on_dismiss_overlay_clicked(lv_event_t* e);
     static void on_pause_clicked(lv_event_t* e);
     static void on_tune_clicked(lv_event_t* e);
     static void on_cancel_clicked(lv_event_t* e);

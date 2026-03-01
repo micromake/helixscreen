@@ -32,6 +32,9 @@ ifneq ($(UNAME_S),Darwin)
     # Linux: may need DRM/input libraries
     ifeq ($(DISPLAY_BACKEND),drm)
         WATCHDOG_LDFLAGS += -ldrm -linput
+        ifeq ($(ENABLE_OPENGLES),yes)
+            WATCHDOG_LDFLAGS += -lEGL -lGLESv2 -lgbm -ldl
+        endif
     endif
 endif
 
@@ -89,9 +92,9 @@ $(BUILD_DIR)/watchdog/ui_notification_stub.o: tools/ui_notification_stub.cpp $(L
 # Link watchdog binary
 # Dependencies: watchdog object, display library, LVGL objects (compiled from source), fonts
 # Note: Use --whole-archive for DISPLAY_LIB to prevent LTO from stripping create_auto()
-$(WATCHDOG_BIN): $(WATCHDOG_OBJ) $(DISPLAY_LIB) $(LVGL_OBJS) $(THORVG_OBJS) $(FONT_OBJS) $(WATCHDOG_EXTRA_OBJS) | $(BUILD_DIR)/bin
+$(WATCHDOG_BIN): $(WATCHDOG_OBJ) $(DISPLAY_LIB) $(LVGL_OBJS) $(LVGL_OPENGLES_OBJS) $(THORVG_OBJS) $(FONT_OBJS) $(WATCHDOG_EXTRA_OBJS) | $(BUILD_DIR)/bin
 	@echo "[LD] $@"
-	$(Q)$(CXX) $(WATCHDOG_OBJ) -Wl,--whole-archive $(DISPLAY_LIB) -Wl,--no-whole-archive $(LVGL_OBJS) $(THORVG_OBJS) $(FONT_OBJS) $(WATCHDOG_EXTRA_OBJS) -o $@ $(WATCHDOG_LDFLAGS)
+	$(Q)$(CXX) $(WATCHDOG_OBJ) -Wl,--whole-archive $(DISPLAY_LIB) -Wl,--no-whole-archive $(LVGL_OBJS) $(LVGL_OPENGLES_OBJS) $(THORVG_OBJS) $(FONT_OBJS) $(WATCHDOG_EXTRA_OBJS) -o $@ $(WATCHDOG_LDFLAGS)
 
 # Create build directories
 $(BUILD_DIR)/watchdog:

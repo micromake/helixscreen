@@ -85,7 +85,58 @@ void MoonrakerDiscoverySequence::start(std::function<void()> on_complete,
 }
 
 void MoonrakerDiscoverySequence::continue_discovery() {
-    // Step 1: Query available printer objects (no params required)
+    // Step 1: Check Klippy readiness via server.info before querying printer objects.
+    // When Klippy is in STARTUP state, printer.objects.list returns JSON-RPC error
+    // -32601 "Method not found", causing confusing error toasts. Gate here instead.
+    client_.send_jsonrpc(
+        "server.info", json(),
+        [this](json server_info_response) {
+            if (is_stale())
+                return;
+
+            // Extract klippy_state from response
+            std::string klippy_state = "unknown";
+            if (server_info_response.contains("result") &&
+                server_info_response["result"].contains("klippy_state")) {
+                klippy_state = server_info_response["result"]["klippy_state"].get<std::string>();
+            }
+
+            spdlog::debug("[Moonraker Client] Klippy state gate check: {}", klippy_state);
+
+            // Allow "ready" and "shutdown" — both have valid Klipper objects.
+            // Abort on "startup", "error", or unknown states.
+            if (klippy_state != "ready" && klippy_state != "shutdown") {
+                std::string reason = fmt::format("Klippy not ready (state: {})", klippy_state);
+                spdlog::warn("[Moonraker Client] {}", reason);
+                client_.emit_event(MoonrakerEventType::DISCOVERY_FAILED, reason, true);
+                if (on_error_discovery_) {
+                    auto cb = std::move(on_error_discovery_);
+                    on_complete_discovery_ = nullptr;
+                    cb(reason);
+                }
+                return;
+            }
+
+            // Klippy is ready/shutdown — proceed to query printer objects
+            continue_discovery_objects();
+        },
+        [this](const MoonrakerError& err) {
+            if (is_stale())
+                return;
+            // server.info failed — cannot determine Klippy state, abort discovery
+            spdlog::error("[Moonraker Client] server.info request failed: {}", err.message);
+            client_.emit_event(MoonrakerEventType::DISCOVERY_FAILED, err.message, true);
+            if (on_error_discovery_) {
+                auto cb = std::move(on_error_discovery_);
+                on_complete_discovery_ = nullptr;
+                cb(err.message);
+            }
+        });
+}
+
+void MoonrakerDiscoverySequence::continue_discovery_objects() {
+    // Step 2: Query available printer objects (no params required)
+    // Silent=true to suppress error toast if Klippy goes away between gate and this call
     client_.send_jsonrpc(
         "printer.objects.list", json(),
         [this](json response) {
@@ -242,6 +293,13 @@ void MoonrakerDiscoverySequence::continue_discovery() {
                         std::string state = result.value("state", "");
                         std::string state_message = result.value("state_message", "");
 
+                        // Detect Kalico (Klipper fork with MPC support)
+                        auto app = result.value("app", "");
+                        if (app == "Kalico") {
+                            hardware_.set_is_kalico(true);
+                            spdlog::info("[Moonraker Client] Kalico firmware detected");
+                        }
+
                         spdlog::debug("[Moonraker Client] Printer hostname: {}", hostname);
                         spdlog::debug("[Moonraker Client] Klipper software version: {}",
                                       software_version);
@@ -318,6 +376,19 @@ void MoonrakerDiscoverySequence::continue_discovery() {
                                         .get<std::string>();
                                 hardware_.set_os_version(os_name);
                                 spdlog::debug("[Moonraker Client] OS version: {}", os_name);
+                            }
+
+                            // Extract CPU architecture from cpu_info.processor
+                            if (sys_response.contains("result") &&
+                                sys_response["result"].contains("system_info") &&
+                                sys_response["result"]["system_info"].contains("cpu_info") &&
+                                sys_response["result"]["system_info"]["cpu_info"].contains(
+                                    "processor")) {
+                                std::string cpu_arch =
+                                    sys_response["result"]["system_info"]["cpu_info"]["processor"]
+                                        .get<std::string>();
+                                hardware_.set_cpu_arch(cpu_arch);
+                                spdlog::debug("[Moonraker Client] CPU architecture: {}", cpu_arch);
                             }
                         },
                         [](const MoonrakerError& err) {
@@ -481,7 +552,10 @@ void MoonrakerDiscoverySequence::continue_discovery() {
                 on_complete_discovery_ = nullptr;
                 cb(err.message);
             }
-        });
+        },
+        0,   // default timeout
+        true // silent — suppress error toast (Klippy gate already checked)
+    );
 }
 
 void MoonrakerDiscoverySequence::complete_discovery_subscription() {
@@ -537,6 +611,12 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription() {
 
     // Idle timeout (for printer activity state - Ready/Printing/Idle)
     subscription_objects["idle_timeout"] = nullptr;
+
+    // Happy Hare MMU object (gate status, colors, materials, filament info)
+    if (hardware_.has_mmu()) {
+        subscription_objects["mmu"] = nullptr;
+        spdlog::info("[Moonraker Client] Subscribing to MMU object (Happy Hare)");
+    }
 
     // All discovered AFC objects (AFC, AFC_stepper, AFC_hub, AFC_extruder)
     // These provide lane status, sensor states, and filament info for MMU support
@@ -599,7 +679,6 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription() {
                         spdlog::warn("[Moonraker Client] INITIAL status has NO print_stats!");
                     }
 
-                    client_.dispatch_status_update(status);
                 }
             } else if (sub_response.contains("error")) {
                 spdlog::error("[Moonraker Client] Subscription failed: {}",
@@ -613,9 +692,15 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription() {
                     false); // Warning, not error - discovery still completes
             }
 
-            // Discovery complete - notify observers
+            // Discovery complete - notify observers.
+            // on_discovery_complete_ fires first so fans/sensors are initialized
+            // before dispatch_status_update processes the initial state.
             if (on_discovery_complete_) {
                 on_discovery_complete_(hardware_);
+            }
+            if (sub_response.contains("result")) {
+                const auto& status = sub_response["result"]["status"];
+                client_.dispatch_status_update(status);
             }
             if (on_complete_discovery_) {
                 auto cb = std::move(on_complete_discovery_);
@@ -706,13 +791,10 @@ void MoonrakerDiscoverySequence::parse_objects(const json& objects) {
                  name.rfind("dotstar ", 0) == 0) {
             leds_.push_back(name);
         }
-        // AFC MMU objects (AFC_stepper, AFC_hub, AFC_extruder, AFC, AFC_lane, AFC_BoxTurtle,
-        // AFC_OpenAMS, AFC_buffer) These need subscription for lane state, sensor data, and
-        // filament info
-        else if (name == "AFC" || name.rfind("AFC_stepper ", 0) == 0 ||
-                 name.rfind("AFC_hub ", 0) == 0 || name.rfind("AFC_extruder ", 0) == 0 ||
-                 name.rfind("AFC_lane ", 0) == 0 || name.rfind("AFC_BoxTurtle ", 0) == 0 ||
-                 name.rfind("AFC_OpenAMS ", 0) == 0 || name.rfind("AFC_buffer ", 0) == 0) {
+        // AFC MMU objects — all AFC objects share the "AFC_" namespace prefix in Klipper.
+        // Subscribe to all of them for lane state, sensor data, filament info, and
+        // unit-level data (BoxTurtle, OpenAMS, ViViD, NightOwl, etc.)
+        else if (name == "AFC" || name.rfind("AFC_", 0) == 0) {
             afc_objects_.push_back(name);
         }
         // Filament sensors (switch or motion type)

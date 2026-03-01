@@ -18,13 +18,13 @@ GCodeCamera::GCodeCamera() {
 }
 
 void GCodeCamera::reset() {
-    // Default isometric view matching common slicer thumbnail angles
-    // Most slicers (OrcaSlicer, PrusaSlicer, Bambu) show front-left view
-    azimuth_ = -45.0f;  // Front-left (was 45° = back-right)
-    elevation_ = 20.0f; // Match OrcaSlicer thumbnail angle
+    // Default isometric view matching OrcaSlicer thumbnail camera:
+    // OrcaSlicer uses zenit=45°, phi=45° (Camera.cpp line 682-691)
+    azimuth_ = -45.0f;  // Front-left view (OrcaSlicer phi=45° maps to our -45°)
+    elevation_ = 45.0f; // Match OrcaSlicer zenit=45°
     target_ = glm::vec3(0, 0, 0);
     distance_ = 100.0f;
-    zoom_level_ = 1.8f; // Tighter framing to match thumbnails (was 1.4)
+    zoom_level_ = 1.4f; // Fit model with margin (OrcaSlicer uses ~2.5% margin)
     projection_type_ = ProjectionType::ORTHOGRAPHIC;
 
     update_matrices();
@@ -84,25 +84,77 @@ void GCodeCamera::fit_to_bounds(const AABB& bounds) {
     // Set target to center of bounding box
     target_ = bounds.center();
 
-    // Calculate distance to fit entire model in view
+    // Set distance far enough for near/far clipping planes
     glm::vec3 size = bounds.size();
     float max_dimension = std::max({size.x, size.y, size.z});
+    distance_ = max_dimension * 2.0f;
 
-    // For orthographic projection, we adjust zoom instead of distance
-    // Distance affects near/far planes, zoom affects the orthographic scale
-    distance_ = max_dimension * 2.0f; // Far enough for near/far planes
+    // Compute the screen-space projected extent of the AABB at current
+    // camera angles.  The renderer applies a -90° Z rotation (model matrix),
+    // then the view matrix from our azimuth/elevation.  We need to know how
+    // big the model actually looks on screen to set proper zoom.
+    glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0, 0, 1));
+    glm::vec3 camera_pos = compute_camera_position();
+    glm::vec3 up(0, 0, 1);
+    glm::mat4 view = glm::lookAt(camera_pos, target_, up);
+    glm::mat4 mv = view * model;
 
-    // Preserve custom zoom if explicitly set (> default), otherwise reset to default
-    constexpr float DEFAULT_ZOOM = 1.8f; // Match slicer thumbnail framing
-    if (zoom_level_ <= DEFAULT_ZOOM) {
-        zoom_level_ = DEFAULT_ZOOM;
+    // Project all 8 AABB corners into camera space
+    float proj_min_x = 1e30f, proj_max_x = -1e30f;
+    float proj_min_y = 1e30f, proj_max_y = -1e30f;
+    for (int i = 0; i < 8; i++) {
+        glm::vec3 corner((i & 1) ? bounds.max.x : bounds.min.x,
+                         (i & 2) ? bounds.max.y : bounds.min.y,
+                         (i & 4) ? bounds.max.z : bounds.min.z);
+        glm::vec4 cs = mv * glm::vec4(corner, 1.0f);
+        proj_min_x = std::min(proj_min_x, cs.x);
+        proj_max_x = std::max(proj_max_x, cs.x);
+        proj_min_y = std::min(proj_min_y, cs.y);
+        proj_max_y = std::max(proj_max_y, cs.y);
     }
+
+    float proj_width = proj_max_x - proj_min_x;
+    float proj_height = proj_max_y - proj_min_y;
+
+    // Guard against zero viewport (widget not yet sized)
+    if (viewport_width_ <= 0 || viewport_height_ <= 0 || proj_width <= 0.0f ||
+        proj_height <= 0.0f) {
+        zoom_level_ = 1.4f;
+        update_matrices();
+        spdlog::debug("[GCode Camera] Fit to bounds: fallback (viewport {}x{})", viewport_width_,
+                      viewport_height_);
+        return;
+    }
+
+    float aspect = static_cast<float>(viewport_width_) / static_cast<float>(viewport_height_);
+
+    // Compute zoom so the projected model fits with ~5% margin on each side
+    // ortho_size = distance / (2 * zoom), visible = 2 * ortho_size (vertical)
+    // We need: proj_height <= 2 * ortho_size * margin, and
+    //          proj_width  <= 2 * ortho_size * aspect * margin
+    constexpr float MARGIN = 0.80f; // ~10% margin on each side
+    float zoom_for_height = distance_ / (proj_height / MARGIN);
+    float zoom_for_width = distance_ * aspect / (proj_width / MARGIN);
+    zoom_level_ = std::min(zoom_for_height, zoom_for_width);
+    zoom_level_ = std::clamp(zoom_level_, 0.1f, 100.0f);
+
+    // Shift target so the projected center is on screen center.
+    // The projected midpoint in camera space may not be at (0,0) because
+    // of the model rotation.  Convert the offset back to world space.
+    float proj_cx = (proj_min_x + proj_max_x) * 0.5f;
+    float proj_cy = (proj_min_y + proj_max_y) * 0.5f;
+
+    // Camera-space X/Y axes in world space (from view matrix rows)
+    glm::vec3 cam_right(view[0][0], view[1][0], view[2][0]);
+    glm::vec3 cam_up(view[0][1], view[1][1], view[2][1]);
+    target_ += cam_right * proj_cx + cam_up * proj_cy;
 
     update_matrices();
 
-    spdlog::debug("[GCode Camera] Fit camera to bounds: center=({:.1f},{:.1f},{:.1f}), "
-                  "size=({:.1f},{:.1f},{:.1f})",
-                  target_.x, target_.y, target_.z, size.x, size.y, size.z);
+    spdlog::debug("[GCode Camera] Fit to bounds: center=({:.1f},{:.1f},{:.1f}), "
+                  "size=({:.1f},{:.1f},{:.1f}), proj=({:.1f}x{:.1f}), zoom={:.2f}",
+                  target_.x, target_.y, target_.z, size.x, size.y, size.z, proj_width, proj_height,
+                  zoom_level_);
 }
 
 void GCodeCamera::set_top_view() {

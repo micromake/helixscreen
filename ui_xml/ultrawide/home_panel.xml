@@ -66,7 +66,7 @@
               style_pad_gap="#space_xs" style_flex_track_place="center" clickable="true">
         <event_cb trigger="clicked" callback="tip_text_clicked_cb"/>
         <text_body text="Tip:" translation_tag="Tip:"/>
-        <text_body name="status_text_label" bind_text="status_text" flex_grow="1" long_mode="dot"/>
+        <text_body name="status_text_label" bind_text="status_text" flex_grow="1" long_mode="dots"/>
         <icon src="help_circle" size="md" variant="muted"/>
       </lv_obj>
 
@@ -77,12 +77,12 @@
 
         <!-- IDLE STATE -->
         <lv_obj name="print_card_idle"
-                width="100%" height="100%" style_pad_all="0" flex_flow="row" style_flex_main_place="center"
-                style_flex_cross_place="center" style_pad_gap="#space_sm" clickable="false">
+                width="100%" height="100%" style_pad_all="#space_xs" flex_flow="column" style_flex_main_place="center"
+                style_flex_cross_place="center" style_pad_gap="#space_xs" clickable="false">
           <bind_flag_if_not_eq subject="print_active" flag="hidden" ref_value="0"/>
           <lv_image name="print_card_thumb"
-                    width="40%" height="100%" src="A:assets/images/benchy_thumbnail_white.png" inner_align="contain"/>
-          <text_body name="print_card_label" text="Print Files" translation_tag="Print Files"/>
+                    width="100%" flex_grow="1" src="A:assets/images/benchy_thumbnail_white.png" inner_align="contain"/>
+          <text_body name="print_card_label" text="Print Files" translation_tag="Print Files" style_text_align="center" width="100%" long_mode="wrap"/>
         </lv_obj>
 
         <!-- PREPARING STATE -->
@@ -91,9 +91,7 @@
                 style_flex_cross_place="center" style_pad_gap="#space_xs" hidden="true" clickable="false">
           <bind_flag_if_eq subject="print_start_phase" flag="hidden" ref_value="0"/>
           <text_body text="Preparing Print" translation_tag="Preparing Print"/>
-          <lv_bar name="print_start_bar"
-                  width="90%" height="8" bind_value="print_start_progress" min_value="0" max_value="100"
-                  style_bg_color="#screen_bg" style_radius="4"/>
+          <progress_bar name="print_start_bar" width="90%" bind_value="print_start_progress"/>
           <text_small bind_text="print_start_message"/>
           <text_small name="print_start_eta" bind_text="print_start_time_left" style_text_color="#text_muted"/>
         </lv_obj>
@@ -120,9 +118,7 @@
             <text_body width="100%"
                        bind_text="print_display_filename" style_text_color="#text" long_mode="wrap"
                        style_text_align="center"/>
-            <lv_bar name="print_progress_bar"
-                    width="90%" height="8" bind_value="print_progress" min_value="0" max_value="100"
-                    style_bg_color="#screen_bg" style_radius="4"/>
+            <progress_bar name="print_progress_bar" width="90%" bind_value="print_progress"/>
             <text_small bind_text="print_progress_text"/>
           </lv_obj>
         </lv_obj>

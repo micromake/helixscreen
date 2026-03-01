@@ -15,6 +15,7 @@
 using namespace helix;
 
 // Aliases for json_utils.h helpers
+using helix::json_util::safe_double;
 using helix::json_util::safe_float;
 using helix::json_util::safe_int;
 using helix::json_util::safe_string;
@@ -24,15 +25,18 @@ static SpoolInfo parse_spool_info(const nlohmann::json& spool_json) {
     SpoolInfo info;
 
     info.id = spool_json.value("id", 0);
-    info.remaining_weight_g = spool_json.value("remaining_weight", 0.0);
-    info.initial_weight_g = spool_json.value("initial_weight", 0.0);
-    info.spool_weight_g = spool_json.value("spool_weight", 0.0);
-    info.price = spool_json.value("price", 0.0);
+    info.remaining_weight_g = safe_double(spool_json, "remaining_weight");
+    info.initial_weight_g = safe_double(spool_json, "initial_weight");
+    info.spool_weight_g = safe_double(spool_json, "spool_weight");
+    info.price = safe_double(spool_json, "price");
     info.lot_nr = safe_string(spool_json, "lot_nr");
     info.comment = safe_string(spool_json, "comment");
 
+    // used_weight for fallback initial weight calculation
+    double used_weight_g = safe_double(spool_json, "used_weight");
+
     // Length is in mm from Spoolman, convert to meters
-    double remaining_length_mm = spool_json.value("remaining_length", 0.0);
+    double remaining_length_mm = safe_double(spool_json, "remaining_length");
     info.remaining_length_m = remaining_length_mm / 1000.0;
 
     // Parse nested filament object
@@ -49,10 +53,22 @@ static SpoolInfo parse_spool_info(const nlohmann::json& spool_json) {
         info.nozzle_temp_recommended = filament.value("settings_extruder_temp", 0);
         info.bed_temp_recommended = filament.value("settings_bed_temp", 0);
 
+        // Fallback: use filament definition weight when spool initial_weight is null/0.
+        // Spoolman's initial_weight is optional; filament.weight is the canonical
+        // net weight for this filament type.
+        if (info.initial_weight_g <= 0) {
+            info.initial_weight_g = safe_double(filament, "weight");
+        }
+
         // Nested vendor
         if (filament.contains("vendor") && filament["vendor"].is_object()) {
             info.vendor = safe_string(filament["vendor"], "name");
         }
+    }
+
+    // Final fallback: compute initial weight from remaining + used
+    if (info.initial_weight_g <= 0 && used_weight_g > 0) {
+        info.initial_weight_g = info.remaining_weight_g + used_weight_g;
     }
 
     return info;

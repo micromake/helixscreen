@@ -7,6 +7,8 @@
 
 #include "panel_widget.h"
 
+#include <memory>
+
 class MoonrakerAPI;
 
 namespace helix {
@@ -26,6 +28,9 @@ class LedWidget : public PanelWidget {
         return "led";
     }
 
+    // XML event callbacks (public for early registration in register_led_widget)
+    static void light_toggle_cb(lv_event_t* e);
+
   private:
     PrinterState& printer_state_;
     MoonrakerAPI* api_;
@@ -33,23 +38,19 @@ class LedWidget : public PanelWidget {
     lv_obj_t* widget_obj_ = nullptr;
     lv_obj_t* parent_screen_ = nullptr;
     lv_obj_t* light_icon_ = nullptr;
-    lv_obj_t* led_control_panel_ = nullptr;
 
+    std::shared_ptr<bool> alive_ = std::make_shared<bool>(false);
     bool light_on_ = false;
-    bool light_long_pressed_ = false;
 
+    ObserverGuard led_version_observer_;
     ObserverGuard led_state_observer_;
     ObserverGuard led_brightness_observer_;
 
     void handle_light_toggle();
-    void handle_light_long_press();
     void update_light_icon();
     void flash_light_icon();
-    void ensure_led_observers();
+    void bind_led();
     void on_led_state_changed(int state);
-
-    static void light_toggle_cb(lv_event_t* e);
-    static void light_long_press_cb(lv_event_t* e);
 };
 
 } // namespace helix

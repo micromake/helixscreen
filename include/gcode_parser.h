@@ -81,6 +81,7 @@ struct ToolpathSegment {
     float extrusion_amount{0.0f};      ///< E-axis delta (mm of filament)
     float width{0.0f};                 ///< Calculated extrusion width (mm) - 0 means use default
     int tool_index{0};                 ///< Which tool/extruder printed this (0-indexed)
+    uint16_t layer_index{0};           ///< Source layer index (set during geometry collection)
 };
 
 /**
@@ -145,6 +146,7 @@ struct ParsedGCodeFile {
     float first_layer_extrusion_width_mm{0.0f}; ///< First layer width
     float filament_diameter_mm{1.75f};          ///< Filament diameter (default: 1.75mm)
     float layer_height_mm{0.2f};                ///< Layer height (default: 0.2mm)
+    float first_layer_height_mm{0.0f};          ///< First layer height (0 = use layer_height)
 
     // Multi-color support
     std::vector<std::string> tool_color_palette; ///< Hex colors per tool (e.g., ["#ED1C24", ...])
@@ -408,6 +410,7 @@ class GCodeParser {
     float metadata_first_layer_extrusion_width_{0.0f};
     float metadata_filament_diameter_{1.75f}; ///< Filament diameter (default: 1.75mm)
     float metadata_layer_height_{0.2f};       ///< Layer height (default: 0.2mm)
+    float metadata_first_layer_height_{0.0f}; ///< First layer height (0 = use layer_height)
 
     // Progress tracking
     size_t lines_parsed_{0};           ///< Line counter

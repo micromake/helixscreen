@@ -19,6 +19,7 @@
 #include "ui_modal.h"
 #include "ui_notification.h"
 #include "ui_panel_settings.h"
+#include "ui_settings_about.h"
 #include "ui_update_queue.h"
 
 #include "app_constants.h"
@@ -28,6 +29,7 @@
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "printer_state.h"
 #include "spdlog/spdlog.h"
+#include "system/telemetry_manager.h"
 #include "version.h"
 
 #include <chrono>
@@ -38,7 +40,6 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
-#include <sys/utsname.h>
 #include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
@@ -356,6 +357,14 @@ int safe_exec(const std::vector<std::string>& args, bool capture_stderr = false)
             close(stderr_pipe[1]);
         }
 
+        // Ensure child has a usable PATH — tools like tar and gunzip spawn
+        // subprocesses (gzip, sh) that need PATH to work.  Systemd services
+        // may clear PATH entirely, breaking those internal lookups.
+        const char* cur_path = std::getenv("PATH");
+        if (!cur_path || cur_path[0] == '\0') {
+            setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", 1);
+        }
+
         // Build C-style argv array
         std::vector<char*> argv;
         argv.reserve(args.size() + 1);
@@ -421,7 +430,7 @@ void cleanup_stale_old_install() {
     }
 
     std::string old_dir = install_root + ".old";
-    struct stat st{};
+    struct stat st {};
     if (stat(old_dir.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) {
         return; // no .old directory
     }
@@ -686,7 +695,7 @@ static const char* const DOWNLOAD_FILENAME = "helixscreen-update.tar.gz";
 
 // Check if a directory is writable and return available bytes (0 on failure)
 static size_t get_available_space(const std::string& dir) {
-    struct statvfs stat{};
+    struct statvfs stat {};
     if (statvfs(dir.c_str(), &stat) != 0) {
         return 0;
     }
@@ -816,6 +825,8 @@ void UpdateChecker::start_download() {
         spdlog::warn("[UpdateChecker] Cannot download update while printing");
         report_download_status(DownloadStatus::Error, 0, "Error: Cannot update while printing",
                                "Stop the print before installing updates");
+        TelemetryManager::instance().record_update_failure("print_in_progress", "",
+                                                           get_platform_key());
         return;
     }
 
@@ -827,6 +838,8 @@ void UpdateChecker::start_download() {
         lock.unlock();
         report_download_status(DownloadStatus::Error, 0, "Error: No update available",
                                "No update information cached");
+        TelemetryManager::instance().record_update_failure("no_cached_update", "",
+                                                           get_platform_key());
         return;
     }
 
@@ -868,6 +881,8 @@ void UpdateChecker::do_download() {
     if (download_path.empty()) {
         report_download_status(DownloadStatus::Error, 0, "Error: No space for download",
                                "Could not find a writable directory with enough free space");
+        TelemetryManager::instance().record_update_failure("no_disk_space", version,
+                                                           get_platform_key());
         return;
     }
     spdlog::info("[UpdateChecker] Downloading {} to {}", url, download_path);
@@ -907,22 +922,28 @@ void UpdateChecker::do_download() {
         std::remove(download_path.c_str()); // Clean up partial download
         report_download_status(DownloadStatus::Error, 0, "Error: Download failed",
                                "Failed to download update file");
+        TelemetryManager::instance().record_update_failure("download_failed", version,
+                                                           get_platform_key());
         return;
     }
 
-    // Verify file size sanity (reject < 1MB or > 50MB)
+    // Verify file size sanity (reject < 1MB or > 150MB)
     if (result < 1024 * 1024) {
         spdlog::error("[UpdateChecker] Downloaded file too small: {} bytes", result);
         std::remove(download_path.c_str());
         report_download_status(DownloadStatus::Error, 0, "Error: Invalid download",
                                "Downloaded file is too small");
+        TelemetryManager::instance().record_update_failure(
+            "file_too_small", version, get_platform_key(), -1, static_cast<int64_t>(result));
         return;
     }
-    if (result > 50 * 1024 * 1024) {
+    if (result > 150 * 1024 * 1024) {
         spdlog::error("[UpdateChecker] Downloaded file too large: {} bytes", result);
         std::remove(download_path.c_str());
         report_download_status(DownloadStatus::Error, 0, "Error: Invalid download",
                                "Downloaded file is too large");
+        TelemetryManager::instance().record_update_failure(
+            "file_too_large", version, get_platform_key(), -1, static_cast<int64_t>(result));
         return;
     }
 
@@ -936,6 +957,8 @@ void UpdateChecker::do_download() {
         std::remove(download_path.c_str());
         report_download_status(DownloadStatus::Error, 0, "Error: Corrupt download",
                                "Downloaded file failed integrity check");
+        TelemetryManager::instance().record_update_failure(
+            "corrupt_download", version, get_platform_key(), -1, static_cast<int64_t>(result));
         return;
     }
 
@@ -947,6 +970,8 @@ void UpdateChecker::do_download() {
         std::remove(download_path.c_str());
         report_download_status(DownloadStatus::Error, 0, "Error: Wrong architecture",
                                "Downloaded binary doesn't match this device's architecture");
+        TelemetryManager::instance().record_update_failure("wrong_architecture", version,
+                                                           get_platform_key());
         return;
     }
 
@@ -954,30 +979,26 @@ void UpdateChecker::do_download() {
 }
 
 bool UpdateChecker::validate_elf_architecture(const std::string& tarball_path) {
-    struct utsname uts;
-    if (uname(&uts) != 0) {
-        spdlog::warn("[UpdateChecker] uname() failed, skipping arch validation");
-        return true; // Can't determine, allow
-    }
+    // Use the compile-time platform key to determine expected architecture.
+    // uname().machine is unreliable: Pi4 with 64-bit kernel + 32-bit userspace
+    // reports "aarch64" even though only 32-bit ARM binaries can execute.
+    std::string platform = get_platform_key();
+    spdlog::info("[UpdateChecker] Platform key: {}", platform);
 
-    std::string machine(uts.machine);
-    spdlog::info("[UpdateChecker] Runtime architecture: {}", machine);
-
-    // Determine expected ELF properties from runtime architecture
     uint8_t expected_class = 0;
     uint16_t expected_machine = 0;
     std::string expected_arch_name;
 
-    if (machine == "armv7l") {
+    if (platform == "pi32" || platform == "ad5m") {
         expected_class = 1;      // ELFCLASS32
         expected_machine = 0x28; // EM_ARM
         expected_arch_name = "ARM 32-bit";
-    } else if (machine == "aarch64") {
+    } else if (platform == "pi") {
         expected_class = 2;      // ELFCLASS64
         expected_machine = 0xB7; // EM_AARCH64
         expected_arch_name = "AARCH64 64-bit";
     } else {
-        spdlog::warn("[UpdateChecker] Unknown architecture '{}', skipping validation", machine);
+        spdlog::info("[UpdateChecker] Platform '{}' — skipping ELF validation", platform);
         return true;
     }
 
@@ -1051,6 +1072,12 @@ bool UpdateChecker::validate_elf_architecture(const std::string& tarball_path) {
 void UpdateChecker::do_install(const std::string& tarball_path) {
     flog_info("[UpdateChecker] do_install() ENTER: tarball={}", tarball_path);
 
+    std::string version;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        version = cached_info_ ? cached_info_->version : "unknown";
+    }
+
     if (download_cancelled_.load()) {
         flog_info("[UpdateChecker] do_install() cancelled, aborting");
         std::remove(tarball_path.c_str());
@@ -1077,7 +1104,7 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
             std::string env_src = install_root + "/config/helixscreen.env";
             const std::string cp_bin = resolve_tool("cp");
 
-            struct stat st{};
+            struct stat st {};
             if (stat(config_src.c_str(), &st) == 0) {
                 int ret = safe_exec({cp_bin, "-f", config_src, PREUPDATE_CONFIG_BACKUP});
                 if (ret == 0) {
@@ -1134,12 +1161,24 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
         flog_error("[UpdateChecker] Cannot find install.sh");
         report_download_status(DownloadStatus::Error, 0, "Error: Installer not found",
                                "Cannot locate install.sh script");
+        TelemetryManager::instance().record_update_failure("installer_not_found", version,
+                                                           get_platform_key());
         return;
     }
 
-    // Write installer output to a persistent log file so it survives even if this
-    // process is killed mid-install (e.g. stop_service kills the cgroup).
-    std::string install_log = tarball_path + ".install.log";
+    // Write installer output to a persistent log in /var/log/ so it survives
+    // process restart and is available for post-update debugging.  Fall back to
+    // the tarball directory if /var/log/ isn't writable (e.g. read-only rootfs).
+    std::string install_log = "/var/log/helixscreen-install.log";
+    {
+        int test_fd = open(install_log.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0640);
+        if (test_fd >= 0) {
+            close(test_fd);
+        } else {
+            install_log = tarball_path + ".install.log";
+            flog_warn("[UpdateChecker] /var/log not writable, using fallback: {}", install_log);
+        }
+    }
 
     flog_info("[UpdateChecker] Running: {} --local {} --update", install_script, tarball_path);
     flog_info("[UpdateChecker] install_script access(X_OK)={} tarball access(R_OK)={}",
@@ -1152,7 +1191,7 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
                   geteuid(), getpid());
     }
     {
-        struct stat st{};
+        struct stat st {};
         if (stat(tarball_path.c_str(), &st) == 0) {
             flog_info("[UpdateChecker] tarball size: {} bytes", st.st_size);
         } else {
@@ -1164,6 +1203,7 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
     // Using a file instead of a pipe means we get the full output even if this
     // process is killed by systemd's stop_service during the install step.
     int ret = -1;
+    bool timed_out = false;
     {
         int log_fd = open(install_log.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0640);
         if (log_fd < 0) {
@@ -1193,6 +1233,9 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
             // `systemctl restart` that systemd completes even if install.sh is
             // killed during the stop phase (see scripts/install.sh main()).
             setsid();
+            // Tell install.sh this is an in-app self-update so it skips
+            // stop_service/start_service on SysV — the watchdog handles restart.
+            setenv("HELIX_SELF_UPDATE", "1", 1);
             const char* argv[] = {install_script.c_str(), "--local", tarball_path.c_str(),
                                   "--update", nullptr};
             execv(install_script.c_str(), const_cast<char**>(argv));
@@ -1237,6 +1280,7 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
                     "[UpdateChecker] install.sh exit: code={} normal={} signaled={} signal={}", ret,
                     normal_exit, signaled, sig);
             } else {
+                timed_out = true;
                 flog_error("[UpdateChecker] install.sh timed out after {}s, killing",
                            timeout_seconds);
                 kill(pid, SIGKILL);
@@ -1246,7 +1290,7 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
 
         // Read back the install log and emit every line through spdlog
         {
-            struct stat log_stat{};
+            struct stat log_stat {};
             if (stat(install_log.c_str(), &log_stat) == 0) {
                 flog_info("[UpdateChecker] Install log exists: {} bytes", log_stat.st_size);
             } else {
@@ -1275,7 +1319,7 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
             flog_error("[UpdateChecker] Could not read install log {}: {}", install_log,
                        strerror(errno));
         }
-        std::remove(install_log.c_str());
+        // Log persists at /var/log/helixscreen-install.log for post-update debugging
     }
 
     // Clean up tarball and extracted installer regardless of result
@@ -1290,16 +1334,17 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
         flog_error("[UpdateChecker] Install script failed with code {}", ret);
         report_download_status(DownloadStatus::Error, 0, "Error: Installation failed",
                                "install.sh returned error code " + std::to_string(ret));
+        std::string reason = timed_out ? "install_timeout" : "install_failed";
+        TelemetryManager::instance().record_update_failure(reason, version, get_platform_key(), -1,
+                                                           -1, ret);
         return;
     }
 
     spdlog::info("[UpdateChecker] Update installed successfully!");
 
-    std::string version;
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        version = cached_info_ ? cached_info_->version : "unknown";
-    }
+    // Write update success flag for telemetry (picked up on next boot)
+    TelemetryManager::write_update_success_flag("config", version, HELIX_VERSION,
+                                                get_platform_key());
 
     report_download_status(DownloadStatus::Complete, 100,
                            "v" + version + " installed! Restarting...");
@@ -1314,8 +1359,18 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
     // dialog, and Config::init() recreates helixconfig.json from defaults — wiping
     // dev_url and channel settings. _exit() terminates immediately at the OS level
     // with no C++ cleanup, so exit code 0 reaches the watchdog cleanly.
-    std::thread([] {
-        std::this_thread::sleep_for(std::chrono::seconds(3));
+    std::thread([this, version] {
+        // Show "Complete" state for 2 seconds
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        // Transition to static "Restarting" screen — no spinner, friendly message
+        if (!shutting_down_.load()) {
+            report_download_status(DownloadStatus::Restarting, 100,
+                                   "v" + version + " installed!");
+        }
+        // 1s gives the LVGL tick loop at least one full frame (~16ms) to
+        // process the queued subject update and render the Restarting container
+        // before _exit(0) tears down the process.
+        std::this_thread::sleep_for(std::chrono::seconds(1));
         spdlog::info("[UpdateChecker] Restarting to apply update");
         spdlog::default_logger()->flush();
         ::_exit(0);
@@ -1620,8 +1675,17 @@ std::string UpdateChecker::get_platform_key() {
     return "ad5m";
 #elif defined(HELIX_PLATFORM_CC1)
     return "cc1";
-#elif defined(HELIX_PLATFORM_K1)
-    return "k1";
+#elif defined(HELIX_PLATFORM_MIPS)
+    // Same binary runs on K1 and AD5X — detect at runtime.
+    // AD5X has /usr/prog dir (FlashForge layout) or /ZMOD file; K1 has neither.
+    {
+        struct stat st;
+        if ((stat("/usr/prog", &st) == 0 && S_ISDIR(st.st_mode)) ||
+            (stat("/ZMOD", &st) == 0 && S_ISREG(st.st_mode))) {
+            return "ad5x";
+        }
+        return "k1";
+    }
 #elif defined(HELIX_PLATFORM_K2)
     return "k2";
 #elif defined(HELIX_PLATFORM_PI32)
@@ -1769,7 +1833,7 @@ static void on_update_notify_install(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_BEGIN("[UpdateChecker] on_update_notify_install");
     spdlog::info("[UpdateChecker] User chose to install update");
     UpdateChecker::instance().hide_update_notification();
-    get_global_settings_panel().show_update_download_modal();
+    helix::settings::get_about_settings_overlay().show_update_download_modal();
     LVGL_SAFE_EVENT_CB_END();
 }
 

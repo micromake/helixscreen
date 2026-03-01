@@ -375,18 +375,35 @@ SystemToolLayout compute_system_tool_layout(const AmsSystemInfo& info, const Ams
 
         if (topo != PathTopology::PARALLEL) {
             // HUB/LINEAR: all lanes converge to a single physical nozzle.
-            // Always assign sequentially — ignore mapped_tool for positioning.
-            utl.first_physical_tool = total_physical;
-            utl.tool_count = 1;
-
-            // Map all virtual tool numbers from this unit to this single physical nozzle
-            for (const auto& slot : unit.slots) {
-                if (slot.mapped_tool >= 0) {
-                    result.virtual_to_physical[slot.mapped_tool] = total_physical;
+            // Multiple HUB units sharing the same hub_tool_label (e.g., all feeding
+            // into T0 on a single-toolhead printer) share one physical nozzle.
+            int shared_phys = -1;
+            if (unit.hub_tool_label >= 0) {
+                // Check if a previous unit already claimed this physical nozzle
+                for (const auto& prev : result.units) {
+                    if (prev.hub_tool_label == unit.hub_tool_label && prev.tool_count == 1) {
+                        shared_phys = prev.first_physical_tool;
+                        break;
+                    }
                 }
             }
 
-            total_physical += 1;
+            if (shared_phys >= 0) {
+                // Reuse existing physical nozzle
+                utl.first_physical_tool = shared_phys;
+            } else {
+                utl.first_physical_tool = total_physical;
+                total_physical += 1;
+            }
+            utl.tool_count = 1;
+
+            // Map all virtual tool numbers from this unit to this physical nozzle
+            int phys = utl.first_physical_tool;
+            for (const auto& slot : unit.slots) {
+                if (slot.mapped_tool >= 0) {
+                    result.virtual_to_physical[slot.mapped_tool] = phys;
+                }
+            }
         } else if (min_tool >= 0) {
             // PARALLEL: each lane maps to its own physical nozzle
             int physical_first = total_physical;

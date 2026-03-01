@@ -230,8 +230,8 @@ void LedSettingsOverlay::populate_macro_devices_impl() {
         if (discovered.empty()) {
             // Warn that no macros were detected on the printer
             auto* note = lv_label_create(container);
-            lv_label_set_text(note, "No LED macros detected on your printer. "
-                                    "Add Klipper macros for LED control first.");
+            lv_label_set_text(note, lv_tr("No LED macros detected on your printer. "
+                                          "Add Klipper macros for LED control first."));
             lv_obj_set_width(note, lv_pct(100));
             lv_label_set_long_mode(note, LV_LABEL_LONG_WRAP);
             lv_obj_set_style_text_color(note, theme_manager_get_color("text_subtle"), 0);
@@ -304,8 +304,8 @@ void LedSettingsOverlay::populate_macro_devices_impl() {
         lv_obj_set_size(edit_btn, 36, 36);
         lv_obj_set_style_bg_opa(edit_btn, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(edit_btn, 0, 0);
-        const char* edit_icon_attrs[] = {"src",     "pencil",    "size", "sm",
-                                         "variant", "secondary", nullptr};
+        const char* edit_icon_attrs[] = {"src",     "pencil",   "size", "sm",
+                                         "variant", "tertiary", nullptr};
         lv_xml_create(edit_btn, "icon", edit_icon_attrs);
 
         // TODO: lv_obj user_data is safe on these buttons because they're
@@ -533,7 +533,7 @@ void LedSettingsOverlay::rebuild_macro_edit_controls(lv_obj_t* container, int in
 
     if (discovered.empty()) {
         auto* no_macros = lv_label_create(container);
-        lv_label_set_text(no_macros, "No LED macros detected on your printer.");
+        lv_label_set_text(no_macros, lv_tr("No LED macros detected on your printer."));
         lv_label_set_long_mode(no_macros, LV_LABEL_LONG_WRAP);
         lv_obj_set_width(no_macros, lv_pct(100));
         lv_obj_set_style_text_color(no_macros, theme_manager_get_color("text_subtle"), 0);
@@ -720,7 +720,7 @@ void LedSettingsOverlay::rebuild_macro_edit_controls(lv_obj_t* container, int in
     lv_obj_set_style_pad_right(save_btn, 16, 0);
 
     auto* save_lbl = lv_label_create(save_btn);
-    lv_label_set_text(save_lbl, "Save");
+    lv_label_set_text(save_lbl, lv_tr("Save"));
     lv_obj_set_style_text_color(save_lbl, lv_color_white(), 0);
     lv_obj_center(save_lbl);
 
@@ -1332,7 +1332,7 @@ void LedSettingsOverlay::rebuild_contextual_controls(const std::string& state_ke
 
         if (effects.empty()) {
             lv_obj_t* label = lv_label_create(container);
-            lv_label_set_text(label, "No effects available");
+            lv_label_set_text(label, lv_tr("No effects available"));
             lv_obj_set_style_text_color(label, theme_manager_get_color("text_subtle"), 0);
             return;
         }
@@ -1430,7 +1430,7 @@ void LedSettingsOverlay::rebuild_contextual_controls(const std::string& state_ke
 
         if (macros.empty()) {
             lv_obj_t* label = lv_label_create(container);
-            lv_label_set_text(label, "No macros available");
+            lv_label_set_text(label, lv_tr("No macros available"));
             lv_obj_set_style_text_color(label, theme_manager_get_color("text_subtle"), 0);
             return;
         }

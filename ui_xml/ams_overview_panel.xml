@@ -14,7 +14,8 @@
     <header_bar name="overlay_header" title="Multi Filament System Overview" title_tag="Multi Filament System Overview"/>
     <!-- Content Area: Two-column layout -->
     <lv_obj name="overview_content"
-            width="100%" flex_grow="1" style_pad_all="#space_sm" style_pad_gap="#space_sm" scrollable="false"
+            width="100%" flex_grow="1" style_pad_all="#space_sm" style_pad_top="0"
+            style_pad_gap="#space_sm" scrollable="false"
             flex_flow="row" style_flex_main_place="start" style_flex_cross_place="start">
       <!-- Disable content when printer not connected or klippy not ready -->
       <bind_state_if_not_eq subject="nav_buttons_enabled" state="disabled" ref_value="1"/>
@@ -69,7 +70,7 @@
       <lv_obj name="right_column"
               height="100%" width="240" style_pad_all="#space_sm" style_pad_gap="#space_sm" flex_flow="column"
               style_flex_main_place="start" style_flex_cross_place="start" scrollable="false">
-        <ams_sidebar name="sidebar"/>
+        <ams_sidebar name="ams_operation_sidebar"/>
       </lv_obj>
     </lv_obj>
   </view>

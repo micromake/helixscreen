@@ -512,3 +512,88 @@ TEST_CASE("SystemToolLayout: mixed setup correct labels with hub_tool_label",
     CHECK(layout.physical_to_virtual_label[4] == 4);
     CHECK(layout.physical_to_virtual_label[5] == 5);
 }
+
+// ============================================================================
+// Shared toolhead: multiple HUB units feeding into one extruder
+// ============================================================================
+
+TEST_CASE("SystemToolLayout: 3 HUB units sharing same hub_tool_label merge to 1 nozzle",
+          "[ams][tool_layout]") {
+    // Simulates 2x BoxTurtle + 1x ViViD, all feeding into a single T0 extruder
+    AmsSystemInfo info;
+    info.type = AmsType::AFC;
+
+    for (int u = 0; u < 3; ++u) {
+        AmsUnit unit;
+        unit.unit_index = u;
+        unit.slot_count = 4;
+        unit.first_slot_global_index = u * 4;
+        unit.topology = PathTopology::HUB;
+        unit.hub_tool_label = 0; // All share T0
+        for (int s = 0; s < 4; ++s) {
+            SlotInfo slot;
+            slot.slot_index = s;
+            slot.global_index = u * 4 + s;
+            slot.mapped_tool = 0; // All map to T0
+            unit.slots.push_back(slot);
+        }
+        info.units.push_back(unit);
+    }
+
+    info.total_slots = 12;
+
+    auto layout = compute_system_tool_layout(info, nullptr);
+
+    // All 3 units share one physical nozzle
+    CHECK(layout.total_physical_tools == 1);
+
+    // All units point to physical nozzle 0
+    for (const auto& utl : layout.units) {
+        CHECK(utl.first_physical_tool == 0);
+        CHECK(utl.tool_count == 1);
+    }
+
+    // Virtual tool T0 maps to physical 0
+    REQUIRE(layout.virtual_to_physical.count(0) == 1);
+    CHECK(layout.virtual_to_physical.at(0) == 0);
+
+    // Label is T0
+    REQUIRE(layout.physical_to_virtual_label.size() == 1);
+    CHECK(layout.physical_to_virtual_label[0] == 0);
+}
+
+TEST_CASE("SystemToolLayout: 2 HUB units with different hub_tool_labels stay separate",
+          "[ams][tool_layout]") {
+    // Multi-extruder setup: unit 0 feeds T0, unit 1 feeds T1
+    AmsSystemInfo info;
+    info.type = AmsType::AFC;
+
+    for (int u = 0; u < 2; ++u) {
+        AmsUnit unit;
+        unit.unit_index = u;
+        unit.slot_count = 4;
+        unit.first_slot_global_index = u * 4;
+        unit.topology = PathTopology::HUB;
+        unit.hub_tool_label = u; // T0 and T1 respectively
+        for (int s = 0; s < 4; ++s) {
+            SlotInfo slot;
+            slot.slot_index = s;
+            slot.global_index = u * 4 + s;
+            slot.mapped_tool = u; // Maps to own tool
+            unit.slots.push_back(slot);
+        }
+        info.units.push_back(unit);
+    }
+
+    info.total_slots = 8;
+
+    auto layout = compute_system_tool_layout(info, nullptr);
+
+    // Different hub_tool_labels = separate physical nozzles
+    CHECK(layout.total_physical_tools == 2);
+    CHECK(layout.units[0].first_physical_tool == 0);
+    CHECK(layout.units[1].first_physical_tool == 1);
+    REQUIRE(layout.physical_to_virtual_label.size() == 2);
+    CHECK(layout.physical_to_virtual_label[0] == 0);
+    CHECK(layout.physical_to_virtual_label[1] == 1);
+}

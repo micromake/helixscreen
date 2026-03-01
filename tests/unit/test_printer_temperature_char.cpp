@@ -56,17 +56,18 @@ TEST_CASE("Temperature characterization: observer fires when extruder_temp chang
     REQUIRE(user_data[1] == 0); // Initial value is 0 centidegrees
 
     // Update temperature via status update (205.3C = 2053 centidegrees)
+    // When value changes, lv_subject_set_int fires once (no redundant notify)
     json status = {{"extruder", {{"temperature", 205.3}}}};
     state.update_from_status(status);
 
-    REQUIRE(user_data[0] == 3);
+    REQUIRE(user_data[0] == 2);
     REQUIRE(user_data[1] == 2053);
 
     // Update again with different value
     status = {{"extruder", {{"temperature", 210.0}}}};
     state.update_from_status(status);
 
-    REQUIRE(user_data[0] == 5);
+    REQUIRE(user_data[0] == 3);
     REQUIRE(user_data[1] == 2100);
 
     lv_observer_remove(observer);
@@ -133,10 +134,11 @@ TEST_CASE("Temperature characterization: observer fires when bed_temp changes",
     REQUIRE(user_data[1] == 0);
 
     // Update bed temp via status update (60.5C = 605 centidegrees)
+    // When value changes, lv_subject_set_int fires once (no redundant notify)
     json status = {{"heater_bed", {{"temperature", 60.5}}}};
     state.update_from_status(status);
 
-    REQUIRE(user_data[0] == 3);
+    REQUIRE(user_data[0] == 2);
     REQUIRE(user_data[1] == 605);
 
     lv_observer_remove(observer);
@@ -377,8 +379,8 @@ TEST_CASE("Temperature characterization: observers on different subjects are ind
     json status = {{"extruder", {{"temperature", 100.0}}}};
     state.update_from_status(status);
 
-    // Only extruder observer should fire
-    REQUIRE(extruder_count == 3);
+    // Only extruder observer should fire (1 fire per value change, no redundant notify)
+    REQUIRE(extruder_count == 2);
     REQUIRE(bed_count == 1);
 
     // Update only bed temp
@@ -386,8 +388,8 @@ TEST_CASE("Temperature characterization: observers on different subjects are ind
     state.update_from_status(status);
 
     // Only bed observer should fire
-    REQUIRE(extruder_count == 3);
-    REQUIRE(bed_count == 3);
+    REQUIRE(extruder_count == 2);
+    REQUIRE(bed_count == 2);
 
     lv_observer_remove(extruder_observer);
     lv_observer_remove(bed_observer);
@@ -420,13 +422,13 @@ TEST_CASE("Temperature characterization: multiple observers on same subject all 
     REQUIRE(count2 == 1);
     REQUIRE(count3 == 1);
 
-    // Single update should fire all three
+    // Single update should fire all three (1 fire per value change, no redundant notify)
     json status = {{"extruder", {{"temperature", 150.0}}}};
     state.update_from_status(status);
 
-    REQUIRE(count1 == 3);
-    REQUIRE(count2 == 3);
-    REQUIRE(count3 == 3);
+    REQUIRE(count1 == 2);
+    REQUIRE(count2 == 2);
+    REQUIRE(count3 == 2);
 
     lv_observer_remove(observer1);
     lv_observer_remove(observer2);

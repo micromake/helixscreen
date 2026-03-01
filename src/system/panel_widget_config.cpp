@@ -4,11 +4,15 @@
 #include "panel_widget_config.h"
 
 #include "config.h"
+#include "grid_layout.h"
 #include "panel_widget_registry.h"
+#include "theme_manager.h"
 
+#include <hv/json.hpp>
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <fstream>
 #include <set>
 
 namespace helix {
@@ -38,6 +42,7 @@ void PanelWidgetConfig::load() {
 
     if (!saved.is_array()) {
         entries_ = build_defaults();
+        save(); // Persist default grid positions for future launches
         return;
     }
 
@@ -76,8 +81,26 @@ void PanelWidgetConfig::load() {
             widget_config = item["config"];
         }
 
+        // Load grid placement coordinates (default to -1 = auto-place)
+        int col = -1;
+        int row_val = -1;
+        int colspan = 1;
+        int rowspan = 1;
+        if (item.contains("col") && item["col"].is_number_integer()) {
+            col = item["col"].get<int>();
+        }
+        if (item.contains("row") && item["row"].is_number_integer()) {
+            row_val = item["row"].get<int>();
+        }
+        if (item.contains("colspan") && item["colspan"].is_number_integer()) {
+            colspan = item["colspan"].get<int>();
+        }
+        if (item.contains("rowspan") && item["rowspan"].is_number_integer()) {
+            rowspan = item["rowspan"].get<int>();
+        }
+
         seen_ids.insert(id);
-        entries_.push_back({id, enabled, widget_config});
+        entries_.push_back({id, enabled, widget_config, col, row_val, colspan, rowspan});
     }
 
     // Append any new widgets from registry that are not in saved config
@@ -85,15 +108,25 @@ void PanelWidgetConfig::load() {
         if (seen_ids.count(def.id) == 0) {
             spdlog::debug("[PanelWidgetConfig] Appending new widget: {} (default_enabled={})",
                           def.id, def.default_enabled);
-            entries_.push_back({def.id, def.default_enabled, {}});
+            entries_.push_back({def.id, def.default_enabled, {}, -1, -1, def.colspan, def.rowspan});
         }
     }
 
-    // If saved array was empty or all entries were invalid, we still have
-    // the appended defaults from above. If nothing was saved at all,
-    // that gives us the full default set.
     if (entries_.empty()) {
         entries_ = build_defaults();
+        return;
+    }
+
+    // If no entries have grid positions, this is a pre-grid config — reset to defaults.
+    bool has_any_grid =
+        std::any_of(entries_.begin(), entries_.end(),
+                    [](const PanelWidgetEntry& e) { return e.has_grid_position(); });
+    if (!has_any_grid) {
+        spdlog::info(
+            "[PanelWidgetConfig] Pre-grid config detected, resetting to default grid for '{}'",
+            panel_id_);
+        entries_ = build_defaults();
+        save();
     }
 }
 
@@ -104,6 +137,11 @@ void PanelWidgetConfig::save() {
         if (!entry.config.empty()) {
             item["config"] = entry.config;
         }
+        // Always write grid coordinates so auto-placed positions survive reload
+        item["col"] = entry.col;
+        item["row"] = entry.row;
+        item["colspan"] = entry.colspan;
+        item["rowspan"] = entry.rowspan;
         widgets_array.push_back(std::move(item));
     }
     config_.set<json>(config_.df() + "panel_widgets/" + panel_id_, widgets_array);
@@ -161,14 +199,112 @@ void PanelWidgetConfig::set_widget_config(const std::string& id, const nlohmann:
     }
 }
 
-std::vector<PanelWidgetEntry> PanelWidgetConfig::build_defaults() {
-    std::vector<PanelWidgetEntry> defaults;
+// Breakpoint name to index mapping for default_layout.json
+static int breakpoint_name_to_index(const std::string& name) {
+    if (name == "tiny") return 0;
+    if (name == "small") return 1;
+    if (name == "medium") return 2;
+    if (name == "large") return 3;
+    if (name == "xlarge") return 4;
+    return -1;
+}
+
+std::vector<PanelWidgetEntry> PanelWidgetConfig::build_default_grid() {
     const auto& defs = get_all_widget_defs();
-    defaults.reserve(defs.size());
-    for (const auto& def : defs) {
-        defaults.push_back({def.id, def.default_enabled, {}});
+
+    // Determine current breakpoint for per-breakpoint anchor sizing
+    lv_subject_t* bp_subj = theme_manager_get_breakpoint_subject();
+    int breakpoint = bp_subj ? lv_subject_get_int(bp_subj) : 2; // Default MEDIUM
+
+    static const char* bp_names[] = {"tiny", "small", "medium", "large", "xlarge"};
+    const char* bp_name = (breakpoint >= 0 && breakpoint <= 4) ? bp_names[breakpoint] : "medium";
+
+    // Load anchor placements from config/default_layout.json (runtime-editable).
+    // Falls back to registry defaults if file is missing or malformed.
+    struct AnchorPlacement {
+        std::string id;
+        int col, row, colspan, rowspan;
+    };
+    std::vector<AnchorPlacement> anchors;
+
+    std::ifstream layout_file("config/default_layout.json");
+    if (layout_file.is_open()) {
+        try {
+            nlohmann::json layout = nlohmann::json::parse(layout_file);
+            for (const auto& anchor : layout.value("anchors", nlohmann::json::array())) {
+                std::string id = anchor.value("id", "");
+                if (id.empty() || !find_widget_def(id))
+                    continue;
+
+                auto placements = anchor.value("placements", nlohmann::json::object());
+                if (placements.contains(bp_name)) {
+                    auto& p = placements[bp_name];
+                    anchors.push_back({id, p.value("col", 0), p.value("row", 0),
+                                       p.value("colspan", 1), p.value("rowspan", 1)});
+                }
+            }
+            spdlog::debug("[PanelWidgetConfig] Loaded {} anchors from default_layout.json (bp={})",
+                          anchors.size(), bp_name);
+        } catch (const std::exception& e) {
+            spdlog::warn("[PanelWidgetConfig] Failed to parse default_layout.json: {}", e.what());
+            anchors.clear();
+        }
     }
-    return defaults;
+
+    // Fallback: if no anchors loaded, use hardcoded defaults so the dashboard
+    // always has printer_image, print_status, and tips placed sensibly.
+    if (anchors.empty()) {
+        spdlog::debug("[PanelWidgetConfig] Using hardcoded anchor fallback (bp={})", bp_name);
+        anchors = {
+            {"printer_image", 0, 0, 2, 2},
+            {"print_status", 0, 2, 2, 2},
+            {"tips", 2, 0, 4, 2},
+        };
+    }
+
+    // Build result: anchored widgets first, then all others with auto-placement
+    std::vector<PanelWidgetEntry> result;
+    result.reserve(defs.size());
+    std::set<std::string> fixed_ids;
+
+    for (const auto& a : anchors) {
+        if (!find_widget_def(a.id))
+            continue;
+        result.push_back({a.id, true, {}, a.col, a.row, a.colspan, a.rowspan});
+        fixed_ids.insert(a.id);
+    }
+
+    // All other widgets: enabled/disabled per registry, no grid position.
+    // Positions computed dynamically at populate time.
+    for (const auto& def : defs) {
+        if (fixed_ids.count(def.id) > 0)
+            continue;
+        result.push_back({def.id, def.default_enabled, {}, -1, -1, def.colspan, def.rowspan});
+    }
+
+    // Safety: ensure at least some widgets are enabled
+    bool any_enabled = std::any_of(result.begin(), result.end(),
+                                    [](const PanelWidgetEntry& e) { return e.enabled; });
+    if (!any_enabled) {
+        spdlog::warn("[PanelWidgetConfig] No widgets enabled — enabling registry defaults");
+        for (auto& entry : result) {
+            const auto* def = find_widget_def(entry.id);
+            if (def && def->default_enabled) {
+                entry.enabled = true;
+            }
+        }
+    }
+
+    return result;
+}
+
+bool PanelWidgetConfig::is_grid_format() const {
+    return std::any_of(entries_.begin(), entries_.end(),
+                       [](const PanelWidgetEntry& e) { return e.has_grid_position(); });
+}
+
+std::vector<PanelWidgetEntry> PanelWidgetConfig::build_defaults() {
+    return build_default_grid();
 }
 
 } // namespace helix

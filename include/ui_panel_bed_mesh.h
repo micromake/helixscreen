@@ -18,7 +18,7 @@
 #include <vector>
 
 /**
- * @brief Bed mesh visualization panel with TinyGL 3D renderer
+ * @brief Bed mesh visualization panel with 3D renderer
  *
  * Interactive 3D visualization of printer bed mesh height maps with touch-drag
  * rotation, color-coded height mapping, profile switching, and statistics.
@@ -28,7 +28,7 @@
  * - Profile management: load, rename, delete, calibrate
  * - SAVE_CONFIG prompt after modifications
  *
- * @see ui_bed_mesh.h for TinyGL widget API
+ * @see ui_bed_mesh.h for bed mesh widget API
  */
 
 // Maximum number of profiles displayed in UI
@@ -59,6 +59,7 @@ class BedMeshPanel : public OverlayBase {
     // === Lifecycle hooks ===
     void on_activate() override;
     void on_deactivate() override;
+    void on_ui_destroyed() override;
 
     /**
      * @brief Load mesh data and render

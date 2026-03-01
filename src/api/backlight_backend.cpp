@@ -95,7 +95,8 @@ class BacklightBackendNone : public BacklightBackend {
  */
 class BacklightBackendSysfs : public BacklightBackend {
   public:
-    BacklightBackendSysfs() {
+    explicit BacklightBackendSysfs(const std::string& base_path = "/sys/class/backlight")
+        : base_path_(base_path) {
         probe_device();
     }
 
@@ -123,6 +124,11 @@ class BacklightBackendSysfs : public BacklightBackend {
             return false;
         }
         f.close();
+
+        // Control bl_power to fully cut/restore backlight power.
+        // On some displays (e.g. Pi 5 DSI), brightness=0 still leaves
+        // the backlight LED glowing — bl_power=1 actually powers it off.
+        set_bl_power(target == 0);
 
         spdlog::debug("[Backlight-Sysfs] Set {} to {}/{} ({}%)", device_name_, target,
                       max_brightness_, percent);
@@ -157,11 +163,9 @@ class BacklightBackendSysfs : public BacklightBackend {
 
   private:
     void probe_device() {
-        const char* backlight_base = "/sys/class/backlight";
-
-        DIR* dir = opendir(backlight_base);
+        DIR* dir = opendir(base_path_.c_str());
         if (!dir) {
-            spdlog::debug("[Backlight-Sysfs] No backlight class at {}", backlight_base);
+            spdlog::debug("[Backlight-Sysfs] No backlight class at {}", base_path_);
             return;
         }
 
@@ -172,12 +176,12 @@ class BacklightBackendSysfs : public BacklightBackend {
                 continue;
             }
 
-            std::string path = std::string(backlight_base) + "/" + entry->d_name;
+            std::string path = base_path_ + "/" + entry->d_name;
             std::string brightness_path = path + "/brightness";
             std::string max_path = path + "/max_brightness";
 
             // Check if brightness file exists
-            struct stat st{};
+            struct stat st {};
             if (stat(brightness_path.c_str(), &st) != 0) {
                 continue;
             }
@@ -209,6 +213,33 @@ class BacklightBackendSysfs : public BacklightBackend {
         closedir(dir);
     }
 
+    /**
+     * @brief Control bl_power sysfs attribute to cut/restore backlight power
+     *
+     * On some displays (e.g. Pi 5 DSI), setting brightness to 0 leaves the
+     * backlight LED faintly glowing. bl_power=1 fully powers off the backlight.
+     * Requires the udev rule to grant video group write access to bl_power.
+     */
+    void set_bl_power(bool off) {
+        std::string bl_power_path = device_path_ + "/bl_power";
+        std::ofstream f(bl_power_path);
+        if (!f.is_open()) {
+            // Not all backlight drivers expose bl_power, and the udev rule
+            // may not have been installed yet — this is non-fatal.
+            spdlog::debug(
+                "[Backlight-Sysfs] Cannot write to {} (not available or permission denied)",
+                bl_power_path);
+            return;
+        }
+
+        // bl_power: 0 = FB_BLANK_UNBLANK (on), 1 = FB_BLANK_POWERDOWN (off)
+        f << (off ? 1 : 0);
+        if (f.good()) {
+            spdlog::debug("[Backlight-Sysfs] bl_power {} for {}", off ? "OFF" : "ON", device_name_);
+        }
+    }
+
+    std::string base_path_;
     std::string device_path_;
     std::string device_name_;
     int max_brightness_ = 0;
@@ -411,7 +442,7 @@ class BacklightBackendAllwinner : public BacklightBackend {
   private:
     void probe_device() {
         // Check if /dev/disp exists
-        struct stat st{};
+        struct stat st {};
         if (stat(DISP_DEVICE, &st) != 0) {
             spdlog::debug("[Backlight-Allwinner] {} not found", DISP_DEVICE);
             return;
@@ -513,3 +544,9 @@ std::unique_ptr<BacklightBackend> BacklightBackend::create() {
     spdlog::info("[Backlight] No hardware backend available");
     return std::make_unique<BacklightBackendNone>(false);
 }
+
+#ifdef __linux__
+std::unique_ptr<BacklightBackend> BacklightBackend::create_sysfs(const std::string& base_path) {
+    return std::make_unique<BacklightBackendSysfs>(base_path);
+}
+#endif

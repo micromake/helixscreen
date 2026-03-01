@@ -47,7 +47,10 @@ check-uptodate:
 # the target changes. This prevents mixing ARM and x86/ARM64 objects.
 # ============================================================================
 ARCH_MARKER := $(BUILD_DIR)/.build-target
-CURRENT_TARGET := $(if $(PLATFORM_TARGET),$(PLATFORM_TARGET),native)
+# Map pi-both → pi, pi32-both → pi32 so switching between single/dual-link
+# modes doesn't trigger an unnecessary clean (they share the same build dir)
+_RAW_TARGET := $(if $(PLATFORM_TARGET),$(PLATFORM_TARGET),native)
+CURRENT_TARGET := $(subst pi32-both,pi32,$(subst pi-both,pi,$(_RAW_TARGET)))
 
 # Check if architecture changed and clean if needed
 define check-arch-change
@@ -111,7 +114,11 @@ ifndef _PARALLEL_CHECKED
 	fi
 else
 # Phase 2: Actual build (only runs when _PARALLEL_CHECKED is set)
+ifdef PI_DUAL_LINK
+all: apply-patches generate-fonts $(TRANS_GEN_C) splash watchdog $(TARGET) $(FBDEV_TARGET) verify-fbdev strip-both
+else
 all: apply-patches generate-fonts $(TRANS_GEN_C) splash watchdog $(TARGET) strip
+endif
 	$(ECHO) "$(GREEN)$(BOLD)✓ Build complete!$(RESET)"
 	$(ECHO) "$(CYAN)Run with: $(YELLOW)./$(TARGET)$(RESET)"
 ifndef SKIP_COMPILE_COMMANDS
@@ -133,39 +140,9 @@ endif
 $(LIBHV_LIB):
 	$(Q)$(MAKE) libhv-build
 
-# Build TinyGL if not present (dependency rule)
-# Only build if ENABLE_TINYGL_3D=yes
-# Output: $(BUILD_DIR)/lib/libTinyGL.a for architecture isolation
-# Note: TinyGL builds in-tree, so we must clean before cross-compilation
-ifeq ($(ENABLE_TINYGL_3D),yes)
-# Track TinyGL source files so incremental builds detect changes
-TINYGL_SOURCES := $(wildcard $(TINYGL_DIR)/src/*.c $(TINYGL_DIR)/src/*.h $(TINYGL_DIR)/include/*.h $(TINYGL_DIR)/include/GL/*.h)
-
-$(TINYGL_LIB): $(TINYGL_SOURCES)
-	$(ECHO) "$(CYAN)$(BOLD)Building TinyGL...$(RESET)"
-	$(Q)mkdir -p $(BUILD_DIR)/lib
-ifneq ($(CROSS_COMPILE),)
-	# Cross-compilation mode - clean in-tree artifacts first
-	$(Q)if [ -f "$(TINYGL_DIR)/lib/libTinyGL.a" ]; then \
-		echo "$(YELLOW)→ Cleaning TinyGL in-tree artifacts for cross-compilation...$(RESET)"; \
-		cd $(TINYGL_DIR) && $(MAKE) clean; \
-	fi
-	# Pass CC and CFLAGS_LIB to override TinyGL's defaults for cross-compilation
-	# Build only the library (skip Raw_Demos which use -march=native and fail with cross-compiler)
-	$(Q)cd $(TINYGL_DIR) && CC="$(CC)" CFLAGS_LIB="-Wall -O3 -std=c99 -pedantic -DNDEBUG -Wno-unused-function $(TARGET_CFLAGS)" $(MAKE) lib/libTinyGL.a
-else ifeq ($(UNAME_S),Darwin)
-	$(Q)cd $(TINYGL_DIR) && MACOSX_DEPLOYMENT_TARGET=$(MACOS_MIN_VERSION) $(MAKE)
-else
-	$(Q)cd $(TINYGL_DIR) && $(MAKE)
-endif
-	# Copy to architecture-specific output directory
-	$(Q)cp $(TINYGL_DIR)/lib/libTinyGL.a $(BUILD_DIR)/lib/libTinyGL.a
-	$(ECHO) "$(GREEN)✓ TinyGL built: $(BUILD_DIR)/lib/libTinyGL.a$(RESET)"
-endif
-
 # Link binary (SDL2_LIB is empty if using system SDL2)
 # Note: Filter out library archives from $^ to avoid duplicate linking, then add via LDFLAGS
-$(TARGET): $(SDL2_LIB) $(LIBHV_LIB) $(TINYGL_LIB) $(APP_C_OBJS) $(APP_OBJS) $(APP_MODULE_OBJS) $(OBJCPP_OBJS) $(LVGL_OBJS) $(HELIX_XML_OBJS) $(THORVG_OBJS) $(LV_MARKDOWN_OBJS) $(FONT_OBJS) $(TRANS_OBJS) $(WPA_DEPS)
+$(TARGET): $(SDL2_LIB) $(LIBHV_LIB) $(CONTRIBUTORS_H) $(APP_C_OBJS) $(APP_OBJS) $(APP_MODULE_OBJS) $(OBJCPP_OBJS) $(LVGL_OBJS) $(HELIX_XML_OBJS) $(THORVG_OBJS) $(LVGL_OPENGLES_OBJS) $(LV_MARKDOWN_OBJS) $(FONT_OBJS) $(TRANS_OBJS) $(WPA_DEPS)
 	$(Q)mkdir -p $(BIN_DIR)
 	$(ECHO) "$(MAGENTA)$(BOLD)[LD]$(RESET) $@"
 	$(Q)$(CXX) $(CXXFLAGS) $(filter-out %.a,$^) -o $@ $(LDFLAGS) || { \
@@ -316,6 +293,19 @@ endif
 	}
 	$(call emit-compile-command,$(CXX),$(SUBMODULE_CXXFLAGS) $(PCH_FLAGS) $(INCLUDES) $(LV_CONF),$<,$@)
 
+# Compile LVGL OpenGL ES shader assets as C++ (raw string literals require C++11)
+# Only the assets/ subdirectory needs C++ — the rest compiles fine as C.
+# -fpermissive allows void* implicit conversions from C-style LVGL allocations.
+# Only built when ENABLE_OPENGLES=yes (LVGL_OPENGLES_OBJS is empty otherwise).
+$(LVGL_OPENGLES_OBJS): $(OBJ_DIR)/lvgl/%.o: $(LVGL_DIR)/%.c lv_conf.h
+	$(Q)mkdir -p $(dir $@)
+	$(ECHO) "$(CYAN)[CXX/GLES]$(RESET) $<"
+	$(Q)$(CXX) $(SUBMODULE_CXXFLAGS) -fpermissive $(INCLUDES) $(LV_CONF) -c $< -o $@ || { \
+		echo "$(RED)$(BOLD)✗ Compilation failed:$(RESET) $<"; \
+		exit 1; \
+	}
+	$(call emit-compile-command,$(CXX),$(SUBMODULE_CXXFLAGS) -fpermissive $(INCLUDES) $(LV_CONF),$<,$@)
+
 # Compile lv_markdown sources (vendored C library - use SUBMODULE_CFLAGS)
 # Includes both src/*.c and deps/md4c/md4c.c
 $(OBJ_DIR)/lv_markdown/%.o: $(LV_MARKDOWN_DIR)/%.c
@@ -368,12 +358,6 @@ clean:
 		echo "$(YELLOW)→ Cleaning libhv build artifacts...$(RESET)"; \
 		find $(LIBHV_DIR) -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.dylib' \) -delete; \
 	fi
-ifeq ($(ENABLE_TINYGL_3D),yes)
-	$(Q)if [ -d "$(TINYGL_DIR)" ] && [ -f "$(TINYGL_DIR)/lib/libTinyGL.a" ]; then \
-		echo "$(YELLOW)→ Cleaning TinyGL...$(RESET)"; \
-		cd $(TINYGL_DIR) && $(MAKE) clean; \
-	fi
-endif
 ifneq ($(UNAME_S),Darwin)
 	$(Q)if [ -d "$(WPA_DIR)/wpa_supplicant" ] && [ -f "$(WPA_DIR)/wpa_supplicant/libwpa_client.a" ]; then \
 		echo "$(YELLOW)→ Cleaning wpa_supplicant...$(RESET)"; \
@@ -400,12 +384,6 @@ distclean: clean
 		echo "$(YELLOW)→ Cleaning SDL2 submodule build...$(RESET)"; \
 		rm -rf lib/sdl2/build; \
 	fi
-ifeq ($(ENABLE_TINYGL_3D),yes)
-	$(Q)if [ -d "$(TINYGL_DIR)" ] && [ -f "$(TINYGL_DIR)/Makefile" ]; then \
-		echo "$(YELLOW)→ Cleaning TinyGL...$(RESET)"; \
-		cd $(TINYGL_DIR) && $(MAKE) clean 2>/dev/null || true; \
-	fi
-endif
 ifneq ($(UNAME_S),Darwin)
 	$(Q)if [ -d "$(WPA_DIR)/wpa_supplicant" ]; then \
 		echo "$(YELLOW)→ Cleaning wpa_supplicant...$(RESET)"; \

@@ -5,11 +5,11 @@
 
 #include "ui_error_reporting.h"
 #include "ui_nav_manager.h"
-#include "ui_panel_print_status.h" // For PrintState enum
 #include "ui_update_queue.h"
 
 #include "filament_sensor_manager.h"
 #include "moonraker_api.h"
+#include "print_lifecycle_state.h" // For PrintState enum
 #include "runtime_config.h"
 #include "standard_macros.h"
 

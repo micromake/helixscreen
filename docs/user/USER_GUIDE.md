@@ -52,7 +52,7 @@ Bed mesh visualization, screws tilt adjust, input shaper resonance testing, Z-of
 ![Bed Mesh](../images/screenshot-bed-mesh-panel.png)
 
 ### [Settings](guide/settings.md)
-Display, theme, sound, LED, network, sensors, touch calibration, hardware health, safety, machine limits, factory reset, help & support (debug bundles, Discord, docs), and about (version info, updates).
+Display, theme, sound, LED, network, sensors, touch calibration, hardware health, safety, machine limits, factory reset, help & support (debug bundles, Discord, docs), and About sub-overlay (version info, updates, branding, contributors).
 
 ![Settings](../images/screenshot-settings-panel.png)
 

@@ -23,8 +23,11 @@ make ad5m-docker
 # Build for Elegoo Centauri Carbon 1 (armv7-a/ARM32)
 make cc1-docker
 
-# Build for Creality K1 series (MIPS32, static/musl)
-make k1-docker
+# Build for Creality K1 (MIPS32, static/musl)
+make mips-docker          # Or: make k1-docker (alias)
+
+# Build for FlashForge AD5X (MIPS32r5, glibc)
+make ad5x-docker
 
 # Build for Creality K1 series (MIPS32, dynamic/glibc)
 make k1-dynamic-docker
@@ -37,7 +40,8 @@ file build/pi/bin/helix-screen     # ELF 64-bit LSB, ARM aarch64
 file build/pi32/bin/helix-screen   # ELF 32-bit LSB, ARM, EABI5
 file build/ad5m/bin/helix-screen   # ELF 32-bit LSB, ARM, EABI5
 file build/cc1/bin/helix-screen    # ELF 32-bit LSB, ARM, EABI5
-file build/k1/bin/helix-screen     # ELF 32-bit LSB, MIPS32 (static)
+file build/mips/bin/helix-screen   # ELF 32-bit LSB, MIPS32 (static)
+file build/ad5x/bin/helix-screen  # ELF 32-bit LSB, MIPS32r5 (dynamic)
 file build/k1-dynamic/bin/helix-screen  # ELF 32-bit LSB, MIPS32 (dynamic)
 file build/k2/bin/helix-screen     # ELF 32-bit LSB, ARM, EABI5
 ```
@@ -52,7 +56,8 @@ Docker images are **automatically built** on first use - no manual setup require
 | **Raspberry Pi (32-bit)** | `make pi32-docker` | armv7-a (armhf) | DRM/fbdev | `build/pi32/` |
 | **Adventurer 5M** | `make ad5m-docker` | armv7-a (hard-float) | fbdev | `build/ad5m/` |
 | **Centauri Carbon 1** | `make cc1-docker` | armv7-a (hard-float) | fbdev | `build/cc1/` |
-| **Creality K1 (static)** | `make k1-docker` | MIPS32r2 (musl) | fbdev | `build/k1/` |
+| **Creality K1** | `make mips-docker` | MIPS32r2 (musl) | fbdev | `build/mips/` |
+| **FlashForge AD5X** | `make ad5x-docker` | MIPS32r5 (glibc) | fbdev | `build/ad5x/` |
 | **Creality K1 (dynamic)** | `make k1-dynamic-docker` | MIPS32r2 (glibc) | fbdev | `build/k1-dynamic/` |
 | **Creality K2** | `make k2-docker` | armv7-a (musl) | fbdev | `build/k2/` |
 | **Native (SDL)** | `make` | Host architecture | SDL2 | `build/` |
@@ -76,8 +81,10 @@ Docker images are **automatically built** on first use - no manual setup require
 
 ```bash
 # Docker-based builds (recommended - no toolchain installation needed)
-make pi-docker           # Raspberry Pi 64-bit via Docker
-make pi32-docker         # Raspberry Pi 32-bit via Docker
+make pi-docker           # Raspberry Pi 64-bit via Docker (DRM only)
+make pi-all-docker       # Raspberry Pi 64-bit — both DRM + fbdev (single pass)
+make pi32-docker         # Raspberry Pi 32-bit via Docker (DRM only)
+make pi32-all-docker     # Raspberry Pi 32-bit — both DRM + fbdev (single pass)
 make ad5m-docker         # Adventurer 5M via Docker
 make cc1-docker          # Centauri Carbon 1 via Docker
 make k1-docker           # Creality K1 series via Docker (static/musl)
@@ -354,6 +361,70 @@ Display backend is selected via `DISPLAY_BACKEND` in `mk/cross.mk` and controls:
 - Display initialization in `display_backend.cpp`
 - Input driver selection (SDL mouse, evdev touch, libinput)
 
+### Pi Dual-Link Build (Compile Once, Link Twice)
+
+Pi release builds produce two binaries: DRM (GPU-accelerated) and fbdev (framebuffer fallback). Instead of compiling all ~900 source files twice, the **dual-link build** compiles everything once with DRM superset defines, then links two binaries with different display libraries and link flags.
+
+**This cuts Pi CI build time roughly in half (~40 min instead of 80+).**
+
+```bash
+# Dual-link build (produces both DRM + fbdev in one pass)
+make PLATFORM_TARGET=pi-both -j       # Direct (requires toolchain)
+make pi-all-docker                     # Docker (recommended)
+
+# Individual builds still work (for development/debugging)
+make PLATFORM_TARGET=pi -j            # DRM only
+make PLATFORM_TARGET=pi-fbdev -j      # fbdev only
+```
+
+#### How It Works
+
+1. **Compile phase**: All source files compile once using DRM superset defines (`-DHELIX_DISPLAY_DRM -DHELIX_DISPLAY_FBDEV -DHELIX_ENABLE_OPENGLES`). Objects go to `build/pi/obj/`.
+
+2. **Variant-specific compilation** (only 4 files):
+   - `display_backend.cpp`, `display_backend_fbdev.cpp`, `touch_calibration.cpp` → compiled into `build/pi/display-fbdev/` without DRM defines, archived as `libhelix-display-fbdev.a`
+   - `crash_reporter.cpp` → compiled into `build/pi/fbdev-variant/` with `-DHELIX_BINARY_VARIANT="fbdev"`
+
+3. **DRM link**: All objects + LVGL DRM drivers + OpenGLES objects + `-ldrm -linput -lEGL -lGLESv2 -lgbm` → `build/pi/bin/helix-screen`
+
+4. **fbdev link**: Common objects (minus DRM drivers, OpenGLES objects, DRM display backend) + `libhelix-display-fbdev.a` + fbdev crash_reporter.o → `build/pi-fbdev/bin/helix-screen`
+
+5. **Verification**: `verify-fbdev` automatically checks the fbdev binary has no DRM/GLES undefined symbols.
+
+#### Build Output Layout
+
+```
+build/
+  pi/
+    obj/                        # ALL objects (shared between both links)
+    lib/
+      libhelix-display.a        # DRM display library (used by splash/watchdog too)
+      libhelix-display-fbdev.a  # fbdev display library
+    display-fbdev/              # fbdev display backend objects
+    fbdev-variant/              # fbdev crash_reporter.o
+    bin/
+      helix-screen              # DRM binary
+      helix-splash              # Splash (DRM only)
+      helix-watchdog            # Watchdog (DRM only)
+  pi-fbdev/
+    bin/
+      helix-screen              # fbdev binary (linked from pi/ objects)
+```
+
+#### Important Caveats for Developers
+
+- **`#ifdef HELIX_DISPLAY_DRM` in non-display files**: The shared objects are compiled with DRM defines enabled. If you add `#ifdef HELIX_DISPLAY_DRM` to a non-display source file, that code path will execute in the fbdev binary too. Only `display_backend*.cpp` is recompiled for fbdev. Use runtime detection (`DisplayBackend::get_type()`) instead of compile-time guards for behavior that should differ between DRM and fbdev.
+- **Adding new DRM-only sources**: If you add a new source file that references DRM/GLES symbols (e.g., `drmModeGetResources`), you must add its object to `LVGL_DRM_DRIVER_OBJS` in `mk/pi-dual-link.mk` to exclude it from the fbdev link. The `verify-fbdev` target will catch this if you forget.
+- **The `pi` and `pi-both` targets share `build/pi/`**: Switching between them doesn't trigger a clean rebuild — the arch-change detection maps both to the same build directory.
+
+#### Files
+
+| File | Purpose |
+|------|---------|
+| `mk/pi-dual-link.mk` | Fbdev display lib, crash reporter variant, fbdev link rule, verify/strip targets |
+| `mk/cross.mk` | `pi-both` / `pi32-both` platform target definitions |
+| `mk/rules.mk` | Conditional `all` target (uses `strip-both` in dual-link mode) |
+
 ---
 
 ## Git Worktrees
@@ -454,6 +525,7 @@ The build system is organized into focused modules:
 | `mk/splash.mk` | ~110 | Splash screen generation |
 | `mk/tools.mk` | ~110 | Development tool targets |
 | `mk/display-lib.mk` | ~60 | Display library configuration |
+| `mk/pi-dual-link.mk` | ~200 | Pi dual-link build (compile once, link DRM + fbdev) |
 
 Each module is self-contained with GPL-3 copyright headers and clear separation of concerns.
 

@@ -21,6 +21,7 @@ static SlotInfo make_test_slot() {
     slot.brand = "Polymaker";
     slot.material = "PLA";
     slot.color_rgb = 0xFF0000; // Red
+    slot.spoolman_filament_id = 100;
     slot.remaining_weight_g = 800.0f;
     slot.total_weight_g = 1000.0f;
     return slot;
@@ -359,4 +360,211 @@ TEST_CASE("SpoolmanSlotSaver save chains filament relink then weight update when
             break;
         }
     }
+}
+
+// ============================================================================
+// Filament PATCH tests (update existing filament instead of create)
+// ============================================================================
+
+TEST_CASE("SpoolmanSlotSaver save PATCHes existing filament when material changes",
+          "[spoolman][slot_saver]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+
+    // Set up mock spool
+    auto& spools = api.spoolman_mock().get_mock_spools();
+    SpoolInfo test_spool;
+    test_spool.id = 42;
+    test_spool.filament_id = 100;
+    test_spool.vendor = "Polymaker";
+    test_spool.material = "PLA";
+    test_spool.color_hex = "FF0000";
+    test_spool.remaining_weight_g = 800.0;
+    test_spool.initial_weight_g = 1000.0;
+    spools.push_back(test_spool);
+
+    SpoolmanSlotSaver saver(&api);
+
+    SlotInfo original = make_test_slot();
+    SlotInfo edited = original;
+    edited.material = "PETG"; // Changed material
+
+    bool callback_called = false;
+    bool callback_success = false;
+
+    saver.save(original, edited, [&](bool success) {
+        callback_called = true;
+        callback_success = success;
+    });
+
+    REQUIRE(callback_called);
+    REQUIRE(callback_success);
+
+    // Verify filament was PATCHed (not created)
+    auto& updates = api.spoolman_mock().filament_updates;
+    REQUIRE(updates.size() == 1);
+    REQUIRE(updates[0].filament_id == 100); // PATCHed the right filament
+    REQUIRE(updates[0].data.contains("material"));
+    REQUIRE(updates[0].data["material"] == "PETG");
+}
+
+TEST_CASE("SpoolmanSlotSaver save PATCHes filament with correct color_hex format",
+          "[spoolman][slot_saver]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+
+    auto& spools = api.spoolman_mock().get_mock_spools();
+    SpoolInfo test_spool;
+    test_spool.id = 42;
+    test_spool.filament_id = 100;
+    test_spool.vendor = "Polymaker";
+    test_spool.material = "PLA";
+    test_spool.color_hex = "FF0000";
+    test_spool.remaining_weight_g = 800.0;
+    spools.push_back(test_spool);
+
+    SpoolmanSlotSaver saver(&api);
+
+    SlotInfo original = make_test_slot();
+    SlotInfo edited = original;
+    edited.color_rgb = 0x00FF00; // Changed to green
+
+    bool callback_called = false;
+    bool callback_success = false;
+
+    saver.save(original, edited, [&](bool success) {
+        callback_called = true;
+        callback_success = success;
+    });
+
+    REQUIRE(callback_called);
+    REQUIRE(callback_success);
+
+    auto& updates = api.spoolman_mock().filament_updates;
+    REQUIRE(updates.size() == 1);
+    // color_hex should NOT have # prefix
+    REQUIRE(updates[0].data.contains("color_hex"));
+    REQUIRE(updates[0].data["color_hex"] == "00FF00");
+}
+
+TEST_CASE("SpoolmanSlotSaver save PATCHes filament then updates weight when both change",
+          "[spoolman][slot_saver]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+
+    auto& spools = api.spoolman_mock().get_mock_spools();
+    SpoolInfo test_spool;
+    test_spool.id = 42;
+    test_spool.filament_id = 100;
+    test_spool.vendor = "Polymaker";
+    test_spool.material = "PLA";
+    test_spool.color_hex = "FF0000";
+    test_spool.remaining_weight_g = 800.0;
+    test_spool.initial_weight_g = 1000.0;
+    spools.push_back(test_spool);
+
+    SpoolmanSlotSaver saver(&api);
+
+    SlotInfo original = make_test_slot();
+    SlotInfo edited = original;
+    edited.material = "ABS";
+    edited.remaining_weight_g = 500.0f;
+
+    bool callback_called = false;
+    bool callback_success = false;
+
+    saver.save(original, edited, [&](bool success) {
+        callback_called = true;
+        callback_success = success;
+    });
+
+    REQUIRE(callback_called);
+    REQUIRE(callback_success);
+
+    // Verify filament was PATCHed
+    auto& updates = api.spoolman_mock().filament_updates;
+    REQUIRE(updates.size() == 1);
+    REQUIRE(updates[0].filament_id == 100);
+    REQUIRE(updates[0].data["material"] == "ABS");
+
+    // Verify weight was also updated
+    for (const auto& spool : api.spoolman_mock().get_mock_spools()) {
+        if (spool.id == 42) {
+            REQUIRE(spool.remaining_weight_g == Catch::Approx(500.0));
+            break;
+        }
+    }
+}
+
+TEST_CASE("SpoolmanSlotSaver save fails gracefully when no filament_id available",
+          "[spoolman][slot_saver]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+
+    SpoolmanSlotSaver saver(&api);
+
+    SlotInfo original = make_test_slot();
+    original.spoolman_filament_id = 0; // No filament ID
+    SlotInfo edited = original;
+    edited.material = "PETG"; // Filament-level change but no filament_id
+
+    bool callback_called = false;
+    bool callback_success = false;
+
+    saver.save(original, edited, [&](bool success) {
+        callback_called = true;
+        callback_success = success;
+    });
+
+    REQUIRE(callback_called);
+    REQUIRE_FALSE(callback_success); // Should fail, not crash
+
+    // Verify no filament update was attempted
+    auto& updates = api.spoolman_mock().filament_updates;
+    REQUIRE(updates.empty());
+}
+
+// ============================================================================
+// color_to_hex format tests
+// ============================================================================
+
+TEST_CASE("SpoolmanSlotSaver color_to_hex produces hex without # prefix",
+          "[spoolman][slot_saver]") {
+    // color_to_hex is private, but we can test via the PATCH payload
+    // This test verifies the format indirectly through the filament update
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+
+    auto& spools = api.spoolman_mock().get_mock_spools();
+    SpoolInfo test_spool;
+    test_spool.id = 42;
+    test_spool.filament_id = 100;
+    test_spool.vendor = "Polymaker";
+    test_spool.material = "PLA";
+    test_spool.color_hex = "000000";
+    test_spool.remaining_weight_g = 800.0;
+    spools.push_back(test_spool);
+
+    SpoolmanSlotSaver saver(&api);
+
+    SlotInfo original = make_test_slot();
+    original.color_rgb = 0x000000;
+    SlotInfo edited = original;
+    edited.color_rgb = 0xABCDEF;
+
+    bool done = false;
+    saver.save(original, edited, [&](bool) { done = true; });
+
+    REQUIRE(done);
+    auto& updates = api.spoolman_mock().filament_updates;
+    REQUIRE(updates.size() == 1);
+    // Must NOT start with #
+    std::string hex = updates[0].data["color_hex"];
+    REQUIRE(hex == "ABCDEF");
+    REQUIRE(hex[0] != '#');
 }

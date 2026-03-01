@@ -18,7 +18,7 @@
 
 #include "lvgl/lvgl.h"
 
-#include <atomic>
+#include <functional>
 #include <memory>
 #include <utility>
 
@@ -50,6 +50,13 @@ class ObserverGuard {
     ObserverGuard(lv_subject_t* subject, lv_observer_cb_t cb, void* user_data)
         : observer_(lv_subject_add_observer(subject, cb, user_data)) {}
 
+    /// Construct with a cleanup callback for the user_data context.
+    /// The cleanup runs in reset() to free the context and expire weak tokens.
+    ObserverGuard(lv_subject_t* subject, lv_observer_cb_t cb, void* user_data,
+                  std::function<void()> cleanup)
+        : observer_(lv_subject_add_observer(subject, cb, user_data)), cleanup_(std::move(cleanup)) {
+    }
+
     ~ObserverGuard() {
         reset();
     }
@@ -57,7 +64,8 @@ class ObserverGuard {
     ObserverGuard(ObserverGuard&& other) noexcept
         : observer_(std::exchange(other.observer_, nullptr)),
           alive_token_(std::move(other.alive_token_)),
-          has_alive_token_(std::exchange(other.has_alive_token_, false)) {}
+          has_alive_token_(std::exchange(other.has_alive_token_, false)),
+          cleanup_(std::move(other.cleanup_)) {}
 
     ObserverGuard& operator=(ObserverGuard&& other) noexcept {
         if (this != &other) {
@@ -65,6 +73,7 @@ class ObserverGuard {
             observer_ = std::exchange(other.observer_, nullptr);
             alive_token_ = std::move(other.alive_token_);
             has_alive_token_ = std::exchange(other.has_alive_token_, false);
+            cleanup_ = std::move(other.cleanup_);
         }
         return *this;
     }
@@ -103,6 +112,11 @@ class ObserverGuard {
             observer_ = nullptr;
             alive_token_.reset();
             has_alive_token_ = false;
+            // Free the observer context (expires weak_alive tokens in deferred lambdas)
+            if (cleanup_) {
+                cleanup_();
+                cleanup_ = nullptr;
+            }
         }
     }
 
@@ -127,6 +141,11 @@ class ObserverGuard {
         observer_ = nullptr;
         alive_token_.reset();
         has_alive_token_ = false;
+        // NOTE: Do NOT call cleanup_ here. release() leaves the observer
+        // registered in LVGL, so the ctx (user_data) must remain valid.
+        // The ctx becomes a permanent leak, but that's acceptable for the
+        // shutdown/pre-deinit paths where release() is used.
+        cleanup_ = nullptr;
     }
 
     explicit operator bool() const {
@@ -143,9 +162,8 @@ class ObserverGuard {
     /// default-constructed weak_ptr reports expired() == true, which would cause
     /// static-subject guards to falsely skip lv_observer_remove() and leak observers.
     bool has_alive_token_ = false;
-
-    /// Global flag: when false, all reset() calls release instead of removing.
-    /// Set to false during soft restart after subjects are torn down via deinit_all().
-    /// Atomic because WebSocket thread destruction can trigger ObserverGuard::reset().
-    static inline std::atomic<bool> s_subjects_valid{true};
+    /// Cleanup callback to free the observer context (LambdaObserverContext).
+    /// When called, destroys the shared_ptr<bool> alive token, expiring weak_ptr
+    /// copies held by deferred lambdas so they skip execution on destroyed widgets.
+    std::function<void()> cleanup_;
 };

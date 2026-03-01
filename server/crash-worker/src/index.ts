@@ -8,6 +8,12 @@
 //   POST /v1/report             - Submit a crash report (requires X-API-Key)
 //   POST /v1/debug-bundle       - Upload debug bundle (requires X-API-Key)
 //   GET  /v1/debug-bundle/:code - Retrieve debug bundle (requires X-Admin-Key)
+//   GET  /v1/debug-bundle       - List debug bundles (requires X-Admin-Key)
+//       ?limit=N                  Max results (1-100, default 20)
+//       &since=YYYY-MM-DD         Uploaded on or after this date
+//       &until=YYYY-MM-DD         Uploaded on or before this date
+//       &match=STRING             Substring match on version/model/platform/code
+//       &cursor=TOKEN             R2 pagination cursor from previous response
 //
 // Secrets (configure via `wrangler secret put`):
 //   INGEST_API_KEY          - API key baked into HelixScreen binaries
@@ -54,13 +60,26 @@ interface IssueResult {
   is_duplicate: boolean;
 }
 
-/** Metadata extracted from a debug bundle. */
+/** Metadata extracted from a debug bundle's gzipped JSON body. */
 interface BundleMetadata {
   version: string;
   printer_model: string;
   klipper_version: string;
   platform: string;
   timestamp: string;
+}
+
+/** Entry in the bundle listing response. */
+interface BundleListEntry {
+  share_code: string;
+  size: number;
+  uploaded: string;
+  metadata: {
+    version: string;
+    printer_model: string;
+    platform: string;
+    klipper_version: string;
+  };
 }
 
 export default {
@@ -92,6 +111,11 @@ export default {
     // Debug bundle upload
     if (url.pathname === "/v1/debug-bundle" && request.method === "POST") {
       return handleDebugBundleUpload(request, env);
+    }
+
+    // Debug bundle listing (must check before retrieval since /v1/debug-bundle matches both)
+    if (url.pathname === "/v1/debug-bundle" && request.method === "GET") {
+      return handleDebugBundleList(request, env, url);
     }
 
     // Debug bundle retrieval
@@ -382,18 +406,30 @@ async function handleDebugBundleUpload(request: Request, env: Env): Promise<Resp
     return jsonResponse(413, { error: "Payload too large (max 500KB)" });
   }
 
-  // --- Store in R2 with a share code ---
+  // --- Extract metadata and store in R2 with a share code ---
+  // Metadata is decompressed from the gzipped body and stored as R2 custom
+  // metadata so the list endpoint can filter/display without decompressing
+  // every bundle. Bundles uploaded before this change lack custom metadata
+  // and show empty fields in listings.
   const shareCode = generateShareCode();
+  const metadata = await extractBundleMetadata(body);
+
   await env.DEBUG_BUNDLES.put(shareCode, body, {
     httpMetadata: {
       contentType: "application/json",
       contentEncoding: "gzip",
     },
+    customMetadata: {
+      version: metadata.version,
+      printer_model: metadata.printer_model,
+      platform: metadata.platform,
+      klipper_version: metadata.klipper_version,
+      uploaded: new Date().toISOString(),
+    },
   });
 
   // --- Send email notification (best-effort, don't fail the upload) ---
   try {
-    const metadata = await extractBundleMetadata(body);
     await sendBundleNotification(env, shareCode, clientIP, metadata);
   } catch (err) {
     console.error("Failed to send bundle notification:", (err as Error).message);
@@ -432,6 +468,101 @@ async function handleDebugBundleRetrieve(request: Request, env: Env, url: URL): 
       "Content-Encoding": "gzip",
       ...corsHeaders(),
     },
+  });
+}
+
+/**
+ * List debug bundles with optional filtering.
+ * Requires admin API key (X-Admin-Key header).
+ *
+ * Query params:
+ *   limit  - Max results, 1-100 (default 20)
+ *   since  - ISO date (YYYY-MM-DD); only bundles uploaded on or after
+ *   until  - ISO date (YYYY-MM-DD); only bundles uploaded on or before (inclusive)
+ *   match  - Case-insensitive substring matched against version, printer_model,
+ *            platform, klipper_version, and share_code
+ *   cursor - R2 pagination token from a previous truncated response
+ *
+ * Returns { bundles: BundleListEntry[], truncated: boolean, cursor?: string }.
+ * Bundles uploaded before custom metadata was added will have empty metadata fields.
+ */
+async function handleDebugBundleList(request: Request, env: Env, url: URL): Promise<Response> {
+  // --- Authentication (admin key) ---
+  const adminKey = request.headers.get("X-Admin-Key");
+  if (!adminKey || adminKey !== env.ADMIN_API_KEY) {
+    return jsonResponse(401, { error: "Unauthorized: invalid or missing admin key" });
+  }
+
+  // --- Parse query parameters ---
+  const limitParam = parseInt(url.searchParams.get("limit") || "20", 10);
+  const limit = Math.min(Math.max(1, limitParam), 100);
+  const since = url.searchParams.get("since") || null;
+  const until = url.searchParams.get("until") || null;
+  const match = url.searchParams.get("match")?.toLowerCase() || null;
+  const cursor = url.searchParams.get("cursor") || undefined;
+
+  // --- List objects from R2 ---
+  // R2 list returns objects sorted by key. We fetch more than needed to allow
+  // for filtering, then trim to limit. Use a larger page size to reduce the
+  // chance of needing multiple R2 list calls.
+  const pageSize = match || since || until ? 500 : limit;
+  const listed = await env.DEBUG_BUNDLES.list({
+    limit: pageSize,
+    cursor,
+    include: ["httpMetadata", "customMetadata"],
+  });
+
+  // --- Build result array with filtering ---
+  const bundles: BundleListEntry[] = [];
+
+  for (const obj of listed.objects) {
+    const custom = obj.customMetadata || {};
+    const uploaded = custom.uploaded || obj.uploaded?.toISOString() || "";
+
+    // Date range filtering
+    if (since && uploaded < since) continue;
+    if (until) {
+      // "until" is inclusive of the full day
+      const untilEnd = until.length === 10 ? until + "T23:59:59Z" : until;
+      if (uploaded > untilEnd) continue;
+    }
+
+    // Pattern matching against metadata values
+    if (match) {
+      const searchable = [
+        custom.version || "",
+        custom.printer_model || "",
+        custom.platform || "",
+        custom.klipper_version || "",
+        obj.key,
+      ]
+        .join(" ")
+        .toLowerCase();
+      if (!searchable.includes(match)) continue;
+    }
+
+    bundles.push({
+      share_code: obj.key,
+      size: obj.size,
+      uploaded,
+      metadata: {
+        version: custom.version || "",
+        printer_model: custom.printer_model || "",
+        platform: custom.platform || "",
+        klipper_version: custom.klipper_version || "",
+      },
+    });
+
+    if (bundles.length >= limit) break;
+  }
+
+  // Sort newest-first by uploaded timestamp
+  bundles.sort((a, b) => b.uploaded.localeCompare(a.uploaded));
+
+  return jsonResponse(200, {
+    bundles,
+    truncated: listed.truncated || bundles.length >= limit,
+    cursor: listed.truncated ? listed.cursor : undefined,
   });
 }
 

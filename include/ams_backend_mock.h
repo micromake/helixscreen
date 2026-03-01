@@ -161,7 +161,7 @@ class AmsBackendMock : public AmsBackend {
     void set_unit_buffer_health(int unit_index, std::optional<BufferHealth> health);
 
     /**
-     * @brief Inject error states for visual testing (HELIX_MOCK_AMS_ERRORS=1)
+     * @brief Inject error states for visual testing (HELIX_MOCK_AMS_STATE=error)
      *
      * Adds lane errors and buffer fault warnings to existing units for
      * testing error visualization (slot error dots, hub tint, overview badges).
@@ -206,7 +206,7 @@ class AmsBackendMock : public AmsBackend {
      * - Load: HEATING → LOADING (segment animation) → CHECKING → IDLE
      * - Unload: HEATING → CUTTING → UNLOADING (animation) → IDLE
      *
-     * Can also be set via HELIX_MOCK_AMS_REALISTIC environment variable.
+     * Can also be set via HELIX_MOCK_AMS_STATE=loading environment variable.
      * Timing respects --sim-speed flag with ±20-30% variance.
      */
     void set_realistic_mode(bool enabled);
@@ -227,7 +227,7 @@ class AmsBackendMock : public AmsBackend {
      * - Disable bypass mode (not applicable for tool changers)
      * - Label slots as "T0", "T1", etc.
      *
-     * Can also be set via HELIX_MOCK_AMS_TYPE=toolchanger environment variable.
+     * Can also be set via HELIX_MOCK_AMS=toolchanger environment variable.
      */
     void set_tool_changer_mode(bool enabled);
 
@@ -248,7 +248,7 @@ class AmsBackendMock : public AmsBackend {
      * - Set AFC-specific device sections and actions (calibration, maintenance, etc.)
      * - Use CUT tip method
      *
-     * Can also be set via HELIX_MOCK_AMS_TYPE=afc environment variable.
+     * Can also be set via HELIX_MOCK_AMS=afc environment variable.
      */
     void set_afc_mode(bool enabled);
 
@@ -291,6 +291,23 @@ class AmsBackendMock : public AmsBackend {
     [[nodiscard]] bool is_mixed_topology_mode() const;
 
     /**
+     * @brief Enable ViViD mixed mode for testing 2x BoxTurtle + 1x ViViD
+     *
+     * Simulates the user's real hardware:
+     * - Unit 0: "Turtle_1" (Box Turtle) - lanes 1-4, HUB topology
+     * - Unit 1: "Turtle_2" (Box Turtle) - lanes 5-8, HUB topology (shared hub)
+     * - Unit 2: "vivid_1" (ViViD) - lanes 13-16, HUB topology
+     *
+     * @param enabled true to enable ViViD mixed mode
+     */
+    void set_vivid_mixed_mode(bool enabled);
+
+    /**
+     * @brief Check if ViViD mixed mode is active
+     */
+    [[nodiscard]] bool is_vivid_mixed_mode() const;
+
+    /**
      * @brief Set whether endless spool is supported
      * @param supported true to enable endless spool support
      *
@@ -328,6 +345,13 @@ class AmsBackendMock : public AmsBackend {
      * @brief Clear the last executed action state
      */
     void clear_last_executed_action();
+
+    /**
+     * @brief Set tool change progress for testing swap count display
+     * @param current Current tool change number (0-based, -1=none yet)
+     * @param total Total expected tool changes this print
+     */
+    void set_toolchange_progress(int current, int total);
 
     /**
      * @brief Set callback for injecting gcode response lines
@@ -456,7 +480,7 @@ class AmsBackendMock : public AmsBackend {
     bool realistic_mode_ = false; ///< Enable multi-phase operations (HEATING→LOADING→CHECKING)
 
     // Path visualization state
-    PathTopology topology_ = PathTopology::HUB;        ///< Simulated topology (default hub for AFC)
+    PathTopology topology_ = PathTopology::LINEAR; ///< Simulated topology (default linear for HH)
     PathSegment filament_segment_ = PathSegment::NONE; ///< Current filament position
     PathSegment error_segment_ = PathSegment::NONE;    ///< Error location (if any)
 
@@ -483,6 +507,7 @@ class AmsBackendMock : public AmsBackend {
     bool afc_mode_ = false;                     ///< Simulate AFC Box Turtle instead of Happy Hare
     bool multi_unit_mode_ = false;              ///< Simulate multi-unit AFC (2x Box Turtle)
     bool mixed_topology_mode_ = false;          ///< Simulate mixed topology (BT + 2x OpenAMS)
+    bool vivid_mixed_mode_ = false;             ///< Simulate 2x BoxTurtle + 1x ViViD
     std::vector<PathTopology> unit_topologies_; ///< Per-unit topology storage
 
     // Endless spool simulation state

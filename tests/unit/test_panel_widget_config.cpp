@@ -49,7 +49,9 @@ class PanelWidgetConfigFixture {
 
 TEST_CASE("PanelWidgetRegistry: returns all widget definitions", "[panel_widget][widget_config]") {
     const auto& defs = get_all_widget_defs();
-    REQUIRE(defs.size() == 14);
+    // At least the core widgets must exist; exact count grows as widgets are added
+    REQUIRE(defs.size() >= 14);
+    REQUIRE(defs.size() == widget_def_count());
 }
 
 TEST_CASE("PanelWidgetRegistry: all widget IDs are unique", "[panel_widget][widget_config]") {
@@ -840,4 +842,284 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     auto widget_cfg = wc.get_widget_config("temperature");
     REQUIRE(widget_cfg.contains("sensor"));
     REQUIRE(widget_cfg["sensor"] == "extruder");
+}
+
+// ============================================================================
+// Grid coordinate tests
+// ============================================================================
+
+TEST_CASE_METHOD(PanelWidgetConfigFixture, "PanelWidgetConfig: grid coordinates load from JSON",
+                 "[panel_widget][widget_config][grid]") {
+    json widgets = json::array({
+        {{"id", "power"},
+         {"enabled", true},
+         {"col", 0},
+         {"row", 0},
+         {"colspan", 1},
+         {"rowspan", 1}},
+        {{"id", "network"},
+         {"enabled", true},
+         {"col", 1},
+         {"row", 0},
+         {"colspan", 1},
+         {"rowspan", 1}},
+        {{"id", "temperature"},
+         {"enabled", true},
+         {"col", 2},
+         {"row", 0},
+         {"colspan", 1},
+         {"rowspan", 1}},
+    });
+    setup_with_widgets(widgets);
+
+    PanelWidgetConfig wc("home", config);
+    wc.load();
+
+    REQUIRE(wc.entries()[0].col == 0);
+    REQUIRE(wc.entries()[0].row == 0);
+    REQUIRE(wc.entries()[0].colspan == 1);
+    REQUIRE(wc.entries()[0].rowspan == 1);
+    REQUIRE(wc.entries()[1].col == 1);
+    REQUIRE(wc.entries()[1].row == 0);
+    REQUIRE(wc.entries()[2].col == 2);
+    REQUIRE(wc.entries()[2].row == 0);
+}
+
+TEST_CASE_METHOD(PanelWidgetConfigFixture, "PanelWidgetConfig: missing grid coords default to -1",
+                 "[panel_widget][widget_config][grid]") {
+    // Include one entry with grid coords to prevent pre-grid migration,
+    // plus one entry without coords to test the default behavior
+    json widgets = json::array({
+        {{"id", "printer_image"},
+         {"enabled", true},
+         {"col", 0},
+         {"row", 0},
+         {"colspan", 2},
+         {"rowspan", 2}},
+        {{"id", "power"}, {"enabled", true}},
+    });
+    setup_with_widgets(widgets);
+
+    PanelWidgetConfig wc("home", config);
+    wc.load();
+
+    // power (entry index 1) has no grid coords — should default to -1
+    auto find_entry = [&](const std::string& id) -> const PanelWidgetEntry* {
+        for (const auto& e : wc.entries()) {
+            if (e.id == id)
+                return &e;
+        }
+        return nullptr;
+    };
+    auto* power = find_entry("power");
+    REQUIRE(power);
+    REQUIRE(power->col == -1);
+    REQUIRE(power->row == -1);
+    REQUIRE(power->colspan == 1);
+    REQUIRE(power->rowspan == 1);
+    REQUIRE_FALSE(power->has_grid_position());
+}
+
+TEST_CASE_METHOD(PanelWidgetConfigFixture,
+                 "PanelWidgetConfig: grid coordinates round-trip save-load",
+                 "[panel_widget][widget_config][grid]") {
+    json widgets = json::array({
+        {{"id", "power"},
+         {"enabled", true},
+         {"col", 2},
+         {"row", 1},
+         {"colspan", 2},
+         {"rowspan", 2}},
+    });
+    setup_with_widgets(widgets);
+
+    PanelWidgetConfig wc1("home", config);
+    wc1.load();
+    wc1.save();
+
+    PanelWidgetConfig wc2("home", config);
+    wc2.load();
+
+    REQUIRE(wc2.entries()[0].col == 2);
+    REQUIRE(wc2.entries()[0].row == 1);
+    REQUIRE(wc2.entries()[0].colspan == 2);
+    REQUIRE(wc2.entries()[0].rowspan == 2);
+}
+
+TEST_CASE_METHOD(PanelWidgetConfigFixture,
+                 "PanelWidgetConfig: save omits grid fields for auto-placed entries",
+                 "[panel_widget][widget_config][grid]") {
+    // One entry with grid coords (prevents pre-grid migration),
+    // one entry without (should not get col/row in saved JSON)
+    json widgets = json::array({
+        {{"id", "printer_image"},
+         {"enabled", true},
+         {"col", 0},
+         {"row", 0},
+         {"colspan", 2},
+         {"rowspan", 2}},
+        {{"id", "power"}, {"enabled", true}},
+    });
+    setup_with_widgets(widgets);
+
+    PanelWidgetConfig wc("home", config);
+    wc.load();
+    wc.save();
+
+    auto& saved = get_data()["panel_widgets"]["home"];
+    // Find the power entry in saved JSON
+    json* power_saved = nullptr;
+    for (auto& item : saved) {
+        if (item["id"] == "power") {
+            power_saved = &item;
+            break;
+        }
+    }
+    REQUIRE(power_saved != nullptr);
+    REQUIRE(power_saved->contains("id"));
+    // All entries always write col/row to JSON so positions survive reload.
+    // Auto-placed entries that haven't been placed yet will have col=-1, row=-1.
+    REQUIRE(power_saved->contains("col"));
+    REQUIRE(power_saved->contains("row"));
+    CHECK(power_saved->at("col").get<int>() == -1);
+    CHECK(power_saved->at("row").get<int>() == -1);
+}
+
+TEST_CASE_METHOD(PanelWidgetConfigFixture,
+                 "PanelWidgetConfig: has_grid_position returns true for placed widgets",
+                 "[panel_widget][widget_config][grid]") {
+    json widgets = json::array({
+        {{"id", "power"}, {"enabled", true}, {"col", 0}, {"row", 0}},
+        {{"id", "network"}, {"enabled", true}},
+    });
+    setup_with_widgets(widgets);
+
+    PanelWidgetConfig wc("home", config);
+    wc.load();
+
+    REQUIRE(wc.entries()[0].has_grid_position());
+    REQUIRE_FALSE(wc.entries()[1].has_grid_position());
+}
+
+TEST_CASE_METHOD(PanelWidgetConfigFixture,
+                 "PanelWidgetConfig: build_default_grid all enabled widgets get grid positions",
+                 "[panel_widget][widget_config][grid]") {
+    auto grid = PanelWidgetConfig::build_default_grid();
+    const auto& defs = get_all_widget_defs();
+    REQUIRE(grid.size() == defs.size());
+
+    // Anchor widgets (printer_image, print_status, tips) get explicit grid positions.
+    // All other widgets get col=-1, row=-1 (auto-place).
+    const std::set<std::string> anchors = {"printer_image", "print_status", "tips"};
+    for (const auto& entry : grid) {
+        INFO("Widget " << entry.id << " enabled=" << entry.enabled << " col=" << entry.col
+                       << " row=" << entry.row);
+        if (anchors.count(entry.id)) {
+            REQUIRE(entry.has_grid_position());
+        } else {
+            REQUIRE_FALSE(entry.has_grid_position());
+        }
+    }
+}
+
+TEST_CASE("PanelWidgetConfig: build_default_grid produces correct layout",
+          "[panel_widget][widget_config][grid]") {
+    auto entries = PanelWidgetConfig::build_default_grid();
+
+    // Should include all registry widgets
+    REQUIRE(entries.size() == widget_def_count());
+
+    // Collect enabled entries with grid positions
+    std::vector<PanelWidgetEntry> placed;
+    std::vector<PanelWidgetEntry> disabled;
+    for (const auto& e : entries) {
+        if (e.enabled && e.has_grid_position()) {
+            placed.push_back(e);
+        } else if (!e.enabled) {
+            disabled.push_back(e);
+        }
+    }
+
+    // Key layout assertions: fixed widgets at expected positions
+    auto find_entry = [&](const std::string& id) -> const PanelWidgetEntry* {
+        for (const auto& e : entries) {
+            if (e.id == id)
+                return &e;
+        }
+        return nullptr;
+    };
+
+    // Printer image: top-left, 2×2
+    auto* pi = find_entry("printer_image");
+    REQUIRE(pi);
+    REQUIRE(pi->enabled);
+    REQUIRE(pi->col == 0);
+    REQUIRE(pi->row == 0);
+    REQUIRE(pi->colspan == 2);
+    REQUIRE(pi->rowspan == 2);
+
+    // Print status: below printer image, 2×2
+    auto* ps = find_entry("print_status");
+    REQUIRE(ps);
+    REQUIRE(ps->enabled);
+    REQUIRE(ps->col == 0);
+    REQUIRE(ps->row == 2);
+    REQUIRE(ps->colspan == 2);
+    REQUIRE(ps->rowspan == 2);
+
+    // Tips: right of printer image, 4×1
+    auto* tips = find_entry("tips");
+    REQUIRE(tips);
+    REQUIRE(tips->enabled);
+    REQUIRE(tips->col == 2);
+    REQUIRE(tips->row == 0);
+    REQUIRE(tips->colspan == 4);
+    REQUIRE(tips->rowspan == 1);
+
+    // Non-anchor enabled widgets should NOT have grid positions (auto-placed at populate time)
+    const std::set<std::string> anchors = {"printer_image", "print_status", "tips"};
+    for (const auto& e : entries) {
+        if (anchors.count(e.id))
+            continue;
+        INFO("Widget " << e.id << " at (" << e.col << "," << e.row << ")");
+        REQUIRE_FALSE(e.has_grid_position());
+    }
+
+    // Disabled widgets should have no grid position
+    for (const auto& e : disabled) {
+        INFO("Disabled widget " << e.id);
+        REQUIRE_FALSE(e.has_grid_position());
+    }
+
+    // fan_stack and notifications must be enabled (default_enabled, no gate) but NOT placed
+    auto* fs = find_entry("fan_stack");
+    REQUIRE(fs);
+    REQUIRE(fs->enabled);
+    REQUIRE_FALSE(fs->has_grid_position());
+
+    auto* notif = find_entry("notifications");
+    REQUIRE(notif);
+    REQUIRE(notif->enabled);
+    REQUIRE_FALSE(notif->has_grid_position());
+}
+
+TEST_CASE_METHOD(PanelWidgetConfigFixture, "PanelWidgetConfig: is_grid_format detects grid entries",
+                 "[panel_widget][widget_config][grid]") {
+    // Config with grid coords
+    json widgets_grid = json::array({
+        {{"id", "power"}, {"enabled", true}, {"col", 0}, {"row", 0}},
+    });
+    setup_with_widgets(widgets_grid);
+    PanelWidgetConfig wc1("home", config);
+    wc1.load();
+    REQUIRE(wc1.is_grid_format());
+
+    // Config without grid coords — gets migrated to grid format
+    json widgets_flat = json::array({
+        {{"id", "power"}, {"enabled", true}},
+    });
+    setup_with_widgets(widgets_flat);
+    PanelWidgetConfig wc2("home", config);
+    wc2.load();
+    REQUIRE(wc2.is_grid_format()); // Pre-grid configs auto-migrate
 }

@@ -29,6 +29,7 @@
 class FanDial {
   public:
     using SpeedCallback = std::function<void(const std::string& fan_id, int speed_percent)>;
+    using IconClickCallback = std::function<void(const std::string& fan_id)>;
 
     /**
      * @brief Create a FanDial widget
@@ -66,6 +67,12 @@ class FanDial {
     void set_on_speed_changed(SpeedCallback callback);
 
     /**
+     * @brief Set callback for when user clicks the fan icon
+     * @param callback Function called with (fan_id)
+     */
+    void set_on_icon_clicked(IconClickCallback callback);
+
+    /**
      * @brief Get the root LVGL object for this widget
      * @return Root lv_obj_t pointer
      */
@@ -90,6 +97,14 @@ class FanDial {
     }
 
     /**
+     * @brief Make the dial read-only (for auto-controlled fans)
+     *
+     * Disables arc interaction, hides the knob, changes indicator to muted color,
+     * and replaces Off/On buttons with an "Auto" label.
+     */
+    void set_read_only(bool read_only);
+
+    /**
      * @brief Refresh fan icon spin animation based on current speed and animation setting
      *
      * Call when the global animations_enabled setting changes.
@@ -104,11 +119,13 @@ class FanDial {
 
     void handle_off_clicked();
     void handle_on_clicked();
+    void handle_icon_clicked();
 
     // Static callbacks
     static void on_arc_value_changed(lv_event_t* e);
     static void on_off_clicked(lv_event_t* e);
     static void on_on_clicked(lv_event_t* e);
+    static void on_icon_clicked(lv_event_t* e);
     static void label_anim_exec_cb(void* var, int32_t value);
     static void anim_completed_cb(lv_anim_t* anim);
 
@@ -131,6 +148,7 @@ class FanDial {
     std::string fan_id_;
     int current_speed_ = 0;
     SpeedCallback on_speed_changed_;
+    IconClickCallback on_icon_clicked_;
     bool syncing_ = false;         // Prevent callback loops during set_speed()
     uint32_t last_user_input_ = 0; // Tick of last user interaction (for suppression window)
 };

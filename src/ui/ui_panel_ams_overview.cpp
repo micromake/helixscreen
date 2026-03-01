@@ -193,8 +193,6 @@ void AmsOverviewPanel::on_activate() {
     if (detail_unit_index_ >= 0) {
         // Re-entering while in detail mode — refresh the detail slots
         show_unit_detail(detail_unit_index_);
-    } else {
-        refresh_units();
     }
 }
 
@@ -790,6 +788,8 @@ void AmsOverviewPanel::create_detail_slots(const AmsUnit& unit) {
     detail_slot_count_ = result.slot_count;
 
     ams_detail_update_labels(detail_widgets_, detail_slot_widgets_, result.slot_count,
+                             result.layout);
+    ams_detail_update_badges(detail_widgets_, detail_slot_widgets_, result.slot_count,
                              result.layout);
     ams_detail_update_tray(detail_widgets_);
 

@@ -198,6 +198,14 @@ class NavigationManager {
     helix::PanelId get_active() const;
 
     /**
+     * @brief Get the active panel subject for observation
+     * @return Pointer to the LVGL subject tracking active panel ID
+     */
+    lv_subject_t* get_active_panel_subject() {
+        return &active_panel_subject_;
+    }
+
+    /**
      * @brief Register panel widgets for show/hide management
      *
      * @param panels Array of panel widgets (size: UI_PANEL_COUNT)
@@ -262,6 +270,12 @@ class NavigationManager {
      * @return true if panel is in the overlay stack
      */
     bool is_panel_in_stack(lv_obj_t* panel) const;
+
+    /**
+     * @brief Check if any overlays are currently open
+     * @return true if there are overlay panels on the stack
+     */
+    bool has_open_overlays() const;
 
     /**
      * @brief Shutdown navigation system during application exit

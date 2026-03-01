@@ -9,7 +9,51 @@
 
 namespace mock_internal {
 
+static bool is_mock_kalico() {
+    const char* env = std::getenv("HELIX_MOCK_KALICO");
+    return env && std::string(env) == "1";
+}
+
 void register_object_handlers(std::unordered_map<std::string, MethodHandler>& registry) {
+    // printer.objects.list - List available printer objects
+    // When Klippy is in STARTUP or ERROR state, Klipper returns JSON-RPC error -32601
+    registry["printer.objects.list"] =
+        [](MoonrakerClientMock* self, const json& /*params*/, std::function<void(json)> success_cb,
+           std::function<void(const MoonrakerError&)> error_cb) -> bool {
+        auto klippy = self->get_klippy_state();
+
+        // When Klippy is not ready (STARTUP/ERROR), Klipper returns Method not found
+        if (klippy == MoonrakerClientMock::KlippyState::STARTUP ||
+            klippy == MoonrakerClientMock::KlippyState::ERROR) {
+            spdlog::debug("[MoonrakerClientMock] printer.objects.list: Klippy not ready, "
+                          "returning error -32601");
+            if (error_cb) {
+                MoonrakerError err;
+                err.code = -32601;
+                err.message = "Method not found";
+                error_cb(err);
+            }
+            return true;
+        }
+
+        // Build the object list from the mock's discovered hardware
+        // This mirrors what rebuild_hardware() / populate_hardware() populates
+        const auto& hw = self->hardware();
+        json objects = json::array();
+        for (const auto& obj : hw.printer_objects()) {
+            objects.push_back(obj);
+        }
+
+        spdlog::debug("[MoonrakerClientMock] printer.objects.list: returning {} objects",
+                      objects.size());
+
+        if (success_cb) {
+            json response = {{"result", {{"objects", objects}}}};
+            success_cb(response);
+        }
+        return true;
+    };
+
     // printer.objects.query - Query printer object state
     registry["printer.objects.query"] =
         [](MoonrakerClientMock* self, const json& params, std::function<void(json)> success_cb,
@@ -95,6 +139,19 @@ void register_object_handlers(std::unordered_map<std::string, MethodHandler>& re
                                                              {"autostart", "false"},
                                                              {"frame_rate", "24"}};
 
+                // Build extruder settings based on HELIX_MOCK_KALICO env var
+                json extruder_settings = {
+                    {"min_temp", 0.0}, {"max_temp", 300.0}, {"min_extrude_temp", 170.0}};
+                if (is_mock_kalico()) {
+                    extruder_settings["control"] = "mpc";
+                    extruder_settings["heater_power"] = 50.0;
+                } else {
+                    extruder_settings["control"] = "pid";
+                    extruder_settings["pid_kp"] = 22.865;
+                    extruder_settings["pid_ki"] = 1.292;
+                    extruder_settings["pid_kd"] = 101.178;
+                }
+
                 status_obj["configfile"] = {
                     {"settings",
                      {{"printer", {{"max_velocity", 500.0}, {"max_accel", 10000.0}}},
@@ -106,14 +163,7 @@ void register_object_handlers(std::unordered_map<std::string, MethodHandler>& re
                        {{"position_min", 0.0},
                         {"position_max", MOCK_BED_Z_MAX},
                         {"position_endstop", 235.0}}},
-                      {"extruder",
-                       {{"min_temp", 0.0},
-                        {"max_temp", 300.0},
-                        {"min_extrude_temp", 170.0},
-                        {"control", "pid"},
-                        {"pid_kp", 22.865},
-                        {"pid_ki", 1.292},
-                        {"pid_kd", 101.178}}},
+                      {"extruder", extruder_settings},
                       {"heater_bed",
                        {{"min_temp", 0.0},
                         {"max_temp", 120.0},
@@ -361,6 +411,19 @@ void register_object_handlers(std::unordered_map<std::string, MethodHandler>& re
 
             // configfile (printer configuration)
             if (objects.contains("configfile")) {
+                // Build extruder settings based on HELIX_MOCK_KALICO env var
+                json extruder_settings2 = {
+                    {"min_temp", 0.0}, {"max_temp", 300.0}, {"min_extrude_temp", 170.0}};
+                if (is_mock_kalico()) {
+                    extruder_settings2["control"] = "mpc";
+                    extruder_settings2["heater_power"] = 50.0;
+                } else {
+                    extruder_settings2["control"] = "pid";
+                    extruder_settings2["pid_kp"] = 22.865;
+                    extruder_settings2["pid_ki"] = 1.292;
+                    extruder_settings2["pid_kd"] = 101.178;
+                }
+
                 status_obj["configfile"] = {
                     {"settings",
                      {{"printer", {{"max_velocity", 500.0}, {"max_accel", 10000.0}}},
@@ -372,14 +435,7 @@ void register_object_handlers(std::unordered_map<std::string, MethodHandler>& re
                        {{"position_min", 0.0},
                         {"position_max", MOCK_BED_Z_MAX},
                         {"position_endstop", 235.0}}},
-                      {"extruder",
-                       {{"min_temp", 0.0},
-                        {"max_temp", 300.0},
-                        {"min_extrude_temp", 170.0},
-                        {"control", "pid"},
-                        {"pid_kp", 22.865},
-                        {"pid_ki", 1.292},
-                        {"pid_kd", 101.178}}},
+                      {"extruder", extruder_settings2},
                       {"heater_bed",
                        {{"min_temp", 0.0},
                         {"max_temp", 120.0},

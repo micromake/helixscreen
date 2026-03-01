@@ -661,18 +661,24 @@ void MacroEnhanceWizard::handle_close() {
 
 MacroEnhanceWizard* MacroEnhanceWizard::get_instance_from_event(lv_event_t* e) {
     lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    lv_obj_t* modal = lv_obj_get_parent(target);
 
-    // Navigate up to find the modal with user data
-    while (modal != nullptr && lv_obj_get_user_data(modal) == nullptr) {
-        modal = lv_obj_get_parent(modal);
+    // Find modal root by name, then get instance from its user_data.
+    // Cannot walk parents checking any user_data — ui_button and other widgets
+    // set their own user_data, which would be miscast (prestonbrown/helixscreen#195).
+    lv_obj_t* obj = target;
+    while (obj) {
+        const char* name = lv_obj_get_name(obj);
+        if (name && strcmp(name, "macro_enhance_modal") == 0) {
+            void* user_data = lv_obj_get_user_data(obj);
+            if (user_data) {
+                return static_cast<MacroEnhanceWizard*>(user_data);
+            }
+        }
+        obj = lv_obj_get_parent(obj);
     }
 
-    if (modal == nullptr) {
-        return nullptr;
-    }
-
-    return static_cast<MacroEnhanceWizard*>(lv_obj_get_user_data(modal));
+    spdlog::warn("[MacroEnhanceWizard] Could not find instance from event target");
+    return nullptr;
 }
 
 void MacroEnhanceWizard::on_skip_cb(lv_event_t* e) {

@@ -124,6 +124,10 @@ void grace_timer_cb(lv_timer_t* timer) {
     // We only clear the reference here; do NOT call lv_timer_delete on one-shot timers
     g_grace_timer = nullptr;
 
+    if (!lv_is_initialized()) {
+        return; // Shutdown in progress
+    }
+
     // Only create if still pending (hide() not called during grace period)
     if (g_pending_show) {
         create_overlay_internal();

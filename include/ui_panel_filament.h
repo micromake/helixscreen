@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "ui_ams_edit_modal.h"
 #include "ui_observer_guard.h"
 #include "ui_panel_base.h"
 
@@ -255,12 +256,12 @@ class FilamentPanel : public PanelBase {
     // Temperature graph (managed by TempControlPanel)
     TempControlPanel* temp_control_panel_ = nullptr;
 
-    // Temperature layout widgets (for dynamic sizing when AMS hidden)
-    lv_obj_t* temp_group_ = nullptr;
+    // Temperature graph (for dynamic sizing when bottom card changes)
     lv_obj_t* temp_graph_card_ = nullptr;
 
     // Multi-filament card widgets (extruder dropdown + AMS row)
     lv_obj_t* ams_status_card_ = nullptr;
+    lv_obj_t* ams_card_header_row_ = nullptr;
     lv_obj_t* extruder_selector_group_ = nullptr;
     lv_obj_t* extruder_dropdown_ = nullptr;
     lv_obj_t* btn_manage_slots_ = nullptr;
@@ -271,6 +272,22 @@ class FilamentPanel : public PanelBase {
     void update_multi_filament_card_visibility();
     void handle_extruder_changed();
     static void on_extruder_dropdown_changed(lv_event_t* e);
+
+    // External spool display (no-AMS mode)
+    lv_obj_t* external_spool_row_ = nullptr;
+    lv_obj_t* external_spool_container_ = nullptr;
+    lv_obj_t* external_spool_canvas_ = nullptr;
+    lv_obj_t* external_spool_material_label_ = nullptr;
+    lv_obj_t* external_spool_color_label_ = nullptr;
+    ObserverGuard external_spool_observer_;
+    lv_subject_t card_title_subject_;
+    char card_title_buf_[32] = {};
+    std::unique_ptr<helix::ui::AmsEditModal> edit_modal_;
+
+    void setup_external_spool_display();
+    void update_external_spool_from_state();
+    void show_external_spool_edit_modal();
+    static void on_external_spool_edit_clicked(lv_event_t* e);
 
     // Temperature observer bundle (nozzle + bed current/target)
     helix::ui::TemperatureObserverBundle<FilamentPanel> temp_observers_;

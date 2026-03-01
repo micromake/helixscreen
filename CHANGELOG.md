@@ -5,6 +5,302 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.13] - 2026-02-28
+
+### Fixed
+- AFC filament system now discovers units with generic `AFC_` prefix, improving compatibility across AFC configurations
+- NULL pointer checks added to helix-xml parsing and rotation probe to prevent OOM crashes
+- Orientation detection logic corrected for display rotation
+
+## [0.13.12] - 2026-02-28
+
+This release adds MPC calibration support for Kalico/Danger Klipper firmware, a unified temperature graph overlay, and significant performance and stability improvements.
+
+### Added
+- MPC (Model Predictive Control) calibration UI with Kalico detection, config migration flow, and mock support
+- Unified temperature graph overlay replacing three separate per-sensor overlays with side-by-side layout and per-mode controls
+- Clickable mini temperature graph on filament panel opens full overlay
+- Friendly status screen displayed before restart during updates
+- Klipper config editor: `ConfigEdit` and `safe_multi_edit` for safe multi-key config changes
+
+### Fixed
+- Fan speeds stuck at 0% due to race condition in fan state updates
+- G-code viewer continues rendering when print status panel is hidden, wasting CPU
+- NEON alignment and NULL guard crashes in LVGL software rendering path
+- Blend area clipped to buffer bounds to prevent NEON SEGV (#242)
+- Black screen on SysV self-update due to unnecessary stop/start cycle
+- User config files now preserved across installer updates
+- Redundant 'Temperature' suffix stripped from temp graph chip labels
+
+### Changed
+- Subject notifications skip redundant updates when values unchanged, reducing UI redraws
+- AMS backend eliminates redundant subject fires and cascading redraws
+- Theme lookups cached and canvas dirty guards added for improved render performance
+
+## [0.13.11] - 2026-02-28
+
+### Added
+- ViViD filament system support in AFC backend with unit discovery and key mapping
+- Dedicated logos for Happy Hare and AFC filament systems
+- Improved 5GHz Wi-Fi band detection across all backends
+
+### Fixed
+- DRM display rotation reworked to eliminate flickering on inverted panels
+- EMU filament system compatibility: color formats, gate counts, dryer state, filament names, and sensor readings
+- Printer setup wizard no longer loses printer type list when navigating between steps (#231)
+- Backlight now fully turns off during sleep mode on sysfs-based displays
+- Bed mesh rendering blit failure and axis label offset corrected
+- AD5X platform detection improved with secondary /ZMOD indicator (#225)
+- Input shaper calibrate-all mode shows progress text instead of premature "Complete" (#225)
+- Spoolman spool picker no longer shows empty vendor list on reopen (#225)
+- DRM NEON blend buffer overrun prevented on reshape failure (#229)
+- Crash loop detection and defensive widget creation for improved stability
+- Missing translation tags on header bar action buttons
+- Spoolman uses PATCH to update existing filaments correctly
+
+### Known Issues
+- Inverted/upside-down panels in DRM mode may exhibit minor flickering during heavy rendering
+
+## [0.13.10] - 2026-02-28
+
+### Added
+- Automatic display orientation detection and software rotation for DRM displays
+
+## [0.13.9] - 2026-02-27
+
+### Added
+- Asynchronous bed mesh rendering with double-buffered worker thread and adaptive quality degradation
+- Off-screen pixel buffer rasterizer for bed mesh visualization
+- Animated connector tube through LINEAR selector box in filament path view
+
+### Fixed
+- Backdrop blur re-enabled with NULL guards across all color formats and NEON paths
+- Bed mesh panel forces initial paint on re-entry
+- G-code viewer forces refresh after first 3D GPU render
+- Home All sends bare G28 instead of G28 X Y Z
+- Global extruder subjects sync correctly on tool selection in temperature panel
+
+## [0.13.8] - 2026-02-27
+
+### Added
+- Memory-aware geometry budget system for 3D G-code viewer — automatically selects detail tier based on available memory with graceful 2D fallback
+- GPU-accelerated backdrop blur for modals
+- Shutdown and reboot widget with modal confirmation dialog
+- Speed and flow rate increment buttons replace sliders for precise control (#219)
+- Lemontron, Sovol SV08 Max, and Sovol Zero added to printer database
+- FlashForge Adventurer 5X support with independent platform toolchain (#203)
+
+### Fixed
+- UI freeze during 3D geometry VBO upload eliminated
+- AMS panel and spool picker back button click targets enlarged for easier navigation
+- Goodix capacitive touch on Creality K1 Max and standalone builds
+- DRM plane rotation fallback for VC4 displays (90/270 unsupported)
+- Spoolman request flooding prevented with debounce and circuit breaker
+- Spoolman filament creation sends required density and diameter fields
+- Klippy readiness checked before querying printer objects during discovery
+- Android display corruption from conditional style reset reverted
+- Signed coordinate crash in LVGL draw path
+- CoalescedTimer repeat count bug
+
+## [0.13.7] - 2026-02-27
+
+### Added
+- Dropdown options now support translation via `options_tag` attribute
+- Broad internationalization pass across C++ UI code with `lv_tr()` calls
+- Touch calibration can be forced on startup with `HELIX_TOUCH_CALIBRATE` environment variable
+- Thumbnail Only option for G-code render mode in display settings
+
+### Fixed
+- AMS tray height reduced for better proportions in slot grid
+- G-code metadata parser rejects percentage values in extrusion width fields
+- Cancel button now appears immediately when starting a print
+- AFC multi-unit bugs: nozzle navigation, lane sorting, and current tool derivation
+
+## [0.13.6] - 2026-02-26
+
+### Added
+- Fan speed overlay opens directly when tapping the fan icon in carousel mode
+- Dual-output Pi builds: single compilation produces both DRM and fbdev binaries
+
+### Fixed
+- LED light state now syncs correctly from hardware on status updates
+- Empty AMS slots are clickable with placeholder circle and context menu
+- LED widget initial state and reactive bindings fixed
+- Print details delete button is now icon-only, giving more room for the print button
+- 2D fallback disabled on print details panel; thumbnails used instead
+- AMS slot positioning fixes for hidden spool containers and LINEAR selector box sizing
+- Keyboard overlay crash when cleanup nulls alternatives mid-use (#207)
+- Use-after-free in LED and temperature widget button user data
+- Tool badge now shown on empty unassigned AMS gates
+- Printer database JSON parsing hardened against type mismatches
+- ELF architecture validation uses platform key instead of uname
+- Updated Ender 5 Max printer image
+- Installer preserves user files in `printer_database.d` during upgrades
+- AMS flow animation no longer runs infinitely, fixing 50%+ CPU usage on AMS panel
+
+### Changed
+- XML event callbacks registered at startup instead of widget attach time
+- Panel switching and widget creation optimized for ARM
+- Spoolman vendor list fetched from dedicated endpoint instead of downloading all spools
+- AMS gate observer rebuilds coalesced to reduce startup churn
+
+## [0.13.5] - 2026-02-26
+
+### Added
+- Touch jitter filter for noisy controllers like Goodix GT9xx with automatic breakout detection
+- Auto-detect swapped touch axes during calibration, especially for Creality SonicPad and similar devices with misreported axis orientation
+- Power Devices entry in System settings
+- AMS filament system header bar now shows system logo and name with declarative bindings
+- AMS LINEAR output path with animated slide beneath active slot
+- Update telemetry tracking: success/failure recording across update lifecycle with analysis tools
+- Seven new telemetry event types with thread-safe recording
+- `--debug-touches` flag for touch input diagnostics
+
+### Fixed
+- Header back button touch target expanded to full title width for easier navigation
+- AMS bypass spool centered on filament line with label moved beneath
+- AMS spools centered inside tray with support for variable AFC lane count
+- Happy Hare AMS now uses LINEAR topology with SELECTOR butted against prep sensors
+- Float-to-int conversion guards against NaN/Inf values (#206)
+- AD5X platform now correctly maps to K1 MIPS binary (#203)
+- Async callback use-after-free in Spoolman spool selection
+- Null guards for keyboard events and NEON blend path (#207, #208)
+- Installer no longer shows misleading 'corrupt download' message on slow CDN connections
+- Jitter filter correctly disabled after breakout for smooth scrolling
+
+### Changed
+- HomePanel refactored into self-contained widgets
+- CI build split into separate compile and test jobs
+
+## [0.13.4] - 2026-02-25
+
+### Added
+- BMP and GIF format support for custom printer images
+- Invalid custom printer images shown as disabled with lazy import and instant gallery refresh
+- In-process fbdev display fallback when DRM initialization fails (no restart needed)
+- Top-level exception handler prevents unhandled crashes from silently terminating the application
+
+### Fixed
+- SonicPad Goodix (gt9xxnew_ts) touchscreen now triggers calibration wizard when kernel reports zero ABS ranges
+- DRM backend no longer falls back to `/dev/dri/card0` when no suitable DRM device exists
+- Fan carousel arc thumb disabled on auto-controlled fans that don't accept manual speed changes
+- Observer cleanup ordering hardened to prevent cascading use-after-free during shutdown
+- Thread safety and crash telemetry improvements across observer guards and lifecycle management
+
+### Changed
+- Macro search resolves only active include-chain config files, improving performance on large configurations
+- Touch calibration and wizard skip decisions promoted to info-level logging for easier diagnostics
+
+## [0.13.3] - 2026-02-25
+
+### Added
+- AFC tool change progress display on print status panel with current/total tool change counter
+- AFC mock tool change progress in test mode for development
+
+### Fixed
+- MT-only touchscreens (e.g., Goodix gt9xxnew_ts on Nebula Pad) now detected correctly — previously invisible due to missing ABS_MT_POSITION_X/Y bit checks
+- ABS range queries fall back to multitouch axes when legacy ABS_X/ABS_Y are absent, enabling rotation mismatch detection on MT-only devices
+- Installer now preserves user data directories (custom_images, printer_database.d) during upgrades
+- Watchdog no longer launches external splash screen in DRM mode, preventing a crash loop
+- ObserverGuard cleanup lambda prevents use-after-free when releasing observers
+- Print status filament row decluttered by removing redundant "Filament" and "Active" labels
+- AFC mock toolchange progress default now set in constructor for consistent test behavior
+
+### Changed
+- README LVGL badge updated to 9.5, added helixscreen.org link
+
+## [0.13.2] - 2026-02-25
+
+### Added
+- FlashForge AD5X platform support (#203)
+- Touch calibration CLI flag (`--calibrate-touch`) and `input.force_calibration` config option
+- Touch calibration standalone user guide
+- Improved touch calibration UX with tap-to-begin, progress counting, and flash feedback
+
+### Fixed
+- Touch input on fbdev devices no longer applies a redundant rotation transform (#186)
+- Shutdown sequence hardened against use-after-free crashes
+- DRM device configuration now validates before use and falls back to auto-detection on failure
+- Diagnostic logging added for DRM initialization failures and startup platform info
+- Alive guards and lifecycle safety added to 5 crash-prone components
+- WebSocket disconnected before clearing app globals to prevent spurious shutdown errors
+- TemperatureSensorManager shutdown crash prevented with alive guard
+- Happy Hare MMU slot data now received via mmu object subscription (#214)
+- Splash screen skipped on DRM-only systems to prevent master contention
+- Telemetry queue file writes now atomic to prevent empty file on interrupted save
+- DRM rotation patch includes header declaration (fixes Pi cross-compilation)
+- Launcher e2e tests mock system commands to avoid hitting dev machine
+
+## [0.13.1] - 2026-02-25
+
+### Added
+- Robust touch calibration with multi-sample input filtering, ADC saturation rejection, and post-compute validation
+- Smart calibration auto-revert with 10-second timeout and broken-matrix detection
+- DRM plane rotation support for `rotate` config on Raspberry Pi
+
+### Fixed
+- Use-after-free crashes in AMS modal destructor and sidebar (#199, #201)
+- Static-linked OpenSSL for Pi fbdev variants (fixes missing libssl.so.1.1 on some systems)
+- Creality SonicPad/Nebula display backlight no longer killed by display-sleep service
+- OTA update downloads no longer fail for releases larger than 50 MB (limit raised to 150 MB)
+- Touch calibration verify handler simplified with dead wizard callbacks removed
+
+## [0.13.0] - 2026-02-24
+
+The rendering engine gets a major upgrade — the 3D G-code viewer is ported from TinyGL to OpenGL ES 2.0 with per-pixel Phong shading, and Pi builds gain GPU-accelerated DRM+EGL rendering with automatic framebuffer fallback. A first-boot rotation probe auto-detects display orientation, and the UI gains carousel modes for temperature and fan widgets, frosted-glass modal backdrops, and a new shared progress bar component with gradient indicators.
+
+### Added
+- GPU-accelerated DRM+EGL rendering for Raspberry Pi with automatic fbdev fallback
+- 3D G-code renderer ported from TinyGL to OpenGL ES 2.0 with per-pixel Phong shading and camera-following light
+- First-boot display rotation probe with auto-rotating touch coordinates
+- Automatic DRM/fbdev binary selection and dual-binary Pi releases
+- Carousel display mode for temperature and fan stack widgets with long-press toggle
+- Shared progress bar component with dynamic gradient indicator
+- Frosted-glass backdrop blur effect on modals
+- G-code render mode setting visible when 3D rendering is available
+- Chamber temperature overlay on controls panel
+- Print lifecycle state extraction for cleaner print status management
+- 3D G-code viewer in print file detail panel with async loading and AMS color support
+- Pinch-to-zoom gesture support for 3D G-code viewer
+- Icons on Delete and Print buttons in print details card
+- SSL enabled for native desktop builds
+- Translation updates with 7 obsolete keys removed
+- External spool widget for printers without AMS
+- Loading spinner overlay and 3D rotate hint icon on print file detail panel
+- AFC tool changer support with proper SELECT_TOOL/UNSELECT_TOOL commands and extruder dropdown
+
+### Fixed
+- Use-after-free crashes in G-code viewer, power panel, mDNS callbacks, thumbnail loading, and AMS widget cleanup (#182, #192, #193)
+- Scroll jitter in virtual list views caused by layout-invalidating calls
+- Safe name-based widget lookup prevents miscast crashes in event handlers (#194, #195)
+- GLES 3D build correctly disabled on macOS (no EGL headers)
+- Stale thumbnail and progress data no longer persists when a new print starts
+- AMS spools no longer show as full when Spoolman initial_weight is null
+- AMS loaded filament card swatch color now updates reactively
+- Overlays now close when clicking the navbar button for the active panel
+- Progress bar draw no longer triggers lv_inv_area assertion
+- Overflow row click passthrough on controls panel
+- Temperature chart validates widget before updating series data
+- Renamed Voron Micron to PFA Micron in printer database
+- AMS edit modal remaining weight defaults and display
+- Header bar back button click area expanded for better touch targeting
+- 3D viewer camera framing and gesture responsiveness
+- Pinch-to-zoom rendering during gesture
+- DRM flush timeout from glReadPixels on cached frames
+- Print buttons stay at bottom when preprint options are hidden
+- Empty preprint options card hidden when no options available
+- Z-adjust button icons corrected for bed-moving printers
+- Z-adjust button order fixed so down arrow is on bottom
+- 3D viewer crash when loading UI triggers on hidden widgets
+- Timelapse callback registration
+
+### Changed
+- Tertiary theme color changed from orange to blue-violet
+- Inline progress bars replaced with shared progress_bar component
+- AMS panels refined with more compact loaded filament card and tighter spacing
+- Edit icons changed from secondary to tertiary color
+- Deprecated AMS mock environment variables removed
+
 ## [0.12.1] - 2026-02-23
 
 ### Added
@@ -1031,6 +1327,20 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.13.13]: https://github.com/prestonbrown/helixscreen/compare/v0.13.12...v0.13.13
+[0.13.12]: https://github.com/prestonbrown/helixscreen/compare/v0.13.11...v0.13.12
+[0.13.11]: https://github.com/prestonbrown/helixscreen/compare/v0.13.10...v0.13.11
+[0.13.10]: https://github.com/prestonbrown/helixscreen/compare/v0.13.9...v0.13.10
+[0.13.9]: https://github.com/prestonbrown/helixscreen/compare/v0.13.8...v0.13.9
+[0.13.8]: https://github.com/prestonbrown/helixscreen/compare/v0.13.7...v0.13.8
+[0.13.7]: https://github.com/prestonbrown/helixscreen/compare/v0.13.6...v0.13.7
+[0.13.6]: https://github.com/prestonbrown/helixscreen/compare/v0.13.5...v0.13.6
+[0.13.5]: https://github.com/prestonbrown/helixscreen/compare/v0.13.4...v0.13.5
+[0.13.4]: https://github.com/prestonbrown/helixscreen/compare/v0.13.3...v0.13.4
+[0.13.3]: https://github.com/prestonbrown/helixscreen/compare/v0.13.2...v0.13.3
+[0.13.2]: https://github.com/prestonbrown/helixscreen/compare/v0.13.1...v0.13.2
+[0.13.1]: https://github.com/prestonbrown/helixscreen/compare/v0.13.0...v0.13.1
+[0.13.0]: https://github.com/prestonbrown/helixscreen/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/prestonbrown/helixscreen/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/prestonbrown/helixscreen/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/prestonbrown/helixscreen/compare/v0.11.0...v0.11.1

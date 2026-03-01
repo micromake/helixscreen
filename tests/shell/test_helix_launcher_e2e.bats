@@ -15,6 +15,13 @@ LAUNCHER="$WORKTREE_ROOT/scripts/helix-launcher.sh"
 setup() {
     load helpers
 
+    # Mock system commands that helix-launcher.sh calls at startup.
+    # Without these, the e2e tests hit the real systemctl/killall/setterm
+    # on the dev machine (e.g. stopping display-sleep.service).
+    mock_command_script "systemctl" 'exit 0'
+    mock_command_script "killall" 'exit 0'
+    mock_command_script "setterm" 'exit 0'
+
     # Create a mock install layout so the launcher can find binaries
     export MOCK_INSTALL="$BATS_TEST_TMPDIR/helixscreen"
     mkdir -p "$MOCK_INSTALL/bin"

@@ -85,6 +85,8 @@ class UpdateQueue {
         if (initialized_)
             return;
 
+        shut_down_ = false;
+
         // Create a timer that fires every lv_timer_handler() cycle
         // Period of 1ms ensures it runs frequently (LVGL processes all ready timers)
         // Created early at init, so it's near the head of the timer list
@@ -108,6 +110,11 @@ class UpdateQueue {
      */
     void queue(UpdateCallback callback) {
         std::lock_guard<std::mutex> lock(mutex_);
+        if (shut_down_) {
+            // Silently discard — queue is shut down, panels may be destroyed.
+            // Call init() to re-enable (e.g. when test fixtures re-initialize).
+            return;
+        }
         pending_.push(std::move(callback));
     }
 
@@ -119,12 +126,17 @@ class UpdateQueue {
      * destroyed. The actual LVGL timer is freed by lv_deinit().
      */
     void shutdown() {
+        // Drain pending callbacks while panels are still alive, then gate off
+        // new enqueues so background threads (libhv WebSocket) that arrive late
+        // silently discard instead of pushing stale panel pointers.
+        process_pending();
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            std::queue<UpdateCallback>().swap(pending_); // Clear pending queue
+            initialized_ = false;
+            shut_down_ = true;
+            std::queue<UpdateCallback>().swap(pending_); // Discard any stragglers
         }
         timer_ = nullptr;
-        initialized_ = false;
     }
 
     /**
@@ -217,6 +229,7 @@ class UpdateQueue {
     std::queue<UpdateCallback> pending_;
     lv_timer_t* timer_ = nullptr;
     bool initialized_ = false;
+    bool shut_down_ = false;
 };
 
 /**

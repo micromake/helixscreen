@@ -62,15 +62,45 @@ The chamber panel works identically to the nozzle and bed panels, just with cham
 
 ---
 
-## Temperature Graphs
+## Temperature Graph Overlay
 
-Live graphs show:
+Tap any temperature card (nozzle, bed, or chamber) on the Controls or Print Status panels to open the unified temperature graph overlay. This single overlay replaces the separate per-heater graphs with a combined view.
 
-- **Current temperature** (solid line)
-- **Target temperature** (dashed line)
-- **History** scrolling over time
+### Layout
 
-Useful for diagnosing heating issues or verifying PID tuning.
+The overlay has a **side-by-side layout**:
+
+- **Left (66%)** — Live temperature graph with all sensors plotted together
+- **Right (33%)** — Heater controls for whichever sensor you tapped (presets, target temperature, custom input)
+
+If you have a chamber sensor with no heater, the right column shows the current temperature but hides the preset buttons and custom input since there's nothing to control.
+
+### Sensor Chips
+
+Above the graph, a row of **sensor chips** lets you toggle which traces are visible:
+
+- Each chip shows a colored dot matching its graph line and the sensor name
+- Tap a chip to show or hide that sensor's trace
+- When you open the overlay from a specific card, only the relevant sensor is shown by default — tap other chips to add more traces
+- Chips wrap across multiple lines if you have many sensors
+
+### Graph Features
+
+- **Solid line** — Current temperature
+- **Dashed line** — Target temperature (for heaters)
+- **Auto-scaling Y axis** — Adjusts range automatically based on visible temperatures
+- **Color-coded traces** — Nozzle (red), Bed (cyan), Chamber (green), additional sensors (yellow, purple, orange, blue)
+
+### Multi-Extruder Support
+
+When multiple extruders are configured, the nozzle controls include an extruder selector row. Tap an extruder to switch which one the right-column presets and target apply to. Each extruder's temperature trace is shown independently on the graph.
+
+### Setting Temperature
+
+From the right column:
+
+- Tap a **material preset** (Off, PLA, PETG, ABS) to set that temperature immediately
+- Tap **Custom...** to enter an exact temperature via the on-screen keypad
 
 ---
 

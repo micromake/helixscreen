@@ -49,6 +49,17 @@ void create_ripple(lv_obj_t* parent, lv_coord_t x, lv_coord_t y, int start_size 
 lv_obj_t* create_fullscreen_backdrop(lv_obj_t* parent, lv_opa_t opacity = 180);
 
 /**
+ * @brief Flash an object with a brief opacity pulse for touch feedback
+ *
+ * Animates the object's opacity down and back up to provide visual confirmation
+ * of a touch event. Respects animation settings (no-op if animations disabled).
+ *
+ * @param obj Object to flash (typically a crosshair or icon)
+ * @param duration_ms Total pulse duration in milliseconds (default: 200)
+ */
+void flash_object(lv_obj_t* obj, int32_t duration_ms = 200);
+
+/**
  * @brief Recursively remove an object tree from the default focus group
  *
  * Prevents LVGL from auto-focusing the next element when focusable children

@@ -8,6 +8,7 @@
 #include "ui_utils.h"
 
 #include "config.h"
+#include "geometry_budget_manager.h"
 
 #include <spdlog/spdlog.h>
 
@@ -78,7 +79,10 @@ int16_t QuantizationParams::quantize(float value, float min_bound) const {
 }
 
 float QuantizationParams::dequantize(int16_t value, float min_bound) const {
-    return static_cast<float>(value) / scale_factor + min_bound;
+    // Use double precision intermediates to avoid float rounding accumulation
+    // when scale_factor and min_bound differ by several orders of magnitude.
+    return static_cast<float>(static_cast<double>(value) / static_cast<double>(scale_factor) +
+                              static_cast<double>(min_bound));
 }
 
 QuantizedVertex QuantizationParams::quantize_vec3(const glm::vec3& v) const {
@@ -105,6 +109,7 @@ RibbonGeometry::RibbonGeometry(RibbonGeometry&& other) noexcept
     : vertices(std::move(other.vertices)), indices(std::move(other.indices)),
       strips(std::move(other.strips)), normal_palette(std::move(other.normal_palette)),
       color_palette(std::move(other.color_palette)),
+      tool_palette_map(std::move(other.tool_palette_map)),
       strip_layer_index(std::move(other.strip_layer_index)),
       layer_strip_ranges(std::move(other.layer_strip_ranges)),
       max_layer_index(other.max_layer_index), layer_bboxes(std::move(other.layer_bboxes)),
@@ -120,6 +125,7 @@ RibbonGeometry& RibbonGeometry::operator=(RibbonGeometry&& other) noexcept {
         strips = std::move(other.strips);
         normal_palette = std::move(other.normal_palette);
         color_palette = std::move(other.color_palette);
+        tool_palette_map = std::move(other.tool_palette_map);
         strip_layer_index = std::move(other.strip_layer_index);
         layer_strip_ranges = std::move(other.layer_strip_ranges);
         layer_bboxes = std::move(other.layer_bboxes);
@@ -133,12 +139,76 @@ RibbonGeometry& RibbonGeometry::operator=(RibbonGeometry&& other) noexcept {
     return *this;
 }
 
+void RibbonGeometry::prepare_interleaved_buffers() {
+    if (strips.empty() || vertices.empty()) {
+        return;
+    }
+
+    size_t num_layers = layer_strip_ranges.empty() ? 1 : layer_strip_ranges.size();
+    prepared_buffers.resize(num_layers);
+
+    // Interleaved vertex format: position(3f) + normal(3f) + color(3f) = 9 floats
+    constexpr size_t kFloatsPerVertex = 9;
+
+    for (size_t layer = 0; layer < num_layers; ++layer) {
+        size_t first_strip = 0;
+        size_t strip_count = strips.size();
+
+        if (!layer_strip_ranges.empty()) {
+            auto [fs, sc] = layer_strip_ranges[layer];
+            first_strip = fs;
+            strip_count = sc;
+        }
+
+        auto& prepared = prepared_buffers[layer];
+        if (strip_count == 0) {
+            prepared.vertex_count = 0;
+            continue;
+        }
+
+        size_t total_verts = strip_count * 6; // 2 triangles per strip
+        prepared.vertex_count = total_verts;
+        prepared.data.resize(total_verts * kFloatsPerVertex);
+
+        static constexpr int kTriIndices[6] = {0, 1, 2, 1, 3, 2};
+        size_t out_idx = 0;
+
+        for (size_t s = 0; s < strip_count; ++s) {
+            const auto& strip = strips[first_strip + s];
+
+            for (int ti = 0; ti < 6; ++ti) {
+                const auto& vert = vertices[strip[static_cast<size_t>(kTriIndices[ti])]];
+                glm::vec3 pos = quantization.dequantize_vec3(vert.position);
+                const glm::vec3& normal = normal_palette[vert.normal_index];
+
+                prepared.data[out_idx++] = pos.x;
+                prepared.data[out_idx++] = pos.y;
+                prepared.data[out_idx++] = pos.z;
+                prepared.data[out_idx++] = normal.x;
+                prepared.data[out_idx++] = normal.y;
+                prepared.data[out_idx++] = normal.z;
+
+                uint32_t rgb = 0x26A69A; // Default teal
+                if (vert.color_index < color_palette.size()) {
+                    rgb = color_palette[vert.color_index];
+                }
+                prepared.data[out_idx++] = ((rgb >> 16) & 0xFF) / 255.0f;
+                prepared.data[out_idx++] = ((rgb >> 8) & 0xFF) / 255.0f;
+                prepared.data[out_idx++] = (rgb & 0xFF) / 255.0f;
+            }
+        }
+    }
+
+    spdlog::debug("[GCode Geometry] Prepared {} layer buffers for GPU upload", num_layers);
+}
+
 void RibbonGeometry::clear() {
     vertices.clear();
     indices.clear();
     strips.clear();
     normal_palette.clear();
     color_palette.clear();
+    tool_palette_map.clear();
     strip_layer_index.clear();
     layer_strip_ranges.clear();
     layer_bboxes.clear();
@@ -154,6 +224,83 @@ void RibbonGeometry::clear() {
 
     extrusion_triangle_count = 0;
     travel_triangle_count = 0;
+}
+
+// ============================================================================
+// RibbonGeometry Validation
+// ============================================================================
+
+void RibbonGeometry::validate() const {
+    size_t issues = 0;
+
+    // Spot-check vertex positions for NaN/Inf (check every 100th vertex, plus first and last)
+    if (!vertices.empty()) {
+        auto check_vertex = [&](size_t idx) {
+            const auto& v = vertices[idx];
+            glm::vec3 pos = quantization.dequantize_vec3(v.position);
+            if (std::isnan(pos.x) || std::isnan(pos.y) || std::isnan(pos.z) || std::isinf(pos.x) ||
+                std::isinf(pos.y) || std::isinf(pos.z)) {
+                spdlog::warn("[GCode::Builder] Vertex {} has NaN/Inf position: ({}, {}, {})", idx,
+                             pos.x, pos.y, pos.z);
+                ++issues;
+            }
+        };
+
+        check_vertex(0);
+        check_vertex(vertices.size() - 1);
+        for (size_t i = 100; i < vertices.size(); i += 100) {
+            check_vertex(i);
+        }
+    }
+
+    // Validate layer strip ranges are within bounds
+    for (size_t layer = 0; layer < layer_strip_ranges.size(); ++layer) {
+        auto [first, count] = layer_strip_ranges[layer];
+        if (count == 0)
+            continue;
+        if (first + count > strips.size()) {
+            spdlog::warn("[GCode::Builder] Layer {} strip range [{}, +{}) exceeds strip count {}",
+                         layer, first, count, strips.size());
+            ++issues;
+        }
+    }
+
+    // Validate color palette indices in vertices (spot-check)
+    size_t color_palette_size = color_palette.size();
+    size_t normal_palette_size = normal_palette.size();
+    for (size_t i = 0; i < vertices.size(); i += std::max(size_t(1), vertices.size() / 200)) {
+        const auto& v = vertices[i];
+        if (v.color_index >= color_palette_size) {
+            spdlog::warn("[GCode::Builder] Vertex {} color_index {} >= palette size {}", i,
+                         v.color_index, color_palette_size);
+            ++issues;
+        }
+        if (v.normal_index >= normal_palette_size) {
+            spdlog::warn("[GCode::Builder] Vertex {} normal_index {} >= palette size {}", i,
+                         v.normal_index, normal_palette_size);
+            ++issues;
+        }
+    }
+
+    // Validate strip vertex indices are within bounds (spot-check)
+    for (size_t i = 0; i < strips.size(); i += std::max(size_t(1), strips.size() / 200)) {
+        for (uint32_t idx : strips[i]) {
+            if (idx >= vertices.size()) {
+                spdlog::warn("[GCode::Builder] Strip {} references vertex {} >= vertex count {}", i,
+                             idx, vertices.size());
+                ++issues;
+                break;
+            }
+        }
+    }
+
+    if (issues > 0) {
+        spdlog::warn("[GCode::Builder] Geometry validation found {} issue(s)", issues);
+    } else {
+        spdlog::debug("[GCode::Builder] Geometry validation passed ({} vertices, {} strips, "
+                      "{} layers)",
+                      vertices.size(), strips.size(), layer_strip_ranges.size());
+    }
 }
 
 // ============================================================================
@@ -187,6 +334,19 @@ void GeometryBuilder::BuildStats::log() const {
 
 GeometryBuilder::GeometryBuilder() {
     stats_ = {};
+
+    auto* config = Config::get_instance();
+    if (config) {
+        tube_sides_ = config->get<int>("/gcode_viewer/tube_sides", 16);
+        if (tube_sides_ != 4 && tube_sides_ != 8 && tube_sides_ != 16) {
+            spdlog::warn(
+                "[GCode Geometry] Invalid tube_sides={} (must be 4, 8, or 16), defaulting to 16",
+                tube_sides_);
+            tube_sides_ = 16;
+        }
+        spdlog::info("[GCode Geometry] G-code tube geometry: N={} sides (elliptical cross-section)",
+                     tube_sides_);
+    }
 }
 
 // ============================================================================
@@ -194,8 +354,8 @@ GeometryBuilder::GeometryBuilder() {
 // ============================================================================
 
 uint16_t GeometryBuilder::add_to_normal_palette(RibbonGeometry& geometry, const glm::vec3& normal) {
-    // Very light quantization (0.001) to merge nearly-identical normals without visible banding
-    constexpr float QUANT_STEP = 0.01f; // Increased from 0.001 for better deduplication
+    // Light quantization to merge nearly-identical normals without visible banding
+    constexpr float QUANT_STEP = 0.002f; // Balanced: reduces banding while still deduplicating
     glm::vec3 quantized;
     quantized.x = std::round(normal.x / QUANT_STEP) * QUANT_STEP;
     quantized.y = std::round(normal.y / QUANT_STEP) * QUANT_STEP;
@@ -248,7 +408,11 @@ uint8_t GeometryBuilder::add_to_color_palette(RibbonGeometry& geometry, uint32_t
 
     // Not in cache - add to palette
     if (geometry.color_palette.size() >= 256) {
-        spdlog::warn("[GCode Geometry] Color palette full (256 entries), reusing last entry");
+        static bool color_warned = false;
+        if (!color_warned) {
+            spdlog::warn("[GCode Geometry] Color palette full (256 entries), reusing last entry");
+            color_warned = true;
+        }
         return 255;
     }
 
@@ -266,13 +430,21 @@ RibbonGeometry GeometryBuilder::build(const ParsedGCodeFile& gcode,
 
     RibbonGeometry geometry;
     stats_ = {}; // Reset statistics
+    budget_exceeded_ = false;
+
+    // Apply budget tube_sides override if set
+    if (budget_tube_sides_ > 0) {
+        tube_sides_ = budget_tube_sides_;
+        spdlog::info("[GCode::Builder] Budget override: tube_sides={}", tube_sides_);
+    }
 
     // Validate and apply options
     SimplificationOptions validated_opts = options;
     validated_opts.validate();
 
-    spdlog::info("[GCode Geometry] Building G-code geometry (tolerance={:.3f}mm, merging={})",
-                 validated_opts.tolerance_mm, validated_opts.enable_merging);
+    spdlog::info("[GCode::Builder] Config: layer_height={:.3f}mm, extrusion_width={:.3f}mm, "
+                 "tube_sides={}, tolerance={:.3f}mm",
+                 layer_height_mm_, extrusion_width_mm_, tube_sides_, validated_opts.tolerance_mm);
 
     // Calculate quantization parameters from bounding box
     // IMPORTANT: Expand bounds to account for tube width (vertices extend beyond segment positions)
@@ -289,19 +461,13 @@ RibbonGeometry GeometryBuilder::build(const ParsedGCodeFile& gcode,
         "[GCode Geometry] Expanded quantization bounds by {:.1f}mm for tube width {:.1f}mm",
         expansion_margin, max_tube_width);
 
-    // Build Z-height to layer index lookup map
-    // Used later to assign layer indices to strips for ghost layer rendering
-    std::unordered_map<int, uint16_t> z_to_layer_index;
-    for (size_t i = 0; i < gcode.layers.size(); ++i) {
-        // Quantize Z to 0.01mm precision for reliable lookups
-        int z_key = static_cast<int>(std::round(gcode.layers[i].z_height * 100.0f));
-        z_to_layer_index[z_key] = static_cast<uint16_t>(i);
-    }
-
-    // Collect all segments from all layers
+    // Collect all segments from all layers, stamping each with its source layer index
     std::vector<ToolpathSegment> all_segments;
-    for (const auto& layer : gcode.layers) {
-        all_segments.insert(all_segments.end(), layer.segments.begin(), layer.segments.end());
+    for (size_t li = 0; li < gcode.layers.size(); ++li) {
+        for (const auto& seg : gcode.layers[li].segments) {
+            all_segments.push_back(seg);
+            all_segments.back().layer_index = static_cast<uint16_t>(li);
+        }
     }
 
     stats_.input_segments = all_segments.size();
@@ -345,24 +511,10 @@ RibbonGeometry GeometryBuilder::build(const ParsedGCodeFile& gcode,
                      simplified.size());
     }
 
-    // Find the maximum Z height (top layer) dynamically for debug filtering
-    float max_z = -std::numeric_limits<float>::infinity();
-    for (const auto& segment : simplified) {
-        float z = std::round(segment.start.z * 100.0f) / 100.0f;
-        if (z > max_z)
-            max_z = z;
-    }
-
     // Step 2: Generate ribbon geometry with vertex sharing
     // Track previous segment end vertices for reuse
     std::optional<TubeCap> prev_end_cap;
     glm::vec3 prev_end_pos{0.0f};
-
-    // DEBUG: Track segment Y range and vertex sharing statistics
-    float seg_y_min = FLT_MAX, seg_y_max = -FLT_MAX;
-    size_t segments_skipped = 0;
-    size_t segments_shared = 0;
-    size_t sharing_candidates = 0; // Segments where prev_end_cap exists
 
     // Layer tracking for ghost layer rendering
     // Temporary map to accumulate strips per layer, then convert to ranges
@@ -373,8 +525,7 @@ RibbonGeometry GeometryBuilder::build(const ParsedGCodeFile& gcode,
     // Initialize per-layer bounding boxes for frustum culling
     geometry.layer_bboxes.resize(gcode.layers.size());
 
-    spdlog::info("[GCode::Builder] Setting max_layer_index = {} (from {} layers)",
-                 geometry.max_layer_index, gcode.layers.size());
+    size_t segments_since_budget_check = 0;
 
     for (size_t i = 0; i < simplified.size(); ++i) {
         const auto& segment = simplified[i];
@@ -384,55 +535,62 @@ RibbonGeometry GeometryBuilder::build(const ParsedGCodeFile& gcode,
         // Skip travel moves (non-extrusion moves)
         // TODO: Make this configurable if we want to visualize travel paths
         if (!segment.is_extrusion) {
-            segments_skipped++;
             continue;
         }
 
-        // Determine layer index from segment Z-height
-        int z_key = static_cast<int>(std::round(segment.start.z * 100.0f));
-        uint16_t layer_idx = 0;
-        auto it = z_to_layer_index.find(z_key);
-        if (it != z_to_layer_index.end()) {
-            layer_idx = it->second;
+        // Progressive budget check
+        if (budget_limit_bytes_ > 0) {
+            segments_since_budget_check++;
+            if (segments_since_budget_check >= GeometryBudgetManager::CHECK_INTERVAL_SEGMENTS) {
+                segments_since_budget_check = 0;
+                size_t current_mem = geometry.memory_usage();
+                float threshold = static_cast<float>(budget_limit_bytes_) *
+                                  GeometryBudgetManager::BUDGET_THRESHOLD;
+                if (static_cast<float>(current_mem) > threshold) {
+                    spdlog::warn("[GCode::Builder] Budget exceeded: {}MB / {}MB at segment {}/{}",
+                                 current_mem / (1024 * 1024), budget_limit_bytes_ / (1024 * 1024),
+                                 i, simplified.size());
+                    budget_exceeded_ = true;
+                    break;
+                }
+
+                // System memory check (less frequent, only at CHECK_INTERVAL boundaries)
+                if (i > 0 && i % GeometryBudgetManager::SYSTEM_CHECK_INTERVAL_SEGMENTS == 0) {
+                    GeometryBudgetManager budget_mgr;
+                    if (budget_mgr.is_system_memory_critical()) {
+                        spdlog::error("[GCode::Builder] System memory critical — aborting build");
+                        budget_exceeded_ = true;
+                        break;
+                    }
+                }
+            }
         }
 
-        // Expand per-layer bounding box for frustum culling
+        // Use source layer index stamped during segment collection
+        uint16_t layer_idx = segment.layer_index;
+
+        // Expand per-layer bounding box for frustum culling.
+        // Include tube width: geometry extends perpendicular to the segment direction,
+        // so expand by max(extrusion_width, segment.width) * 0.5 * sqrt(2).
         if (layer_idx < geometry.layer_bboxes.size()) {
             AABB& layer_bbox = geometry.layer_bboxes[layer_idx];
-            layer_bbox.expand(segment.start);
-            layer_bbox.expand(segment.end);
+            float tube_width = std::max(extrusion_width_mm_, segment.width);
+            float expansion = tube_width * 0.5f * 1.41421356f; // sqrt(2) for diagonal
+            glm::vec3 expand_vec(expansion, expansion, expansion);
+            layer_bbox.expand(segment.start - expand_vec);
+            layer_bbox.expand(segment.start + expand_vec);
+            layer_bbox.expand(segment.end - expand_vec);
+            layer_bbox.expand(segment.end + expand_vec);
         }
 
-        // Track Y range
-        seg_y_min = std::min({seg_y_min, segment.start.y, segment.end.y});
-        seg_y_max = std::max({seg_y_max, segment.start.y, segment.end.y});
-
-        // Check if we can share vertices with previous segment (OPTIMIZATION ENABLED!)
+        // Check if we can share vertices with previous segment
         bool can_share = false;
-        float dist = 0.0f;
-        float connection_tolerance = 0.0f;
         if (prev_end_cap.has_value()) {
-            sharing_candidates++;
-
             // Segments must connect spatially (within epsilon) and be same type
-            dist = glm::distance(segment.start, prev_end_pos);
-            // Use width-based tolerance: if gap is less than extrusion width, consider them
-            // connected
-            connection_tolerance = segment.width * 1.5f; //  50% overlap tolerance
+            float dist = glm::distance(segment.start, prev_end_pos);
+            float connection_tolerance = segment.width * 0.5f;
             can_share = (dist < connection_tolerance) &&
                         (segment.is_extrusion == simplified[i - 1].is_extrusion);
-
-            if (can_share) {
-                segments_shared++;
-            }
-
-            // Debug top layer connections
-            float z = std::round(segment.start.z * 100.0f) / 100.0f;
-            if (z == max_z) {
-                spdlog::trace("[GCode Geometry]   Seg {:3d}: dist={:.4f}mm, tol={:.4f}mm, "
-                              "width={:.4f}mm, can_share={}",
-                              i, dist, connection_tolerance, segment.width, can_share);
-            }
         }
 
         // Track strip count before generating geometry
@@ -457,69 +615,31 @@ RibbonGeometry GeometryBuilder::build(const ParsedGCodeFile& gcode,
     // Build layer_strip_ranges from accumulated data
     // Initialize with empty ranges for all layers
     geometry.layer_strip_ranges.resize(gcode.layers.size(), {0, 0});
+    size_t non_contiguous_layers = 0;
     for (const auto& [layer_idx, strip_indices] : layer_to_strip_indices) {
         if (!strip_indices.empty() && layer_idx < geometry.layer_strip_ranges.size()) {
-            // Find contiguous range (strips should be mostly contiguous per layer)
             size_t first = strip_indices.front();
-            size_t count = strip_indices.size();
-            geometry.layer_strip_ranges[layer_idx] = {first, count};
-        }
-    }
+            size_t last = strip_indices.back();
+            size_t span = last - first + 1;
 
-    spdlog::debug("[GCode::Builder] Layer tracking: {} layers, {} total strips",
-                  geometry.layer_strip_ranges.size(), geometry.strips.size());
-
-    spdlog::trace("[GCode Geometry] Segment Y range: [{:.1f}, {:.1f}]", seg_y_min, seg_y_max);
-
-    // Categorize segments in top layer by angle and type (max_z already calculated above)
-    size_t total_segs = 0, extrusion_segs = 0, travel_segs = 0;
-    size_t diagonal_45_segs = 0, horizontal_segs = 0, vertical_segs = 0, other_angle_segs = 0;
-
-    for (const auto& segment : simplified) {
-        float z = std::round(segment.start.z * 100.0f) / 100.0f;
-        if (std::abs(z - max_z) < 0.01f) {
-            total_segs++;
-
-            // Categorize by extrusion vs travel
-            if (segment.is_extrusion) {
-                extrusion_segs++;
-            } else {
-                travel_segs++;
+            // Contiguity check: if the span exceeds the index count, there are gaps
+            if (span != strip_indices.size()) {
+                non_contiguous_layers++;
+                spdlog::trace("[GCode::Builder] Layer {} strips are non-contiguous: "
+                              "{} indices spanning {} slots (gaps present)",
+                              layer_idx, strip_indices.size(), span);
             }
 
-            // Calculate segment angle in XY plane
-            glm::vec2 delta(segment.end.x - segment.start.x, segment.end.y - segment.start.y);
-            float length_2d = glm::length(delta);
-
-            if (length_2d > 0.01f) { // Skip near-zero length segments
-                float angle_rad = std::atan2(delta.y, delta.x);
-                float angle_deg = glm::degrees(angle_rad);
-
-                // Normalize angle to [0, 180) for direction-independent classification
-                if (angle_deg < 0)
-                    angle_deg += 180.0f;
-
-                // Categorize by angle (±5° tolerance)
-                if (std::abs(angle_deg - 45.0f) < 5.0f || std::abs(angle_deg - 135.0f) < 5.0f) {
-                    diagonal_45_segs++;
-                } else if (std::abs(angle_deg - 0.0f) < 5.0f ||
-                           std::abs(angle_deg - 180.0f) < 5.0f) {
-                    horizontal_segs++;
-                } else if (std::abs(angle_deg - 90.0f) < 5.0f) {
-                    vertical_segs++;
-                } else {
-                    other_angle_segs++;
-                }
-            }
+            // Use the full span range (first, span) to cover all strips including gaps.
+            // This may include strips from other layers in the gap, but the renderer
+            // draws by layer range so this is safe for single-VBO-per-layer upload.
+            geometry.layer_strip_ranges[layer_idx] = {first, span};
         }
     }
-
-    if (total_segs > 0) {
-        spdlog::debug(
-            "[GCode Geometry] Top layer Z={:.2f}mm: {} segments ({} extrusion, {} travel, angles: "
-            "{}°±45°, {}°h, {}°v, {} other)",
-            max_z, total_segs, extrusion_segs, travel_segs, diagonal_45_segs, horizontal_segs,
-            vertical_segs, other_angle_segs);
+    if (non_contiguous_layers > 0) {
+        spdlog::warn("[GCode::Builder] {} layers have non-contiguous strip ranges "
+                     "(using span-based ranges as fallback)",
+                     non_contiguous_layers);
     }
 
     // Store quantization parameters for dequantization during rendering
@@ -534,32 +654,10 @@ RibbonGeometry GeometryBuilder::build(const ParsedGCodeFile& gcode,
     stats_.triangles_generated = geometry.strips.size() * 2;
     stats_.memory_bytes = geometry.memory_usage();
 
-    // Log vertex sharing statistics
-    float sharing_rate =
-        sharing_candidates > 0 ? (100.0f * segments_shared / sharing_candidates) : 0.0f;
-    spdlog::info("[GCode::Builder] Vertex sharing: {}/{} segments ({:.1f}%)", segments_shared,
-                 sharing_candidates, sharing_rate);
-    if (sharing_rate < 40.0f) {
-        spdlog::warn("[GCode::Builder] Low vertex sharing rate ({:.1f}%) - expected ~50% for "
-                     "continuous toolpaths",
-                     sharing_rate);
-    }
-
-    // Log palette statistics
-    spdlog::info("[GCode::Builder] Palette stats: {} normals, {} colors (smooth_shading={})",
-                 geometry.normal_palette.size(), geometry.color_palette.size(),
-                 use_smooth_shading_);
-
-    // Log cache statistics
-    spdlog::debug("[GCode::Builder] Cache stats: normal_cache={} entries, color_cache={} entries",
-                  geometry.normal_cache->size(), geometry.color_cache->size());
-
-    if (segments_skipped > 0) {
-        spdlog::debug("[GCode::Builder] Skipped {} travel move segments (non-extrusion)",
-                      segments_skipped);
-    }
-
     stats_.log();
+
+    // Validate geometry integrity before returning
+    geometry.validate();
 
     // End timing
     auto build_end = std::chrono::high_resolution_clock::now();
@@ -593,24 +691,47 @@ GeometryBuilder::simplify_segments(const std::vector<ToolpathSegment>& segments,
 
         // Can only merge segments if:
         // 1. Same move type (both extrusion or both travel)
-        // 2. Endpoints connect (current.end ≈ next.start)
-        // 3. Same object (for per-object highlighting)
-        // 4. Collinear within tolerance
+        // 2. Same layer (segments in different layers must NEVER be merged)
+        // 3. Endpoints connect (current.end ≈ next.start)
+        // 4. Same object (for per-object highlighting)
+        // 5. Collinear within tolerance
 
         bool same_type = (current.is_extrusion == next.is_extrusion);
+        bool same_layer = (current.layer_index == next.layer_index);
         bool endpoints_connect = glm::distance2(current.end, next.start) < 0.0001f;
         bool same_object = (current.object_name == next.object_name);
+        bool same_width = (std::abs(current.width - next.width) < 0.001f);
 
-        if (same_type && endpoints_connect && same_object) {
-            // Check if current.start, current.end, next.end are collinear
-            bool collinear =
-                are_collinear(current.start, current.end, next.end, options.tolerance_mm);
+        if (same_type && same_layer && endpoints_connect && same_object && same_width) {
+            // Direction check: prevent merging segments with significantly different directions.
+            // This preserves zigzag fill patterns where perpendicular distance is small but
+            // the direction changes sharply (e.g., 90-degree turns in solid infill).
+            glm::vec3 merged_dir = next.end - current.start;
+            glm::vec3 candidate_dir = next.end - next.start;
+            float merged_len2 = glm::length2(merged_dir);
+            float candidate_len2 = glm::length2(candidate_dir);
 
-            if (collinear) {
-                // Merge: extend current segment to end at next.end
-                current.end = next.end;
-                current.extrusion_amount += next.extrusion_amount;
-                continue; // Skip adding next to simplified list
+            bool direction_ok = true;
+            if (merged_len2 > 1e-8f && candidate_len2 > 1e-8f) {
+                glm::vec3 d1 = merged_dir / std::sqrt(merged_len2);
+                glm::vec3 d2 = candidate_dir / std::sqrt(candidate_len2);
+                float dot = glm::dot(d1, d2);
+                dot = std::max(-1.0f, std::min(1.0f, dot)); // Clamp for acos safety
+                float angle_deg = glm::degrees(std::acos(dot));
+                direction_ok = (angle_deg <= options.max_direction_change_deg);
+            }
+
+            if (direction_ok) {
+                // Check if current.start, current.end, next.end are collinear
+                bool collinear =
+                    are_collinear(current.start, current.end, next.end, options.tolerance_mm);
+
+                if (collinear) {
+                    // Merge: extend current segment to end at next.end
+                    current.end = next.end;
+                    current.extrusion_amount += next.extrusion_amount;
+                    continue; // Skip adding next to simplified list
+                }
             }
         }
 
@@ -661,25 +782,7 @@ GeometryBuilder::TubeCap
 GeometryBuilder::generate_ribbon_vertices(const ToolpathSegment& segment, RibbonGeometry& geometry,
                                           const QuantizationParams& quant,
                                           std::optional<TubeCap> prev_start_cap) {
-    // Read tube cross-section configuration
-    static int tube_sides = -1; // Cache config value (read once)
-    if (tube_sides == -1) {
-        tube_sides = Config::get_instance()->get<int>("/gcode_viewer/tube_sides", 16);
-
-        // Validate: only 4, 8, or 16 sides supported
-        if (tube_sides != 4 && tube_sides != 8 && tube_sides != 16) {
-            spdlog::warn(
-                "[GCode Geometry] Invalid tube_sides={} (must be 4, 8, or 16), defaulting to 16",
-                tube_sides);
-            tube_sides = 16;
-        }
-
-        spdlog::info("[GCode Geometry] G-code tube geometry: N={} sides (elliptical cross-section)",
-                     tube_sides);
-    }
-
-    // All phases complete - use configured N value
-    const int N = tube_sides;
+    const int N = tube_sides_;
 
     // Determine tube dimensions
     float width;
@@ -723,6 +826,12 @@ GeometryBuilder::generate_ribbon_vertices(const ToolpathSegment& segment, Ribbon
 
     uint8_t color_idx = add_to_color_palette(geometry, rgb);
 
+    // Record tool → palette index mapping for per-tool recoloring (AMS overrides)
+    if (segment.tool_index >= 0) {
+        auto tool_idx = static_cast<uint8_t>(segment.tool_index);
+        geometry.tool_palette_map[tool_idx] = color_idx;
+    }
+
     // Face colors: one color per face (N faces total)
     std::vector<uint8_t> face_colors(static_cast<size_t>(N), color_idx);
 
@@ -754,28 +863,36 @@ GeometryBuilder::generate_ribbon_vertices(const ToolpathSegment& segment, Ribbon
     const glm::vec3 prev_pos = segment.start - half_height * perp_up;
     const glm::vec3 curr_pos = segment.end - half_height * perp_up;
 
-    // Generate N vertex offsets in elliptical arrangement
-    // Vertex i is at angle (i * 2π/N) around the ellipse
-    // Position offset = cos(angle)*half_width*right + sin(angle)*half_height*perp_up
-    const float angle_step = 2.0f * static_cast<float>(M_PI) / N;
+    // Generate N vertex offsets for tube cross-section
     std::vector<glm::vec3> vertex_offsets(static_cast<size_t>(N));
 
-    for (int i = 0; i < N; i++) {
-        float angle = i * angle_step; // 0°, 360°/N, 2×360°/N, ...
-        vertex_offsets[static_cast<size_t>(i)] =
-            half_width * std::cos(angle) * right + half_height * std::sin(angle) * perp_up;
+    if (N == 4) {
+        // Rectangle cross-section: flat top/bottom/sides with full width coverage.
+        // Adjacent extrusion lines tile seamlessly (no gaps between solid fill lines).
+        // Order: top-right, top-left, bottom-left, bottom-right
+        vertex_offsets[0] = +half_width * right + half_height * perp_up;
+        vertex_offsets[1] = -half_width * right + half_height * perp_up;
+        vertex_offsets[2] = -half_width * right - half_height * perp_up;
+        vertex_offsets[3] = +half_width * right - half_height * perp_up;
+    } else {
+        // Higher N: elliptical cross-section via parametric angle
+        const float angle_step = 2.0f * static_cast<float>(M_PI) / N;
+        for (int i = 0; i < N; i++) {
+            float angle = i * angle_step;
+            vertex_offsets[static_cast<size_t>(i)] =
+                half_width * std::cos(angle) * right + half_height * std::sin(angle) * perp_up;
+        }
     }
 
-    // Generate N face normals (one per face)
-    // Face normal points outward from face center (midpoint between adjacent vertices)
-    // Face i connects vertex i to vertex (i+1)%N, so face center is at angle (i+0.5)*angle_step
-    std::vector<glm::vec3> face_normals(static_cast<size_t>(N));
-
+    // Per-vertex normals derived from vertex offset direction (smooth shading)
+    std::vector<glm::vec3> vertex_normals(static_cast<size_t>(N));
     for (int i = 0; i < N; i++) {
-        float face_angle = (i + 0.5f) * angle_step; // Midpoint between vertices i and i+1
-        glm::vec3 face_center_offset = half_width * std::cos(face_angle) * right +
-                                       half_height * std::sin(face_angle) * perp_up;
-        face_normals[static_cast<size_t>(i)] = glm::normalize(face_center_offset);
+        float len = glm::length(vertex_offsets[static_cast<size_t>(i)]);
+        if (len > 1e-6f) {
+            vertex_normals[static_cast<size_t>(i)] = vertex_offsets[static_cast<size_t>(i)] / len;
+        } else {
+            vertex_normals[static_cast<size_t>(i)] = glm::vec3(0.0f, 0.0f, 1.0f);
+        }
     }
 
     // Phase 3: N-based vertex generation (replaces hardcoded N=4 logic)
@@ -808,36 +925,42 @@ GeometryBuilder::generate_ribbon_vertices(const ToolpathSegment& segment, Ribbon
     // ========== PREV SIDE FACE VERTICES ==========
     // Generate 2N prev vertices (2 vertices per face, N faces)
     // Each face connects vertex (i+1)%N to vertex i (going backwards around circle for correct
-    // winding)
+    // winding). Per-vertex radial normals for smooth shading.
     for (int i = 0; i < N; i++) {
         int next_i = (i + 1) % N;
         glm::vec3 pos_v1 =
             prev_pos + vertex_offsets[static_cast<size_t>(next_i)]; // REVERSED: next_i first
         glm::vec3 pos_v2 = prev_pos + vertex_offsets[static_cast<size_t>(i)]; // then i
-        uint16_t normal_idx = add_to_normal_palette(geometry, face_normals[static_cast<size_t>(i)]);
+        uint16_t normal_idx_v1 =
+            add_to_normal_palette(geometry, vertex_normals[static_cast<size_t>(next_i)]);
+        uint16_t normal_idx_v2 =
+            add_to_normal_palette(geometry, vertex_normals[static_cast<size_t>(i)]);
 
         geometry.vertices.push_back(
-            {quant.quantize_vec3(pos_v1), normal_idx, face_colors[static_cast<size_t>(i)]});
+            {quant.quantize_vec3(pos_v1), normal_idx_v1, face_colors[static_cast<size_t>(i)]});
         geometry.vertices.push_back(
-            {quant.quantize_vec3(pos_v2), normal_idx, face_colors[static_cast<size_t>(i)]});
+            {quant.quantize_vec3(pos_v2), normal_idx_v2, face_colors[static_cast<size_t>(i)]});
     }
     idx_start += static_cast<uint32_t>(2 * N);
 
     // ========== CURR SIDE FACE VERTICES ==========
     // Generate 2N curr vertices (2 vertices per face, N faces)
     // Each face connects vertex (i+1)%N to vertex i (going backwards around circle for correct
-    // winding)
+    // winding). Per-vertex radial normals for smooth shading.
     for (int i = 0; i < N; i++) {
         int next_i = (i + 1) % N;
         glm::vec3 pos_v1 =
             curr_pos + vertex_offsets[static_cast<size_t>(next_i)]; // REVERSED: next_i first
         glm::vec3 pos_v2 = curr_pos + vertex_offsets[static_cast<size_t>(i)]; // then i
-        uint16_t normal_idx = add_to_normal_palette(geometry, face_normals[static_cast<size_t>(i)]);
+        uint16_t normal_idx_v1 =
+            add_to_normal_palette(geometry, vertex_normals[static_cast<size_t>(next_i)]);
+        uint16_t normal_idx_v2 =
+            add_to_normal_palette(geometry, vertex_normals[static_cast<size_t>(i)]);
 
         geometry.vertices.push_back(
-            {quant.quantize_vec3(pos_v1), normal_idx, face_colors[static_cast<size_t>(i)]});
+            {quant.quantize_vec3(pos_v1), normal_idx_v1, face_colors[static_cast<size_t>(i)]});
         geometry.vertices.push_back(
-            {quant.quantize_vec3(pos_v2), normal_idx, face_colors[static_cast<size_t>(i)]});
+            {quant.quantize_vec3(pos_v2), normal_idx_v2, face_colors[static_cast<size_t>(i)]});
     }
     idx_start += static_cast<uint32_t>(2 * N);
 
@@ -848,30 +971,6 @@ GeometryBuilder::generate_ribbon_vertices(const ToolpathSegment& segment, Ribbon
     for (int i = 0; i < N; i++) {
         // Track first vertex of each face (vertex i)
         end_cap[static_cast<size_t>(i)] = end_cap_base + static_cast<uint32_t>(2 * i);
-    }
-
-    static int debug_count = 0;
-    if (debug_count < 2 && debug_face_colors_) {
-        spdlog::info("[GCode Geometry] === Segment {} | N={} | is_first={} ===", debug_count, N,
-                     is_first_segment);
-        spdlog::info(
-            "[GCode Geometry]   Segment: start=({:.3f},{:.3f},{:.3f}) end=({:.3f},{:.3f},{:.3f})",
-            segment.start.x, segment.start.y, segment.start.z, segment.end.x, segment.end.y,
-            segment.end.z);
-        spdlog::info(
-            "[GCode Geometry]   Direction: dir=({:.3f},{:.3f},{:.3f}) right=({:.3f},{:.3f},{:.3f}) "
-            "perp_up=({:.3f},{:.3f},{:.3f})",
-            dir.x, dir.y, dir.z, right.x, right.y, right.z, perp_up.x, perp_up.y, perp_up.z);
-        spdlog::info("[GCode Geometry]   Cross-section center: prev_pos=({:.3f},{:.3f},{:.3f}) "
-                     "curr_pos=({:.3f},{:.3f},{:.3f})",
-                     prev_pos.x, prev_pos.y, prev_pos.z, curr_pos.x, curr_pos.y, curr_pos.z);
-        spdlog::info("[GCode Geometry]   Curr vertices ({} total):", N);
-        for (int i = 0; i < N; i++) {
-            glm::vec3 pos = curr_pos + vertex_offsets[static_cast<size_t>(i)];
-            spdlog::info("[GCode Geometry]     v{}[{}]: ({:.3f},{:.3f},{:.3f})", i,
-                         end_cap[static_cast<size_t>(i)], pos.x, pos.y, pos.z);
-        }
-        debug_count++;
     }
 
     // ========== TRIANGLE STRIPS GENERATION (Phase 4: N-based) ==========
@@ -917,11 +1016,6 @@ GeometryBuilder::generate_ribbon_vertices(const ToolpathSegment& segment, Ribbon
                 start_cap_base + static_cast<uint32_t>(i + 1)  // Duplicate (degenerate triangle)
             });
         }
-
-        if (debug_face_colors_) {
-            spdlog::info("[GCode Geometry] START CAP: N={} vertices, {} triangles (triangle fan)",
-                         N, N - 2);
-        }
     }
 
     // ========== END CAP VERTICES ==========
@@ -934,24 +1028,18 @@ GeometryBuilder::generate_ribbon_vertices(const ToolpathSegment& segment, Ribbon
 
     uint32_t idx_end_cap_start = idx_start;
 
-    if (debug_face_colors_) {
-        spdlog::info("[GCode Geometry] END CAP SOURCE INDICES (first {} of {}):", std::min(N, 4),
-                     N);
-        for (int i = 0; i < std::min(N, 4); i++) {
-            spdlog::info("[GCode Geometry]   end_cap[{}]={}", i, end_cap[static_cast<size_t>(i)]);
-        }
-    }
-
     // Create N end cap vertices with axial normals
     for (int i = 0; i < N; i++) {
-        geometry.vertices.push_back({geometry.vertices[end_cap[static_cast<size_t>(i)]].position,
-                                     end_cap_normal_idx, end_cap_color_idx});
+        uint32_t src_idx = end_cap[static_cast<size_t>(i)];
+        if (src_idx >= geometry.vertices.size()) {
+            spdlog::error("[GCode Geometry] End cap vertex index {} out of bounds (size={})",
+                          src_idx, geometry.vertices.size());
+            continue;
+        }
+        geometry.vertices.push_back(
+            {geometry.vertices[src_idx].position, end_cap_normal_idx, end_cap_color_idx});
     }
     idx_start += static_cast<uint32_t>(N);
-
-    if (debug_face_colors_) {
-        spdlog::info("[GCode Geometry] END CAP VERTICES ADDED: {} vertices", N);
-    }
 
     // ========== END CAP STRIPS ==========
     // Triangle fan with REVERSED winding (CW instead of CCW) for opposite-facing cap
@@ -962,14 +1050,6 @@ GeometryBuilder::generate_ribbon_vertices(const ToolpathSegment& segment, Ribbon
             idx_end_cap_start + static_cast<uint32_t>(N - i - 1), // vN-i-1
             idx_end_cap_start + static_cast<uint32_t>(N - i - 1)  // Duplicate (degenerate)
         });
-    }
-
-    if (debug_face_colors_) {
-        spdlog::info(
-            "[GCode Geometry] END CAP: N={} vertices, {} triangles (reversed triangle fan)", N,
-            N - 2);
-        spdlog::info("[GCode Geometry]   Total geometry.strips.size() = {}",
-                     geometry.strips.size());
     }
 
     // ========== TRIANGLE COUNT VALIDATION ==========

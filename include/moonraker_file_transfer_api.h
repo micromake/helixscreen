@@ -220,7 +220,7 @@ class MoonrakerFileTransferAPI {
     // Track pending HTTP request threads to ensure clean shutdown
     // IMPORTANT: Prevents use-after-free when threads outlive the API object
     mutable std::mutex http_threads_mutex_;
-    std::list<std::thread> http_threads_;
+    std::list<std::pair<std::thread, std::shared_ptr<std::atomic<bool>>>> http_threads_;
     std::atomic<bool> shutting_down_{false};
 
     /**

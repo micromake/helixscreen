@@ -26,9 +26,11 @@ void lv_init_safe() {
         lv_init();
         lv_xml_init(); // Must be called after lv_init() — LVGL 9.5 removed XML from core
     }
-    // UpdateQueue init is handled by LVGLTestFixture constructor per-test,
-    // NOT here. Having it here (called once via call_once) conflicts with
-    // the per-test shutdown/reinit lifecycle in the fixture destructor.
+    // Ensure UpdateQueue accepts callbacks. A prior test in this shard may
+    // have called shutdown() (e.g. LVGLTestFixture dtor), which blocks
+    // queue() until init() is called again. This is idempotent — if already
+    // initialized, init() returns immediately.
+    helix::ui::UpdateQueue::instance().init();
 }
 
 uint32_t lv_timer_handler_safe() {
@@ -764,6 +766,13 @@ TemperatureHistoryManager* get_temperature_history_manager() {
     return nullptr;
 }
 
+// Stub for get_job_queue_state (tests don't have state manager)
+class JobQueueState;
+JobQueueState* get_job_queue_state() {
+    return nullptr;
+}
+void set_job_queue_state(JobQueueState*) {}
+
 // Stub for MoonrakerManager::macro_analysis (never called since get_moonraker_manager returns null)
 #include "moonraker_manager.h"
 namespace helix {
@@ -785,24 +794,26 @@ int MoonrakerManager::connect(const std::string& /*websocket_url*/,
 // These stubs support tests that need more complete UI initialization
 // but don't need real network/hardware connections.
 
-// Stub for app_globals_init_subjects (creates test notification subject)
+// Stub for app_globals_init_subjects (creates test notification + edit mode subjects)
 static lv_subject_t s_test_notification_subject;
+static lv_subject_t s_test_home_edit_mode_subject;
 static bool s_test_notification_subject_initialized = false;
 
 void app_globals_init_subjects() {
     if (!s_test_notification_subject_initialized) {
         lv_subject_init_pointer(&s_test_notification_subject, nullptr);
+        lv_subject_init_int(&s_test_home_edit_mode_subject, 0);
         s_test_notification_subject_initialized = true;
-        spdlog::debug("[Test Stub] app_globals_init_subjects: notification subject initialized");
+        spdlog::debug("[Test Stub] app_globals_init_subjects: subjects initialized");
     }
 }
 
 void app_globals_deinit_subjects() {
     if (s_test_notification_subject_initialized) {
         lv_subject_deinit(&s_test_notification_subject);
+        lv_subject_deinit(&s_test_home_edit_mode_subject);
         s_test_notification_subject_initialized = false;
-        spdlog::debug(
-            "[Test Stub] app_globals_deinit_subjects: notification subject deinitialized");
+        spdlog::debug("[Test Stub] app_globals_deinit_subjects: subjects deinitialized");
     }
 }
 
@@ -811,6 +822,13 @@ lv_subject_t& get_notification_subject() {
         app_globals_init_subjects();
     }
     return s_test_notification_subject;
+}
+
+lv_subject_t& get_home_edit_mode_subject() {
+    if (!s_test_notification_subject_initialized) {
+        app_globals_init_subjects();
+    }
+    return s_test_home_edit_mode_subject;
 }
 
 // Stub for ui_notification_init_subjects (creates test subjects for notification badge)

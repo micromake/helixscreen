@@ -16,7 +16,7 @@
 #include "ui_panel_calibration_zoffset.h"
 #include "ui_panel_motion.h"
 #include "ui_panel_screws_tilt.h"
-#include "ui_panel_temp_control.h"
+#include "ui_overlay_temp_graph.h"
 #include "ui_position_utils.h"
 #include "ui_settings_sensors.h"
 #include "ui_subject_registry.h"
@@ -78,8 +78,6 @@ ControlsPanel::~ControlsPanel() {
     // Note: safe_delete_obj handles shutdown guards (lv_is_initialized, is_destroying_all, etc.)
     using helix::ui::safe_delete_obj;
     safe_delete_obj(motion_panel_);
-    safe_delete_obj(nozzle_temp_panel_);
-    safe_delete_obj(bed_temp_panel_);
     safe_delete_obj(fan_control_panel_);
     safe_delete_obj(bed_mesh_panel_);
     safe_delete_obj(zoffset_panel_);
@@ -268,6 +266,7 @@ void ControlsPanel::init_subjects() {
         {"on_controls_temperatures", on_temperatures_clicked},
         {"on_nozzle_temp_clicked", on_nozzle_temp_clicked},
         {"on_bed_temp_clicked", on_bed_temp_clicked},
+        {"on_chamber_temp_clicked", on_chamber_temp_clicked},
         {"on_controls_cooling", on_cooling_clicked},
     });
 
@@ -372,6 +371,11 @@ void ControlsPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
 }
 
 void ControlsPanel::on_activate() {
+    active_ = true;
+
+    // Force-refresh all displays so UI catches up on state changes missed while hidden
+    refresh_all_displays();
+
     // Refresh secondary fans list when panel becomes visible
     // This handles edge cases where:
     // 1. Fan discovery completed after initial setup
@@ -379,14 +383,64 @@ void ControlsPanel::on_activate() {
     // 3. Observer callback was missed due to timing
     populate_secondary_fans();
 
-    // Refresh secondary temperature sensors list
-    populate_secondary_temps();
-
-    // Refresh macro buttons in case StandardMacros was initialized after setup()
-    // This ensures button labels reflect auto-detected macros, not just fallbacks
+    // Refresh macro buttons — no observer exists for StandardMacros changes,
+    // so this must run on each activation to pick up auto-detected macros
     refresh_macro_buttons();
 
-    spdlog::trace("[{}] Panel activated, refreshed fans, temps, and macro buttons", get_name());
+    spdlog::trace("[{}] Panel activated, refreshed macro buttons", get_name());
+}
+
+void ControlsPanel::on_deactivate() {
+    active_ = false;
+    spdlog::trace("[{}] Panel deactivated, observer callbacks will skip UI updates", get_name());
+}
+
+void ControlsPanel::refresh_all_displays() {
+    // Re-read cached values from subjects and update all formatted displays
+    if (auto* subj = printer_state_.get_active_extruder_temp_subject()) {
+        cached_extruder_temp_ = lv_subject_get_int(subj);
+    }
+    if (auto* subj = printer_state_.get_active_extruder_target_subject()) {
+        cached_extruder_target_ = lv_subject_get_int(subj);
+    }
+    if (auto* subj = printer_state_.get_bed_temp_subject()) {
+        cached_bed_temp_ = lv_subject_get_int(subj);
+    }
+    if (auto* subj = printer_state_.get_bed_target_subject()) {
+        cached_bed_target_ = lv_subject_get_int(subj);
+    }
+    update_nozzle_temp_display();
+    update_bed_temp_display();
+    update_fan_display();
+    update_nozzle_label();
+    update_speed_display();
+
+    // Re-read position subjects
+    if (auto* subj = printer_state_.get_gcode_position_x_subject()) {
+        int centimm = lv_subject_get_int(subj);
+        format_position(centimm, controls_pos_x_buf_, sizeof(controls_pos_x_buf_));
+        lv_subject_copy_string(&controls_pos_x_subject_, controls_pos_x_buf_);
+    }
+    if (auto* subj = printer_state_.get_gcode_position_y_subject()) {
+        int centimm = lv_subject_get_int(subj);
+        format_position(centimm, controls_pos_y_buf_, sizeof(controls_pos_y_buf_));
+        lv_subject_copy_string(&controls_pos_y_subject_, controls_pos_y_buf_);
+    }
+    if (auto* subj = printer_state_.get_gcode_position_z_subject()) {
+        int centimm = lv_subject_get_int(subj);
+        format_position(centimm, controls_pos_z_buf_, sizeof(controls_pos_z_buf_));
+        lv_subject_copy_string(&controls_pos_z_subject_, controls_pos_z_buf_);
+    }
+
+    // Re-read Z-offset subjects
+    if (auto* subj = printer_state_.get_pending_z_offset_delta_subject()) {
+        update_z_offset_delta_display(lv_subject_get_int(subj));
+    }
+    if (auto* subj = printer_state_.get_gcode_z_offset_subject()) {
+        update_controls_z_offset_display(lv_subject_get_int(subj));
+    }
+
+    spdlog::trace("[{}] All displays refreshed after activation", get_name());
 }
 
 // ============================================================================
@@ -418,80 +472,107 @@ void ControlsPanel::setup_card_handlers() {
 
 void ControlsPanel::register_observers() {
     // Subscribe to temperature updates using bundle (replaces 4 individual observers)
+    // Always cache the raw value; skip expensive formatting when panel is hidden
     temp_observers_.setup_sync(
         this, printer_state_,
         [](ControlsPanel* self, int value) {
             self->cached_extruder_temp_ = value;
-            self->update_nozzle_temp_display();
+            if (self->active_)
+                self->update_nozzle_temp_display();
         },
         [](ControlsPanel* self, int value) {
             self->cached_extruder_target_ = value;
-            self->update_nozzle_temp_display();
+            if (self->active_)
+                self->update_nozzle_temp_display();
         },
         [](ControlsPanel* self, int value) {
             self->cached_bed_temp_ = value;
-            self->update_bed_temp_display();
+            if (self->active_)
+                self->update_bed_temp_display();
         },
         [](ControlsPanel* self, int value) {
             self->cached_bed_target_ = value;
-            self->update_bed_temp_display();
+            if (self->active_)
+                self->update_bed_temp_display();
         });
 
-    // Subscribe to fan updates
+    // Subscribe to fan updates (skip formatting when hidden)
     fan_observer_ = observe_int_sync<ControlsPanel>(
-        printer_state_.get_fan_speed_subject(), this,
-        [](ControlsPanel* self, int /* value */) { self->update_fan_display(); });
+        printer_state_.get_fan_speed_subject(), this, [](ControlsPanel* self, int /* value */) {
+            if (self->active_)
+                self->update_fan_display();
+        });
 
     // Subscribe to multi-fan list changes (fires when fans are discovered/updated)
+    // Skip widget rebuilds when hidden; on_activate() calls populate_secondary_fans()
     fans_version_observer_ = observe_int_sync<ControlsPanel>(
-        printer_state_.get_fans_version_subject(), this,
-        [](ControlsPanel* self, int /* version */) { self->populate_secondary_fans(); });
+        printer_state_.get_fans_version_subject(), this, [](ControlsPanel* self, int /* version */) {
+            if (self->active_)
+                self->populate_secondary_fans();
+        });
 
     // Subscribe to active tool changes for dynamic nozzle label
     active_tool_observer_ = observe_int_sync<ControlsPanel>(
         helix::ToolState::instance().get_active_tool_subject(), this,
-        [](ControlsPanel* self, int /* tool_idx */) { self->update_nozzle_label(); });
+        [](ControlsPanel* self, int /* tool_idx */) {
+            if (self->active_)
+                self->update_nozzle_label();
+        });
     update_nozzle_label(); // Set initial value
 
     // Subscribe to temperature sensor count changes
+    // Skip widget rebuilds when hidden; on_activate() calls populate_secondary_temps()
     temp_sensor_count_observer_ = observe_int_sync<ControlsPanel>(
         helix::sensors::TemperatureSensorManager::instance().get_sensor_count_subject(), this,
-        [](ControlsPanel* self, int /* count */) { self->populate_secondary_temps(); });
+        [](ControlsPanel* self, int /* count */) {
+            if (self->active_)
+                self->populate_secondary_temps();
+        });
 
     // Subscribe to pending Z-offset delta (for unsaved adjustment banner)
     pending_z_offset_observer_ =
         observe_int_sync<ControlsPanel>(printer_state_.get_pending_z_offset_delta_subject(), this,
                                         [](ControlsPanel* self, int delta_microns) {
-                                            self->update_z_offset_delta_display(delta_microns);
+                                            if (self->active_)
+                                                self->update_z_offset_delta_display(delta_microns);
                                         });
 
     // Subscribe to gcode position updates for Position card using bundle (commanded position in
-    // centimillimeters)
+    // centimillimeters). Skip formatting when hidden — positions update very frequently.
     pos_observers_.setup_sync(
         this, printer_state_,
         [](ControlsPanel* self, int centimm) {
+            if (!self->active_)
+                return;
             format_position(centimm, self->controls_pos_x_buf_, sizeof(self->controls_pos_x_buf_));
             lv_subject_copy_string(&self->controls_pos_x_subject_, self->controls_pos_x_buf_);
         },
         [](ControlsPanel* self, int centimm) {
+            if (!self->active_)
+                return;
             format_position(centimm, self->controls_pos_y_buf_, sizeof(self->controls_pos_y_buf_));
             lv_subject_copy_string(&self->controls_pos_y_subject_, self->controls_pos_y_buf_);
         },
         [](ControlsPanel* self, int centimm) {
+            if (!self->active_)
+                return;
             format_position(centimm, self->controls_pos_z_buf_, sizeof(self->controls_pos_z_buf_));
             lv_subject_copy_string(&self->controls_pos_z_subject_, self->controls_pos_z_buf_);
         });
 
-    // Subscribe to speed/flow factor updates
+    // Subscribe to speed/flow factor updates (skip formatting when hidden)
     speed_factor_observer_ = observe_int_sync<ControlsPanel>(
-        printer_state_.get_speed_factor_subject(), this,
-        [](ControlsPanel* self, int /* value */) { self->update_speed_display(); });
+        printer_state_.get_speed_factor_subject(), this, [](ControlsPanel* self, int /* value */) {
+            if (self->active_)
+                self->update_speed_display();
+        });
 
-    // Subscribe to gcode Z-offset for live tuning display
+    // Subscribe to gcode Z-offset for live tuning display (skip formatting when hidden)
     gcode_z_offset_observer_ =
         observe_int_sync<ControlsPanel>(printer_state_.get_gcode_z_offset_subject(), this,
                                         [](ControlsPanel* self, int offset_microns) {
-                                            self->update_controls_z_offset_display(offset_microns);
+                                            if (self->active_)
+                                                self->update_controls_z_offset_display(offset_microns);
                                         });
 
     spdlog::trace("[{}] Observers registered for dashboard live data", get_name());
@@ -720,7 +801,8 @@ void ControlsPanel::populate_secondary_fans() {
         lv_obj_set_style_border_width(more_row, 0, 0);
         lv_obj_set_style_pad_all(more_row, 0, 0);
         lv_obj_remove_flag(more_row, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_add_flag(more_row, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_remove_flag(more_row, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(more_row, LV_OBJ_FLAG_EVENT_BUBBLE);
         lv_obj_set_flex_flow(more_row, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(more_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
                               LV_FLEX_ALIGN_CENTER);
@@ -869,83 +951,23 @@ void ControlsPanel::handle_quick_actions_clicked() {
 }
 
 void ControlsPanel::handle_temperatures_clicked() {
-    spdlog::debug("[{}] Temperatures card clicked - opening nozzle temp panel", get_name());
-
-    if (!temp_control_panel_) {
-        NOTIFY_ERROR("Temperature panel not available");
-        return;
-    }
-
-    // For combined temps card, open nozzle panel (user can switch to bed from there)
-    if (!nozzle_temp_panel_ && parent_screen_) {
-        nozzle_temp_panel_ =
-            static_cast<lv_obj_t*>(lv_xml_create(parent_screen_, "nozzle_temp_panel", nullptr));
-        if (nozzle_temp_panel_) {
-            temp_control_panel_->setup_nozzle_panel(nozzle_temp_panel_, parent_screen_);
-            NavigationManager::instance().register_overlay_instance(
-                nozzle_temp_panel_, temp_control_panel_->get_nozzle_lifecycle());
-            // Panel starts hidden via XML hidden="true" attribute
-        } else {
-            NOTIFY_ERROR("Failed to load temperature panel");
-            return;
-        }
-    }
-
-    if (nozzle_temp_panel_) {
-        NavigationManager::instance().push_overlay(nozzle_temp_panel_);
-    }
+    spdlog::debug("[{}] Temperatures card clicked - opening temperature graph", get_name());
+    get_global_temp_graph_overlay().open(TempGraphOverlay::Mode::Nozzle, parent_screen_);
 }
 
 void ControlsPanel::handle_nozzle_temp_clicked() {
-    spdlog::debug("[{}] Nozzle temp clicked - opening nozzle temp panel", get_name());
-
-    if (!temp_control_panel_) {
-        NOTIFY_ERROR("Temperature panel not available");
-        return;
-    }
-
-    if (!nozzle_temp_panel_ && parent_screen_) {
-        nozzle_temp_panel_ =
-            static_cast<lv_obj_t*>(lv_xml_create(parent_screen_, "nozzle_temp_panel", nullptr));
-        if (nozzle_temp_panel_) {
-            temp_control_panel_->setup_nozzle_panel(nozzle_temp_panel_, parent_screen_);
-            NavigationManager::instance().register_overlay_instance(
-                nozzle_temp_panel_, temp_control_panel_->get_nozzle_lifecycle());
-        } else {
-            NOTIFY_ERROR("Failed to load nozzle temperature panel");
-            return;
-        }
-    }
-
-    if (nozzle_temp_panel_) {
-        NavigationManager::instance().push_overlay(nozzle_temp_panel_);
-    }
+    spdlog::debug("[{}] Nozzle temp clicked - opening temperature graph", get_name());
+    get_global_temp_graph_overlay().open(TempGraphOverlay::Mode::Nozzle, parent_screen_);
 }
 
 void ControlsPanel::handle_bed_temp_clicked() {
-    spdlog::debug("[{}] Bed temp clicked - opening bed temp panel", get_name());
+    spdlog::debug("[{}] Bed temp clicked - opening temperature graph", get_name());
+    get_global_temp_graph_overlay().open(TempGraphOverlay::Mode::Bed, parent_screen_);
+}
 
-    if (!temp_control_panel_) {
-        NOTIFY_ERROR("Temperature panel not available");
-        return;
-    }
-
-    if (!bed_temp_panel_ && parent_screen_) {
-        bed_temp_panel_ =
-            static_cast<lv_obj_t*>(lv_xml_create(parent_screen_, "bed_temp_panel", nullptr));
-        if (bed_temp_panel_) {
-            temp_control_panel_->setup_bed_panel(bed_temp_panel_, parent_screen_);
-            NavigationManager::instance().register_overlay_instance(
-                bed_temp_panel_, temp_control_panel_->get_bed_lifecycle());
-        } else {
-            NOTIFY_ERROR("Failed to load bed temperature panel");
-            return;
-        }
-    }
-
-    if (bed_temp_panel_) {
-        NavigationManager::instance().push_overlay(bed_temp_panel_);
-    }
+void ControlsPanel::handle_chamber_temp_clicked() {
+    spdlog::debug("[{}] Chamber temp clicked - opening temperature graph", get_name());
+    get_global_temp_graph_overlay().open(TempGraphOverlay::Mode::Chamber, parent_screen_);
 }
 
 void ControlsPanel::handle_cooling_clicked() {
@@ -1002,7 +1024,7 @@ void ControlsPanel::handle_home_all() {
         operation_guard_.begin(300000, [] { NOTIFY_WARNING("Homing timed out"); });
         NOTIFY_INFO("Homing all axes...");
         api_->motion().home_axes(
-            "XYZ",
+            "",
             [this]() {
                 helix::ui::async_call(
                     [](void* ud) { static_cast<ControlsPanel*>(ud)->operation_guard_.end(); },
@@ -1442,7 +1464,7 @@ void ControlsPanel::handle_motors_cancel() {
 
 void ControlsPanel::handle_calibration_bed_mesh() {
     helix::ui::lazy_create_and_push_overlay<BedMeshPanel>(
-        get_global_bed_mesh_panel, bed_mesh_panel_, parent_screen_, "Bed Mesh", get_name());
+        get_global_bed_mesh_panel, bed_mesh_panel_, parent_screen_, "Bed Mesh", get_name(), true);
 }
 
 void ControlsPanel::handle_calibration_zoffset() {
@@ -1471,6 +1493,7 @@ PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, quick_actions_clicked
 PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, temperatures_clicked)
 PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, nozzle_temp_clicked)
 PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, bed_temp_clicked)
+PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, chamber_temp_clicked)
 PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, cooling_clicked)
 PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, secondary_fans_clicked)
 PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, secondary_temps_clicked)
@@ -1541,6 +1564,8 @@ void ControlsPanel::subscribe_to_secondary_fan_speeds() {
                 [name = row.object_name, gen](ControlsPanel* self, int speed_pct) {
                     if (gen != self->fan_populate_gen_)
                         return; // stale callback — widgets gone
+                    if (!self->active_)
+                        return; // skip label update when hidden
                     self->update_secondary_fan_speed(name, speed_pct);
                 },
                 lifetime));
@@ -1667,7 +1692,8 @@ void ControlsPanel::populate_secondary_temps() {
         lv_obj_set_style_border_width(more_row, 0, 0);
         lv_obj_set_style_pad_all(more_row, 0, 0);
         lv_obj_remove_flag(more_row, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_add_flag(more_row, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_remove_flag(more_row, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(more_row, LV_OBJ_FLAG_EVENT_BUBBLE);
         lv_obj_set_flex_flow(more_row, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(more_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
                               LV_FLEX_ALIGN_CENTER);
@@ -1718,6 +1744,8 @@ void ControlsPanel::subscribe_to_secondary_temp_subjects() {
                 [name = row.klipper_name, gen](ControlsPanel* self, int centidegrees) {
                     if (gen != self->temp_populate_gen_)
                         return; // stale callback — widgets gone
+                    if (!self->active_)
+                        return; // skip label update when hidden
                     self->update_secondary_temp(name, centidegrees);
                 },
                 lifetime));

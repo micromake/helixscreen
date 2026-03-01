@@ -177,6 +177,7 @@ static void* ui_gradient_canvas_xml_create(lv_xml_parser_state_t* state, const c
     data_ptr->draw_buf = nullptr;
 
     // Create draw buffer for gradient
+    // Must stay ARGB8888 — render_gradient_buffer() writes lv_color32_t pixels directly
     data_ptr->draw_buf =
         lv_draw_buf_create(GRADIENT_BUFFER_SIZE, GRADIENT_BUFFER_SIZE, LV_COLOR_FORMAT_ARGB8888, 0);
 

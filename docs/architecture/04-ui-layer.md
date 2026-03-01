@@ -44,7 +44,7 @@ graph TB
         PRINT["PrintSelectPanel<br/>File browser, card/list view,<br/>sort, search, thumbnails"]
         CTRL["ControlsPanel<br/>5 smart cards: actions,<br/>temps, fans, calibration"]
         FIL["FilamentPanel<br/>Load/unload, presets,<br/>safety checks"]
-        SET["SettingsPanel<br/>Display, sound, sensors,<br/>LED, plugins, about"]
+        SET["SettingsPanel<br/>Display, sound, sensors,<br/>LED, plugins, about link"]
         ADV["AdvancedPanel<br/>Power, macros, console,<br/>debug, memory stats"]
     end
 
@@ -73,7 +73,7 @@ graph TB
             LIMITS["MachineLimitsOverlay"]
             PLUGINS["SettingsPluginsOverlay"]
             MACBTN["MacroButtonsOverlay"]
-            ABOUT["AboutOverlay"]
+            ABOUT["AboutSettingsOverlay"]
             TELDATA["TelemetryDataOverlay"]
         end
 

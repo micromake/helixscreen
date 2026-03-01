@@ -425,3 +425,104 @@ ALTEOF
     run fix_install_ownership
     [ "$status" -eq 0 ]
 }
+
+# =============================================================================
+# _is_self_update / HELIX_SELF_UPDATE skip logic
+# =============================================================================
+
+@test "stop_service: sysv self-update skips stop" {
+    INIT_SYSTEM="sysv"
+    export HELIX_SELF_UPDATE=1
+    INIT_SCRIPT_DEST="$BATS_TEST_TMPDIR/etc/init.d/S99helixscreen"
+    local stop_called="$BATS_TEST_TMPDIR/sysv_stop_called"
+    cat > "$INIT_SCRIPT_DEST" << STOPEOF
+#!/bin/sh
+case "\$1" in
+    stop) touch "$stop_called" ;;
+esac
+STOPEOF
+    chmod +x "$INIT_SCRIPT_DEST"
+
+    mock_command "killall" ""
+    mock_command_script "pidof" 'exit 1'
+
+    stop_service
+
+    # Init stop must NOT have been called
+    [ ! -f "$stop_called" ]
+}
+
+@test "stop_service: sysv without self-update still stops" {
+    INIT_SYSTEM="sysv"
+    unset HELIX_SELF_UPDATE
+    INIT_SCRIPT_DEST="$BATS_TEST_TMPDIR/etc/init.d/S99helixscreen"
+    local stop_called="$BATS_TEST_TMPDIR/sysv_stop_called"
+    cat > "$INIT_SCRIPT_DEST" << STOPEOF
+#!/bin/sh
+case "\$1" in
+    stop) touch "$stop_called" ;;
+esac
+STOPEOF
+    chmod +x "$INIT_SCRIPT_DEST"
+
+    mock_command "killall" ""
+    mock_command_script "pidof" 'exit 1'
+
+    stop_service
+
+    [ -f "$stop_called" ]
+}
+
+@test "start_service_sysv: self-update skips start" {
+    export HELIX_SELF_UPDATE=1
+    local start_called="$BATS_TEST_TMPDIR/sysv_start_called"
+    INIT_SCRIPT_DEST="$BATS_TEST_TMPDIR/etc/init.d/S99helixscreen"
+    cat > "$INIT_SCRIPT_DEST" << STARTEOF
+#!/bin/sh
+case "\$1" in
+    start) touch "$start_called" ;;
+    status) exit 0 ;;
+esac
+STARTEOF
+    chmod +x "$INIT_SCRIPT_DEST"
+
+    start_service_sysv
+
+    [ ! -f "$start_called" ]
+}
+
+@test "start_service_sysv: without self-update starts normally" {
+    unset HELIX_SELF_UPDATE
+    local start_called="$BATS_TEST_TMPDIR/sysv_start_called"
+    INIT_SCRIPT_DEST="$BATS_TEST_TMPDIR/etc/init.d/S99helixscreen"
+    cat > "$INIT_SCRIPT_DEST" << STARTEOF
+#!/bin/sh
+case "\$1" in
+    start) touch "$start_called" ;;
+    status) exit 0 ;;
+esac
+STARTEOF
+    chmod +x "$INIT_SCRIPT_DEST"
+
+    start_service_sysv
+
+    [ -f "$start_called" ]
+}
+
+@test "stop_service: systemd ignores HELIX_SELF_UPDATE (NoNewPrivs controls)" {
+    INIT_SYSTEM="systemd"
+    export HELIX_SELF_UPDATE=1
+    local stop_called="$BATS_TEST_TMPDIR/stop_called"
+    mock_command_script "systemctl" '
+        case "$*" in
+            *is-active*) exit 0 ;;
+            *stop*) touch "'"$stop_called"'"; exit 0 ;;
+            *) exit 0 ;;
+        esac
+    '
+
+    stop_service
+
+    # systemd path uses NoNewPrivs check, not HELIX_SELF_UPDATE — stop still called
+    [ -f "$stop_called" ]
+}

@@ -21,6 +21,9 @@ Applied in order. The fbdev patches have a dependency: `stride_bpp` must be appl
 | `lvgl-strdup-null-guard.patch` | `lv_string_builtin.c`, `clib/` | NULL input guard for lv_strdup |
 | `lvgl_sdl_window.patch` | `lv_sdl_window.c` | Multi-display positioning, Android support, macOS crash fix |
 | `lvgl_theme_breakpoints.patch` | `lv_theme_default.c` | Custom breakpoint tuning for 480-800px |
+| `lvgl-drm-flush-rotation.patch` | `lv_linux_drm.c`, `.h` | DRM plane rotation API + 180° software rotation via shadow buffer in flush callback |
+| `lvgl-drm-egl-getters.patch` | `lv_linux_drm.h`, `lv_linux_drm_egl.c` | EGL display/context/config getters |
+| `lvgl_refr_reshape_null_guard.patch` | `lv_refr.c` | NULL guard on draw_buf reshape failure to prevent buffer overrun (#229) |
 
 ## Dropped Patches (v9.5.0)
 

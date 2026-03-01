@@ -102,4 +102,14 @@ class BacklightBackend {
      * @return Unique pointer to selected backend (never null)
      */
     static std::unique_ptr<BacklightBackend> create();
+
+#ifdef __linux__
+    /**
+     * @brief Create a sysfs backend with a custom base path (for testing)
+     *
+     * @param base_path Directory to scan for backlight devices (default: /sys/class/backlight)
+     * @return Unique pointer to sysfs backend (may not be available if path has no devices)
+     */
+    static std::unique_ptr<BacklightBackend> create_sysfs(const std::string& base_path);
+#endif
 };

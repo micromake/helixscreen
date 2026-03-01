@@ -154,12 +154,14 @@ struct WiFiNetwork {
     int signal_strength;       ///< Signal strength (0-100 percentage)
     bool is_secured;           ///< True if network requires password
     std::string security_type; ///< Security type ("WPA2", "WPA3", "WEP", "Open")
+    int frequency_mhz{0};      ///< Frequency in MHz (0 = unknown)
 
     WiFiNetwork() : signal_strength(0), is_secured(false) {}
 
     WiFiNetwork(const std::string& ssid_, int strength, bool secured,
-                const std::string& security = "")
-        : ssid(ssid_), signal_strength(strength), is_secured(secured), security_type(security) {}
+                const std::string& security = "", int freq_mhz = 0)
+        : ssid(ssid_), signal_strength(strength), is_secured(secured), security_type(security),
+          frequency_mhz(freq_mhz) {}
 };
 
 /**
@@ -190,6 +192,7 @@ class WifiBackend {
         std::string ip_address;  ///< Current IP address
         std::string mac_address; ///< Device WiFi adapter MAC address
         int signal_strength;     ///< Signal strength (0-100%)
+        int frequency_mhz{0};    ///< Connected frequency in MHz (0 = unknown)
     };
 
     // ========================================================================

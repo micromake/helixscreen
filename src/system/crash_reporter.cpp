@@ -126,6 +126,11 @@ CrashReporter::CrashReport CrashReporter::collect_report() {
 
     // Collect additional system context
     report.platform = UpdateChecker::get_platform_key();
+#ifdef HELIX_BINARY_VARIANT
+    report.display_info = HELIX_BINARY_VARIANT;
+#else
+    report.display_info = "unknown";
+#endif
 
     auto caps = helix::PlatformCapabilities::detect();
     report.ram_total_mb = static_cast<int>(caps.total_ram_mb);

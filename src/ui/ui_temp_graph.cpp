@@ -35,11 +35,9 @@ static ui_temp_series_meta_t* find_series(ui_temp_graph_t* graph, int series_id)
 
 // Helper: Create a muted (reduced opacity) version of a color
 // Since LVGL chart cursors don't support opacity, we blend toward the background
-static lv_color_t mute_color(lv_color_t color, lv_opa_t opa) {
+static lv_color_t mute_color(lv_color_t color, lv_opa_t opa, lv_color_t bg) {
     // Blend toward chart background based on opacity
     // opa=255 = full color, opa=0 = full background
-    // Use theme token for chart background (dark mode typically used for graphs)
-    lv_color_t bg = theme_manager_get_color("graph_bg");
     uint8_t r = (color.red * opa + bg.red * (255 - opa)) / 255;
     uint8_t g = (color.green * opa + bg.green * (255 - opa)) / 255;
     uint8_t b = (color.blue * opa + bg.blue * (255 - opa)) / 255;
@@ -483,7 +481,7 @@ static void draw_grid_lines_cb(lv_event_t* e) {
     // Setup line style - use explicit theme token for consistent grid appearance
     lv_draw_line_dsc_t line_dsc;
     lv_draw_line_dsc_init(&line_dsc);
-    line_dsc.color = theme_manager_get_color("elevated_bg"); // Match bed mesh grid
+    line_dsc.color = graph->cached_grid_color;
     line_dsc.width = 1;
     line_dsc.opa = LV_OPA_30;
 
@@ -592,8 +590,12 @@ static void theme_change_cb(lv_observer_t* observer, lv_subject_t* subject) {
         return;
     }
 
+    // Refresh cached theme colors for draw callbacks
+    graph->cached_grid_color = theme_manager_get_color("elevated_bg");
+    graph->cached_graph_bg = theme_manager_get_color("graph_bg");
+
     // Re-apply themed background color
-    lv_obj_set_style_bg_color(graph->chart, theme_manager_get_color("graph_bg"), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(graph->chart, graph->cached_graph_bg, LV_PART_MAIN);
 
     // Re-apply themed text color for axis labels
     lv_obj_set_style_text_color(graph->chart, theme_manager_get_color("text"), LV_PART_MAIN);
@@ -650,9 +652,13 @@ ui_temp_graph_t* ui_temp_graph_create(lv_obj_t* parent) {
                             static_cast<int32_t>(graph->min_temp),
                             static_cast<int32_t>(graph->max_temp));
 
+    // Cache theme colors for draw callbacks (avoid per-frame theme lookups)
+    graph->cached_grid_color = theme_manager_get_color("elevated_bg");
+    graph->cached_graph_bg = theme_manager_get_color("graph_bg");
+
     // Style chart background (theme handles colors)
     lv_obj_set_style_bg_opa(graph->chart, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(graph->chart, theme_manager_get_color("graph_bg"), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(graph->chart, graph->cached_graph_bg, LV_PART_MAIN);
     lv_obj_set_style_border_width(graph->chart, 0, LV_PART_MAIN);
     // Use responsive spacing from theme constants
     int32_t space_md = theme_manager_get_spacing("space_md"); // 8/10/12px
@@ -818,7 +824,7 @@ int ui_temp_graph_add_series(ui_temp_graph_t* graph, const char* name, lv_color_
     // to a data point which scrolls. Instead we use lv_chart_set_cursor_pos for
     // a fixed Y position representing the target temperature.
     // Use moderately muted color so target line is visible but distinct from actual data
-    lv_color_t cursor_color = mute_color(color, LV_OPA_50); // 50% opacity for visibility
+    lv_color_t cursor_color = mute_color(color, LV_OPA_50, graph->cached_graph_bg);
     meta->target_cursor = lv_chart_add_cursor(graph->chart, cursor_color, LV_DIR_HOR);
 
     graph->series_count++;

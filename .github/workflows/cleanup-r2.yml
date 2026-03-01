@@ -6,7 +6,7 @@ on:
       retain_count:
         description: 'Number of versions to retain per channel'
         required: false
-        default: '10'
+        default: '5'
       dry_run:
         description: 'Dry run (list but do not delete)'
         required: false

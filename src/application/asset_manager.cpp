@@ -3,6 +3,7 @@
 
 #include "asset_manager.h"
 
+#include "theme_manager.h"
 #include "ui_fonts.h"
 
 #include <spdlog/spdlog.h>
@@ -19,10 +20,25 @@ void AssetManager::register_fonts() {
         return;
     }
 
-    spdlog::trace("[AssetManager] Registering fonts...");
+    // Determine breakpoint from the current display's vertical resolution.
+    // Fonts only used at larger breakpoints are skipped to save memory
+    // (~500-800KB of .rodata pages that won't be faulted in).
+    int32_t ver_res = 0;
+    lv_display_t* disp = lv_display_get_default();
+    if (disp) {
+        ver_res = lv_display_get_vertical_resolution(disp);
+    }
+    const bool is_medium_plus = (ver_res > UI_BREAKPOINT_SMALL_MAX);
+    const bool is_large_plus = (ver_res > UI_BREAKPOINT_MEDIUM_MAX);
+
+    int skipped = 0;
+
+    spdlog::trace("[AssetManager] Registering fonts (ver_res={}, medium+={}, large+={})",
+                  ver_res, is_medium_plus, is_large_plus);
 
     // Material Design Icons (various sizes for different UI elements)
     // Source: https://pictogrammers.com/library/mdi/
+    // All icon sizes needed at all breakpoints (used in watchdog, XML, etc.)
     lv_xml_register_font(nullptr, "mdi_icons_64", &mdi_icons_64);
     lv_xml_register_font(nullptr, "mdi_icons_48", &mdi_icons_48);
     lv_xml_register_font(nullptr, "mdi_icons_32", &mdi_icons_32);
@@ -31,9 +47,9 @@ void AssetManager::register_fonts() {
     lv_xml_register_font(nullptr, "mdi_icons_14", &mdi_icons_14);
 
     // Montserrat text fonts - used by semantic text components:
-    // - text_heading uses font_heading (20/26/28 for small/medium/large breakpoints)
-    // - text_body uses font_body (14/18/20 for small/medium/large breakpoints)
-    // - text_small uses font_small (12/16/18 for small/medium/large breakpoints)
+    // - text_heading uses font_heading (14/20/26/28 for tiny/small/medium/large)
+    // - text_body uses font_body (11/14/18/20 for tiny/small/medium/large)
+    // - text_small uses font_small (11/12/16/18 for tiny/small/medium/large)
     // NOTE: Registering as "montserrat_*" for XML compatibility but using noto_sans_* fonts
     lv_xml_register_font(nullptr, "montserrat_10", &noto_sans_10);
     lv_xml_register_font(nullptr, "montserrat_12", &noto_sans_12);
@@ -42,8 +58,18 @@ void AssetManager::register_fonts() {
     lv_xml_register_font(nullptr, "montserrat_18", &noto_sans_18);
     lv_xml_register_font(nullptr, "montserrat_20", &noto_sans_20);
     lv_xml_register_font(nullptr, "montserrat_24", &noto_sans_24);
-    lv_xml_register_font(nullptr, "montserrat_26", &noto_sans_26);
-    lv_xml_register_font(nullptr, "montserrat_28", &noto_sans_28);
+    // montserrat_26: only font_heading_medium
+    if (is_medium_plus) {
+        lv_xml_register_font(nullptr, "montserrat_26", &noto_sans_26);
+    } else {
+        skipped++;
+    }
+    // montserrat_28: only font_heading_large
+    if (is_large_plus) {
+        lv_xml_register_font(nullptr, "montserrat_28", &noto_sans_28);
+    } else {
+        skipped++;
+    }
 
     // Noto Sans fonts - same sizes as Montserrat, with extended Unicode support
     // (includes ©®™€£¥°±•… and other symbols)
@@ -55,18 +81,44 @@ void AssetManager::register_fonts() {
     lv_xml_register_font(nullptr, "noto_sans_18", &noto_sans_18);
     lv_xml_register_font(nullptr, "noto_sans_20", &noto_sans_20);
     lv_xml_register_font(nullptr, "noto_sans_24", &noto_sans_24);
-    lv_xml_register_font(nullptr, "noto_sans_26", &noto_sans_26);
-    lv_xml_register_font(nullptr, "noto_sans_28", &noto_sans_28);
+    // noto_sans_26: only font_heading_medium
+    if (is_medium_plus) {
+        lv_xml_register_font(nullptr, "noto_sans_26", &noto_sans_26);
+    } else {
+        skipped++;
+    }
+    // noto_sans_28: only font_heading_large
+    if (is_large_plus) {
+        lv_xml_register_font(nullptr, "noto_sans_28", &noto_sans_28);
+    } else {
+        skipped++;
+    }
 
-    // Noto Sans Light fonts (for text_small)
+    // Noto Sans Light fonts (for text_small and text_xs)
     lv_xml_register_font(nullptr, "noto_sans_light_10", &noto_sans_light_10);
     lv_xml_register_font(nullptr, "noto_sans_light_11", &noto_sans_light_11);
     lv_xml_register_font(nullptr, "noto_sans_light_12", &noto_sans_light_12);
-    lv_xml_register_font(nullptr, "noto_sans_light_14", &noto_sans_light_14);
-    lv_xml_register_font(nullptr, "noto_sans_light_16", &noto_sans_light_16);
-    lv_xml_register_font(nullptr, "noto_sans_light_18", &noto_sans_light_18);
+    // noto_sans_light_14: only font_xs_large
+    if (is_large_plus) {
+        lv_xml_register_font(nullptr, "noto_sans_light_14", &noto_sans_light_14);
+    } else {
+        skipped++;
+    }
+    // noto_sans_light_16: only font_small_medium
+    if (is_medium_plus) {
+        lv_xml_register_font(nullptr, "noto_sans_light_16", &noto_sans_light_16);
+    } else {
+        skipped++;
+    }
+    // noto_sans_light_18: only font_small_large
+    if (is_large_plus) {
+        lv_xml_register_font(nullptr, "noto_sans_light_18", &noto_sans_light_18);
+    } else {
+        skipped++;
+    }
 
-    // Noto Sans Bold fonts
+    // Noto Sans Bold fonts — all registered unconditionally because they're
+    // used directly in C++ (watchdog: bold_16/24) and XML (debug modal: bold_28)
     lv_xml_register_font(nullptr, "noto_sans_bold_14", &noto_sans_bold_14);
     lv_xml_register_font(nullptr, "noto_sans_bold_16", &noto_sans_bold_16);
     lv_xml_register_font(nullptr, "noto_sans_bold_18", &noto_sans_bold_18);
@@ -75,7 +127,11 @@ void AssetManager::register_fonts() {
     lv_xml_register_font(nullptr, "noto_sans_bold_28", &noto_sans_bold_28);
 
     s_fonts_registered = true;
-    spdlog::trace("[AssetManager] Fonts registered successfully");
+    if (skipped > 0) {
+        spdlog::info("[AssetManager] Fonts registered ({} skipped for breakpoint)", skipped);
+    } else {
+        spdlog::trace("[AssetManager] All fonts registered (large+ breakpoint)");
+    }
 }
 
 void AssetManager::register_images() {
@@ -85,6 +141,10 @@ void AssetManager::register_images() {
     }
 
     spdlog::trace("[AssetManager] Registering images...");
+
+    // Branding
+    lv_xml_register_image(nullptr, "A:assets/images/helixscreen-logo.png",
+                          "A:assets/images/helixscreen-logo.png");
 
     // Printer and UI images
     lv_xml_register_image(nullptr, "A:assets/images/printer_400.png",

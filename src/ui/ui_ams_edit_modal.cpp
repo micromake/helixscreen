@@ -114,17 +114,20 @@ bool AmsEditModal::show_for_slot(lv_obj_t* parent, int slot_index, const SlotInf
     api_ = api;
     remaining_pre_edit_pct_ = 0;
     cached_spools_.clear();
+    vendors_loaded_ = false;
 
     // Reset remaining mode subject before showing (0 = view mode)
     lv_subject_set_int(&remaining_mode_subject_, 0);
 
+    // Set static active instance BEFORE Modal::show() so callbacks during
+    // on_show() (e.g., async fetch triggers) can resolve the instance
+    s_active_instance_ = this;
+
     // Show the modal via Modal
     if (!Modal::show(parent)) {
+        s_active_instance_ = nullptr;
         return false;
     }
-
-    // Set static active instance for callback routing
-    s_active_instance_ = this;
 
     // Determine first view: picker for empty slots with Spoolman, form otherwise
     bool has_spoolman = false;
@@ -255,7 +258,7 @@ void AmsEditModal::init_subjects() {
     color_name_buf_[0] = '\0';
     snprintf(temp_nozzle_buf_, sizeof(temp_nozzle_buf_), "200-230°C");
     snprintf(temp_bed_buf_, sizeof(temp_bed_buf_), "60°C");
-    snprintf(remaining_pct_buf_, sizeof(remaining_pct_buf_), "75%%");
+    snprintf(remaining_pct_buf_, sizeof(remaining_pct_buf_), "100%%");
 
     lv_subject_init_string(&slot_indicator_subject_, slot_indicator_buf_, nullptr,
                            sizeof(slot_indicator_buf_), "--");
@@ -274,7 +277,7 @@ void AmsEditModal::init_subjects() {
     subjects_.register_subject(&temp_bed_subject_);
 
     lv_subject_init_string(&remaining_pct_subject_, remaining_pct_buf_, nullptr,
-                           sizeof(remaining_pct_buf_), "75%");
+                           sizeof(remaining_pct_buf_), "100%");
     subjects_.register_subject(&remaining_pct_subject_);
 
     // Initialize save button text subject
@@ -313,29 +316,36 @@ void AmsEditModal::fetch_vendors_from_spoolman() {
         return;
     }
 
+    // Skip Spoolman API call if not configured (avoids "method not found" toast)
+    auto* spoolman_subj = lv_xml_get_subject(nullptr, "printer_has_spoolman");
+    if (spoolman_subj && lv_subject_get_int(spoolman_subj) != 1) {
+        return;
+    }
+
     // Capture callback guard for async safety [L012]
     std::weak_ptr<bool> guard = callback_guard_;
 
-    api_->spoolman().get_spoolman_spools(
-        [this, guard](const std::vector<SpoolInfo>& spools) {
-            // Extract vendor list on this thread (WebSocket), then marshal to main
+    // Use dedicated vendor endpoint instead of downloading all spools
+    api_->spoolman().get_spoolman_vendors(
+        [this, guard](const std::vector<VendorInfo>& vendors_result) {
+            // Build vendor list on background thread, then marshal to main
             std::set<std::string> unique_vendors;
             unique_vendors.insert("Generic"); // Always have Generic as first option
-            for (const auto& spool : spools) {
-                if (!spool.vendor.empty()) {
-                    unique_vendors.insert(spool.vendor);
+            for (const auto& vendor : vendors_result) {
+                if (!vendor.name.empty()) {
+                    unique_vendors.insert(vendor.name);
                 }
             }
 
             // Build vendor list and options string (local copies, no member access)
             std::vector<std::string> vendors;
             std::string options;
-            for (const auto& vendor : unique_vendors) {
+            for (const auto& name : unique_vendors) {
                 if (!options.empty()) {
                     options += '\n';
                 }
-                options += vendor;
-                vendors.push_back(vendor);
+                options += name;
+                vendors.push_back(name);
             }
 
             // Marshal member writes to main thread
@@ -353,8 +363,7 @@ void AmsEditModal::fetch_vendors_from_spoolman() {
             });
         },
         [](const MoonrakerError& err) {
-            spdlog::warn("[AmsEditModal] Failed to fetch Spoolman spools for vendor list: {}",
-                         err.message);
+            spdlog::warn("[AmsEditModal] Failed to fetch Spoolman vendors: {}", err.message);
             // Keep using fallback vendors
         });
 }
@@ -531,6 +540,7 @@ void AmsEditModal::handle_spool_selected(int spool_id) {
         if (spool.id == spool_id) {
             // Auto-fill working_info_ from the selected spool
             working_info_.spoolman_id = spool.id;
+            working_info_.spoolman_filament_id = spool.filament_id;
             working_info_.color_name = spool.color_name;
             working_info_.material = spool.material;
             working_info_.brand = spool.vendor;
@@ -723,12 +733,15 @@ void AmsEditModal::update_ui() {
     lv_subject_copy_string(&color_name_subject_, color_name_buf_);
 
     // Update remaining slider and label
-    int remaining_pct = 75; // Default
-    if (working_info_.total_weight_g > 0) {
-        remaining_pct = static_cast<int>(100.0f * working_info_.remaining_weight_g /
-                                         working_info_.total_weight_g);
-        remaining_pct = std::max(0, std::min(100, remaining_pct));
+    // Use synthetic 1000g total if no weight data (manual spool without Spoolman)
+    if (working_info_.total_weight_g <= 0) {
+        working_info_.total_weight_g = 1000.0f;
+        working_info_.remaining_weight_g =
+            (working_info_.remaining_weight_g > 0) ? working_info_.remaining_weight_g : 1000.0f;
     }
+    int remaining_pct =
+        static_cast<int>(100.0f * working_info_.remaining_weight_g / working_info_.total_weight_g);
+    remaining_pct = std::max(0, std::min(100, remaining_pct));
 
     lv_obj_t* remaining_slider = find_widget("remaining_slider");
     if (remaining_slider) {
@@ -740,13 +753,10 @@ void AmsEditModal::update_ui() {
     lv_subject_copy_string(&remaining_pct_subject_, remaining_pct_buf_);
 
     // Update progress bar fill width (shown in view mode)
-    lv_obj_t* progress_container = find_widget("remaining_progress_container");
+    // Use percentage width to avoid layout timing issues
     lv_obj_t* progress_fill = find_widget("remaining_progress_fill");
-    if (progress_container && progress_fill) {
-        lv_obj_update_layout(progress_container);
-        int container_width = lv_obj_get_width(progress_container);
-        int fill_width = container_width * remaining_pct / 100;
-        lv_obj_set_width(progress_fill, fill_width);
+    if (progress_fill) {
+        lv_obj_set_width(progress_fill, lv_pct(remaining_pct));
     }
 
     // Update temperature display based on material
@@ -921,10 +931,12 @@ void AmsEditModal::handle_remaining_changed(int percent) {
     lv_subject_copy_string(&remaining_pct_subject_, remaining_pct_buf_);
 
     // Update slot info remaining weight based on percentage
-    if (working_info_.total_weight_g > 0) {
-        working_info_.remaining_weight_g =
-            working_info_.total_weight_g * static_cast<float>(percent) / 100.0f;
+    // Use synthetic 1000g total if no weight data (manual spool without Spoolman)
+    if (working_info_.total_weight_g <= 0) {
+        working_info_.total_weight_g = 1000.0f;
     }
+    working_info_.remaining_weight_g =
+        working_info_.total_weight_g * static_cast<float>(percent) / 100.0f;
 
     update_sync_button_state();
     spdlog::trace("[AmsEditModal] Remaining changed to {}%", percent);
@@ -957,11 +969,8 @@ void AmsEditModal::handle_remaining_accept() {
 
     // Update the progress bar fill to match
     lv_obj_t* progress_fill = find_widget("remaining_progress_fill");
-    lv_obj_t* progress_container = find_widget("remaining_progress_container");
-    if (progress_fill && progress_container) {
-        int container_width = lv_obj_get_width(progress_container);
-        int fill_width = container_width * new_pct / 100;
-        lv_obj_set_width(progress_fill, fill_width);
+    if (progress_fill) {
+        lv_obj_set_width(progress_fill, lv_pct(new_pct));
     }
 
     // Exit edit mode - subject binding will show progress/edit button, hide slider/accept/cancel
@@ -1019,10 +1028,17 @@ void AmsEditModal::handle_save() {
                 if (guard.expired()) {
                     return;
                 }
-                if (!success) {
-                    spdlog::error("[AmsEditModal] Spoolman save failed, saving locally");
-                }
-                fire_completion(true); // Always save locally regardless
+                // Spoolman callback arrives on a background thread — defer
+                // to the UI thread before touching LVGL subjects/widgets.
+                helix::ui::queue_update([this, guard, success]() {
+                    if (guard.expired()) {
+                        return;
+                    }
+                    if (!success) {
+                        spdlog::error("[AmsEditModal] Spoolman save failed, saving locally");
+                    }
+                    fire_completion(true);
+                });
             });
             return; // Async path - fire_completion called from callback
         }
@@ -1194,7 +1210,14 @@ void AmsEditModal::on_spool_item_cb(lv_event_t* e) {
 
     // Use current_target (the button with the handler), not target (the clicked child)
     lv_obj_t* item = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    if (!item) {
+        return;
+    }
     auto spool_id = static_cast<int>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(item)));
+    if (spool_id <= 0) {
+        spdlog::warn("[AmsEditModal] Spool item clicked with invalid spool_id={}", spool_id);
+        return;
+    }
     self->handle_spool_selected(spool_id);
 }
 

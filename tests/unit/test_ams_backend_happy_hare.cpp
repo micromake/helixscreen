@@ -81,6 +81,15 @@ class AmsBackendHappyHareTestHelper : public AmsBackendHappyHare {
         return entry ? &entry->info : nullptr;
     }
 
+    /**
+     * @brief Get const SlotEntry pointer for test assertions (includes sensors)
+     * @param slot_index Global slot index
+     * @return Pointer to SlotEntry or nullptr
+     */
+    const helix::printer::SlotEntry* get_slot_entry(int slot_index) const {
+        return slots_.get(slot_index);
+    }
+
     // G-code capture for persistence tests
     std::vector<std::string> captured_gcodes;
 
@@ -1458,6 +1467,49 @@ TEST_CASE("Happy Hare manages_active_spool=true when spoolman enabled",
 }
 
 // ============================================================================
+// EMU drying_state array format
+// ============================================================================
+
+TEST_CASE_METHOD(AmsBackendHappyHareTestHelper, "EMU drying_state as array",
+                 "[ams][happy_hare][emu]") {
+    initialize_test_gates(4);
+
+    SECTION("all empty strings means supported but not active") {
+        nlohmann::json mmu_data = {{"drying_state", {"", "", "", ""}}};
+        test_parse_mmu_state(mmu_data);
+
+        auto dryer = get_dryer_info();
+        REQUIRE(dryer.supported == true);
+        REQUIRE(dryer.active == false);
+    }
+
+    SECTION("existing object format still works") {
+        nlohmann::json mmu_data = {{"drying_state",
+                                    {{"active", true},
+                                     {"current_temp", 55.0},
+                                     {"target_temp", 60.0},
+                                     {"remaining_min", 30},
+                                     {"duration_min", 240},
+                                     {"fan_pct", 75}}}};
+        test_parse_mmu_state(mmu_data);
+
+        auto dryer = get_dryer_info();
+        REQUIRE(dryer.supported == true);
+        REQUIRE(dryer.active == true);
+        REQUIRE(dryer.current_temp_c == Catch::Approx(55.0));
+    }
+
+    SECTION("array with non-empty entry means active") {
+        nlohmann::json mmu_data = {{"drying_state", {"", "drying", "", ""}}};
+        test_parse_mmu_state(mmu_data);
+
+        auto dryer = get_dryer_info();
+        REQUIRE(dryer.supported == true);
+        REQUIRE(dryer.active == true);
+    }
+}
+
+// ============================================================================
 // tracks_weight_locally() — Happy Hare does NOT track weight (no extruder
 // position-based weight decrement like AFC). Spoolman is source of truth.
 // ============================================================================
@@ -1465,4 +1517,265 @@ TEST_CASE("Happy Hare manages_active_spool=true when spoolman enabled",
 TEST_CASE("Happy Hare does not track weight locally", "[ams][happy_hare][spoolman]") {
     AmsBackendHappyHareTestHelper helper;
     REQUIRE(helper.tracks_weight_locally() == false);
+}
+
+// ============================================================================
+// EMU compatibility — num_gates as integer or array
+// EMU sends num_gates as plain integer (e.g. 8), not comma-separated string.
+// Config format may also send it as a JSON array (e.g. [8]).
+// ============================================================================
+
+TEST_CASE_METHOD(AmsBackendHappyHareTestHelper, "EMU num_gates as integer",
+                 "[ams][happy_hare][emu]") {
+    // EMU sends num_gates as plain integer, not string
+    nlohmann::json mmu_data = {{"gate_status", {1, 1, 1, 1, 1, 1, 1, 1}}, {"num_gates", 8}};
+    test_parse_mmu_state(mmu_data);
+
+    auto info = get_system_info();
+    REQUIRE(info.total_slots == 8);
+    REQUIRE(info.units.size() == 1);
+    REQUIRE(info.units[0].slot_count == 8);
+}
+
+TEST_CASE_METHOD(AmsBackendHappyHareTestHelper, "EMU num_gates as array",
+                 "[ams][happy_hare][emu]") {
+    // Config format sends num_gates as [8] array
+    nlohmann::json mmu_data = {{"gate_status", {1, 1, 1, 1, 1, 1, 1, 1}}, {"num_gates", {8}}};
+    test_parse_mmu_state(mmu_data);
+
+    auto info = get_system_info();
+    REQUIRE(info.total_slots == 8);
+    REQUIRE(info.units.size() == 1);
+    REQUIRE(info.units[0].slot_count == 8);
+}
+
+TEST_CASE_METHOD(AmsBackendHappyHareTestHelper, "EMU gate_color_rgb as float arrays",
+                 "[ams][happy_hare][emu]") {
+    initialize_test_gates(4);
+    nlohmann::json mmu_data = {{"gate_color_rgb",
+                                {
+                                    {1.0, 0.0, 0.0},     // Red
+                                    {0.0, 1.0, 0.0},     // Green
+                                    {0.0, 0.0, 1.0},     // Blue
+                                    {0.976, 0.976, 0.4}, // Yellowish
+                                }}};
+    test_parse_mmu_state(mmu_data);
+
+    auto info = get_system_info();
+    REQUIRE(info.units[0].slots[0].color_rgb == 0xFF0000);
+    REQUIRE(info.units[0].slots[1].color_rgb == 0x00FF00);
+    REQUIRE(info.units[0].slots[2].color_rgb == 0x0000FF);
+    // 0.976*255 = 248.88 -> round -> 249 = 0xF9, 0.4*255 = 102 -> 0x66
+    REQUIRE(info.units[0].slots[3].color_rgb == 0xF9F966);
+}
+
+TEST_CASE_METHOD(AmsBackendHappyHareTestHelper, "gate_color hex string fallback",
+                 "[ams][happy_hare][emu]") {
+    initialize_test_gates(3);
+    // gate_color_rgb absent, fall back to gate_color hex strings
+    nlohmann::json mmu_data = {{"gate_color", {"ffffff", "000000", "042f56"}}};
+    test_parse_mmu_state(mmu_data);
+
+    auto info = get_system_info();
+    REQUIRE(info.units[0].slots[0].color_rgb == 0xFFFFFF);
+    REQUIRE(info.units[0].slots[1].color_rgb == 0x000000);
+    REQUIRE(info.units[0].slots[2].color_rgb == 0x042F56);
+}
+
+TEST_CASE_METHOD(AmsBackendHappyHareTestHelper, "EMU num_gates array multi-unit dissimilar",
+                 "[ams][happy_hare][emu]") {
+    // Multi-unit setup with array format [6, 4]
+    nlohmann::json setup = {{"num_units", 2}};
+    test_parse_mmu_state(setup);
+
+    nlohmann::json mmu_data = {{"gate_status", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}},
+                               {"num_gates", {6, 4}}};
+    test_parse_mmu_state(mmu_data);
+
+    auto info = get_system_info();
+    REQUIRE(info.total_slots == 10);
+    REQUIRE(info.units.size() == 2);
+    REQUIRE(info.units[0].slot_count == 6);
+    REQUIRE(info.units[1].slot_count == 4);
+}
+
+// ============================================================================
+// EMU aggregate sensor format
+// ============================================================================
+
+TEST_CASE_METHOD(AmsBackendHappyHareTestHelper, "EMU aggregate sensor format",
+                 "[ams][happy_hare][emu]") {
+    initialize_test_gates(4);
+
+    SECTION("aggregate sensors with active gate") {
+        nlohmann::json mmu_data = {
+            {"gate", 0},
+            {"sensors",
+             {{"mmu_pre_gate", true}, {"mmu_gear", true}, {"extruder", true}, {"toolhead", true}}}};
+        test_parse_mmu_state(mmu_data);
+
+        auto info = get_system_info();
+        REQUIRE(info.units[0].has_slot_sensors == true);
+
+        // All gates should report having pre-gate sensors
+        auto slot0 = get_slot_entry(0);
+        REQUIRE(slot0 != nullptr);
+        REQUIRE(slot0->sensors.has_pre_gate_sensor == true);
+        REQUIRE(slot0->sensors.pre_gate_triggered == true);
+
+        // Other gates have sensor hardware but we only know current gate's reading
+        auto slot1 = get_slot_entry(1);
+        REQUIRE(slot1 != nullptr);
+        REQUIRE(slot1->sensors.has_pre_gate_sensor == true);
+    }
+
+    SECTION("aggregate sensors with different active gate") {
+        nlohmann::json mmu_data = {{"gate", 2},
+                                   {"sensors", {{"mmu_pre_gate", false}, {"mmu_gear", true}}}};
+        test_parse_mmu_state(mmu_data);
+
+        auto slot2 = get_slot_entry(2);
+        REQUIRE(slot2 != nullptr);
+        REQUIRE(slot2->sensors.has_pre_gate_sensor == true);
+        REQUIRE(slot2->sensors.pre_gate_triggered == false);
+    }
+}
+
+// ============================================================================
+// EMU gate_filament_name parsing — EMU sends filament names via
+// gate_filament_name instead of gate_name
+// ============================================================================
+
+TEST_CASE_METHOD(AmsBackendHappyHareTestHelper, "EMU gate_filament_name parsing",
+                 "[ams][happy_hare][emu]") {
+    initialize_test_gates(3);
+
+    SECTION("gate_filament_name used when gate_name is null") {
+        nlohmann::json mmu_data = {{"gate_name", nullptr},
+                                   {"gate_filament_name",
+                                    {"Matte White", "Matte Black", "Matte Yellow"}}};
+        test_parse_mmu_state(mmu_data);
+
+        auto info = get_system_info();
+        REQUIRE(info.units[0].slots[0].color_name == "Matte White");
+        REQUIRE(info.units[0].slots[1].color_name == "Matte Black");
+        REQUIRE(info.units[0].slots[2].color_name == "Matte Yellow");
+    }
+
+    SECTION("gate_name takes priority over gate_filament_name") {
+        nlohmann::json mmu_data = {{"gate_name", {"Priority Name", "Other", "Third"}},
+                                   {"gate_filament_name", {"Fallback", "Fallback", "Fallback"}}};
+        test_parse_mmu_state(mmu_data);
+
+        auto info = get_system_info();
+        REQUIRE(info.units[0].slots[0].color_name == "Priority Name");
+    }
+
+    SECTION("gate_filament_name used when gate_name absent") {
+        nlohmann::json mmu_data = {{"gate_filament_name", {"Name A", "Name B", "Name C"}}};
+        test_parse_mmu_state(mmu_data);
+
+        auto info = get_system_info();
+        REQUIRE(info.units[0].slots[0].color_name == "Name A");
+    }
+}
+
+// ============================================================================
+// Full EMU integration test — validates all EMU parsing fixes together
+// using real data from an EMU user's Moonraker dump
+// ============================================================================
+
+TEST_CASE_METHOD(AmsBackendHappyHareTestHelper, "Full EMU status integration",
+                 "[ams][happy_hare][emu]") {
+    // Real data from EMU user's Moonraker dump (simplified)
+    nlohmann::json mmu_data = {
+        {"gate", 0},
+        {"tool", 0},
+        {"filament", "Loaded"},
+        {"action", "Idle"},
+        {"num_gates", 8},
+        {"filament_pos", 10},
+        {"has_bypass", true},
+        {"gate_status", {2, 2, 2, 2, 2, 2, 1, 1}},
+        {"gate_color_rgb", {
+            {1.0, 1.0, 1.0},
+            {0.0, 0.0, 0.0},
+            {0.976, 0.976, 0.4},
+            {0.016, 0.184, 0.337},
+            {0.553, 0.784, 0.588},
+            {0.0, 0.0, 0.0},
+            {1.0, 1.0, 1.0},
+            {0.0, 0.0, 0.0}
+        }},
+        {"gate_material", {"PLA", "PLA", "PLA", "PLA", "PLA", "ABS", "ABS", "ASA CF"}},
+        {"gate_filament_name", {"Matte White", "Matte Black", "Matte Yellow", "Matte Navy",
+                                "Matte Green", "Black", "White", "Black"}},
+        {"gate_temperature", {230, 230, 230, 230, 230, 260, 260, 265}},
+        {"gate_name", nullptr},
+        {"ttg_map", {0, 1, 2, 3, 4, 5, 6, 7}},
+        {"endless_spool_groups", {0, 1, 2, 3, 4, 5, 6, 7}},
+        {"bowden_progress", -1},
+        {"encoder", nullptr},
+        {"unit_gate_counts", nullptr},
+        {"sync_drive", true},
+        {"sync_feedback_state", "neutral"},
+        {"clog_detection_enabled", 0},
+        {"espooler_active", ""},
+        {"spoolman_support", "push"},
+        {"drying_state", {"", "", "", "", "", "", "", ""}},
+        {"sensors", {
+            {"mmu_pre_gate", true},
+            {"mmu_gear", true},
+            {"filament_proportional", false},
+            {"extruder", true},
+            {"toolhead", true}
+        }}
+    };
+    test_parse_mmu_state(mmu_data);
+
+    auto info = get_system_info();
+
+    // Structure
+    REQUIRE(info.total_slots == 8);
+    REQUIRE(info.units.size() == 1);
+    REQUIRE(info.units[0].slot_count == 8);
+
+    // Current state
+    REQUIRE(info.current_slot == 0);
+    REQUIRE(info.current_tool == 0);
+    REQUIRE(info.filament_loaded == true);
+    REQUIRE(info.action == AmsAction::IDLE);
+    REQUIRE(info.supports_bypass == true);
+
+    // Colors (float arrays converted to 0xRRGGBB)
+    REQUIRE(info.units[0].slots[0].color_rgb == 0xFFFFFF);  // White
+    REQUIRE(info.units[0].slots[1].color_rgb == 0x000000);  // Black
+    REQUIRE(info.units[0].slots[3].color_rgb == 0x042F56);  // Navy
+
+    // Materials
+    REQUIRE(info.units[0].slots[0].material == "PLA");
+    REQUIRE(info.units[0].slots[5].material == "ABS");
+    REQUIRE(info.units[0].slots[7].material == "ASA CF");
+
+    // Filament names (from gate_filament_name since gate_name is null)
+    REQUIRE(info.units[0].slots[0].color_name == "Matte White");
+    REQUIRE(info.units[0].slots[3].color_name == "Matte Navy");
+
+    // Temperatures
+    REQUIRE(info.units[0].slots[0].nozzle_temp_min == 230);
+    REQUIRE(info.units[0].slots[5].nozzle_temp_min == 260);
+
+    // Sensors (aggregate format)
+    REQUIRE(info.units[0].has_slot_sensors == true);
+
+    // Dryer (array format = supported but inactive)
+    auto dryer = get_dryer_info();
+    REQUIRE(dryer.supported == true);
+    REQUIRE(dryer.active == false);
+
+    // v4 fields
+    REQUIRE(info.sync_drive == true);
+    REQUIRE(info.sync_feedback_state == "neutral");
+    REQUIRE(info.spoolman_mode == SpoolmanMode::PUSH);
+    REQUIRE(info.encoder_flow_rate == -1);  // null encoder
 }

@@ -111,8 +111,18 @@ class ControlsPanel : public PanelBase {
      * completed after initial setup or when switching between connections.
      */
     void on_activate() override;
+    void on_deactivate() override;
 
   private:
+    //
+    // === Panel Active State (observer suspension) ===
+    //
+
+    bool active_ = false; ///< True when panel is visible; observer callbacks skip work when false
+
+    /// Force-refresh all display values (called on activate to catch up on missed changes)
+    void refresh_all_displays();
+
     //
     // === Dependencies ===
     //
@@ -204,8 +214,6 @@ class ControlsPanel : public PanelBase {
     //
 
     lv_obj_t* motion_panel_ = nullptr;
-    lv_obj_t* nozzle_temp_panel_ = nullptr;
-    lv_obj_t* bed_temp_panel_ = nullptr;
     lv_obj_t* fan_control_panel_ = nullptr;
     lv_obj_t* bed_mesh_panel_ = nullptr;
     lv_obj_t* zoffset_panel_ = nullptr;
@@ -337,6 +345,7 @@ class ControlsPanel : public PanelBase {
     void handle_temperatures_clicked();
     void handle_nozzle_temp_clicked();
     void handle_bed_temp_clicked();
+    void handle_chamber_temp_clicked();
     void handle_cooling_clicked();
     void handle_secondary_fans_clicked();
     void handle_secondary_temps_clicked();
@@ -419,6 +428,7 @@ class ControlsPanel : public PanelBase {
     static void on_temperatures_clicked(lv_event_t* e);
     static void on_nozzle_temp_clicked(lv_event_t* e);
     static void on_bed_temp_clicked(lv_event_t* e);
+    static void on_chamber_temp_clicked(lv_event_t* e);
     static void on_cooling_clicked(lv_event_t* e);
     static void on_secondary_fans_clicked(lv_event_t* e);
     static void on_secondary_temps_clicked(lv_event_t* e);

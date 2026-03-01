@@ -9,6 +9,7 @@
 #include "display_settings_manager.h"
 #include "input_settings_manager.h"
 #include "led/led_controller.h"
+#include "material_settings_manager.h"
 #include "moonraker_client.h"
 #include "printer_state.h"
 #include "runtime_config.h"
@@ -50,6 +51,7 @@ void SettingsManager::init_subjects() {
     InputSettingsManager::instance().init_subjects();
     AudioSettingsManager::instance().init_subjects();
     SafetySettingsManager::instance().init_subjects();
+    MaterialSettingsManager::instance().init();
 
     // LED state (ephemeral, not persisted - start as off)
     UI_MANAGED_SUBJECT_INT(led_enabled_subject_, 0, "settings_led_enabled", subjects_);

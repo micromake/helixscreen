@@ -7,7 +7,9 @@
 #include "overlay_base.h"
 #include "subject_managed_panel.h"
 
+#include <atomic>
 #include <deque>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -54,6 +56,7 @@ class ConsolePanel : public OverlayBase {
     // === Lifecycle hooks ===
     void on_activate() override;
     void on_deactivate() override;
+    void on_ui_destroyed() override;
 
     /**
      * @brief Send the current G-code command from the input field
@@ -219,6 +222,9 @@ class ConsolePanel : public OverlayBase {
 
     // Callback registration tracking
     bool callbacks_registered_ = false;
+
+    // Destruction flag for async callback safety [L072]
+    std::shared_ptr<std::atomic<bool>> alive_ = std::make_shared<std::atomic<bool>>(true);
 };
 
 /**

@@ -813,6 +813,72 @@ TEST_CASE("Fan characterization: fan with unusual name format", "[characterizati
 }
 
 // ============================================================================
+// Init Ordering Tests - Verify init_fans must precede update_from_status
+// ============================================================================
+
+TEST_CASE("Fan characterization: init_fans before update populates per-fan speeds",
+          "[characterization][fan][ordering]") {
+    lv_init_safe();
+
+    PrinterState& state = get_printer_state();
+    PrinterStateTestAccess::reset(state);
+    state.init_subjects(false);
+
+    // Correct order: init fans FIRST, then send status updates
+    state.init_fans({"fan", "heater_fan hotend_fan"});
+
+    json status = {{"fan", {{"speed", 0.75}}}, {"heater_fan hotend_fan", {{"speed", 0.6}}}};
+    state.update_from_status(status);
+
+    SECTION("per-fan subjects reflect updated speeds") {
+        REQUIRE(lv_subject_get_int(state.get_fan_speed_subject("fan")) == 75);
+        REQUIRE(lv_subject_get_int(state.get_fan_speed_subject("heater_fan hotend_fan")) == 60);
+    }
+
+    SECTION("FanInfo speed_percent reflects updated speeds") {
+        const auto& fans = state.get_fans();
+        REQUIRE(fans[0].speed_percent == 75);
+        REQUIRE(fans[1].speed_percent == 60);
+    }
+}
+
+TEST_CASE("Fan characterization: update before init_fans drops per-fan speeds",
+          "[characterization][fan][ordering]") {
+    lv_init_safe();
+
+    PrinterState& state = get_printer_state();
+    PrinterStateTestAccess::reset(state);
+    state.init_subjects(false);
+
+    // Wrong order: send status updates BEFORE init_fans
+    json status = {{"fan", {{"speed", 0.75}}}, {"heater_fan hotend_fan", {{"speed", 0.6}}}};
+    state.update_from_status(status);
+
+    // Now init fans (after updates were already sent)
+    state.init_fans({"fan", "heater_fan hotend_fan"});
+
+    SECTION("per-fan subjects are at 0 — updates were dropped") {
+        REQUIRE(lv_subject_get_int(state.get_fan_speed_subject("fan")) == 0);
+        REQUIRE(lv_subject_get_int(state.get_fan_speed_subject("heater_fan hotend_fan")) == 0);
+    }
+
+    SECTION("FanInfo speed_percent is 0 — updates were dropped") {
+        const auto& fans = state.get_fans();
+        REQUIRE(fans[0].speed_percent == 0);
+        REQUIRE(fans[1].speed_percent == 0);
+    }
+
+    SECTION("static fan_speed subject was updated despite wrong order") {
+        // The static fan_speed_ subject updates regardless of init_fans,
+        // but init_fans resets it to 0 when creating subjects
+        // After init_fans, subsequent updates will work
+        json new_status = {{"fan", {{"speed", 0.5}}}};
+        state.update_from_status(new_status);
+        REQUIRE(lv_subject_get_int(state.get_fan_speed_subject("fan")) == 50);
+    }
+}
+
+// ============================================================================
 // FanRoleConfig Tests - Configured fan role classification and naming
 // ============================================================================
 

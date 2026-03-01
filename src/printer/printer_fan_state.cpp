@@ -79,7 +79,9 @@ void PrinterFanState::update_from_status(const nlohmann::json& status) {
         if (fan.contains("speed") && fan["speed"].is_number()) {
             int speed_pct = units::json_to_percent(fan, "speed");
             spdlog::trace("[PrinterFanState] Fan speed update: {}%", speed_pct);
-            lv_subject_set_int(&fan_speed_, speed_pct);
+            if (lv_subject_get_int(&fan_speed_) != speed_pct) {
+                lv_subject_set_int(&fan_speed_, speed_pct);
+            }
 
             // Also update multi-fan tracking
             double speed = fan["speed"].get<double>();
@@ -101,7 +103,9 @@ void PrinterFanState::update_from_status(const nlohmann::json& status) {
                 // so the hero slider tracks the actual part fan speed
                 if (!roles_.part_fan.empty() && key == roles_.part_fan) {
                     int speed_pct = units::json_to_percent(value, "speed");
-                    lv_subject_set_int(&fan_speed_, speed_pct);
+                    if (lv_subject_get_int(&fan_speed_) != speed_pct) {
+                        lv_subject_set_int(&fan_speed_, speed_pct);
+                    }
                 }
             }
         }
@@ -252,6 +256,10 @@ void PrinterFanState::update_fan_speed(const std::string& object_name, double sp
                     lv_subject_set_int(it->second.get(), speed_pct);
                     spdlog::trace("[PrinterFanState] Fan {} speed updated to {}%", object_name,
                                   speed_pct);
+                } else {
+                    spdlog::debug("[PrinterFanState] Dropping speed update for '{}' — subject "
+                                  "not initialized",
+                                  object_name);
                 }
             }
             return;

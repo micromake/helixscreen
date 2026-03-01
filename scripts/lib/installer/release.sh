@@ -278,7 +278,7 @@ download_release() {
             log_success "Downloaded ${filename} (${size}) from CDN"
             return 0
         fi
-        log_warn "CDN download corrupt, trying GitHub..."
+        log_warn "CDN download incomplete or timed out, trying GitHub..."
         rm -f "$dest"
     else
         log_warn "CDN download failed, trying GitHub..."
@@ -414,7 +414,7 @@ validate_binary_architecture() {
             expected_machine_lo="28"
             expected_desc="ARM 32-bit (armv7l)"
             ;;
-        k1)
+        ad5x|k1)
             expected_class="01"
             expected_machine_lo="08"
             expected_desc="MIPS 32-bit (mipsel)"
@@ -487,7 +487,7 @@ extract_release() {
     mkdir -p "$extract_dir"
     cd "$extract_dir" || exit 1
 
-    if [ "$platform" = "ad5m" ] || [ "$platform" = "k1" ]; then
+    if [ "$platform" = "ad5m" ] || [ "$platform" = "ad5x" ] || [ "$platform" = "k1" ]; then
         # BusyBox tar doesn't support -z
         if ! gunzip -c "$tarball" | tar xf -; then
             # Check if it was a space issue vs actual corruption
@@ -599,49 +599,80 @@ extract_release() {
     fi
 
     # Phase 6: Restore config and settings
-    # Try TMP_DIR backup first; fall back to the .old directory's copy.
-    # Under systemd's PrivateTmp=true, TMP_DIR lives in a volatile mount that
-    # can disappear if the service restarts.  The .old directory is on the real
-    # filesystem and survives any restart.
+    # User's config always takes priority over bundled defaults so customizations
+    # survive updates.  Try TMP_DIR backup first; fall back to the .old copy.
+    # (Under systemd PrivateTmp=true the TMP_DIR mount can vanish on restart,
+    # so the .old directory on the real filesystem acts as a safety net.)
     $(file_sudo "${INSTALL_DIR}") mkdir -p "${INSTALL_DIR}/config" 2>/dev/null || true
-    if [ ! -f "${INSTALL_DIR}/config/helixconfig.json" ]; then
-        if [ -n "${BACKUP_CONFIG:-}" ] && [ -f "$BACKUP_CONFIG" ]; then
-            $(file_sudo "${INSTALL_DIR}/config") cp "$BACKUP_CONFIG" "${INSTALL_DIR}/config/helixconfig.json" 2>/dev/null && \
-                log_info "Restored configuration from backup" || \
-                log_warn "Failed to restore configuration from TMP_DIR backup"
+
+    # _restore_config_file SRC DEST LABEL — copy a single config file with
+    # appropriate sudo, logging success or warning on failure.
+    _restore_config_file() {
+        local _src=$1 _dest=$2 _label=$3
+        if $(file_sudo "$(dirname "$_dest")") cp "$_src" "$_dest" 2>/dev/null; then
+            log_info "Restored $_label"
+        else
+            log_warn "Failed to restore $_label"
         fi
-    fi
-    # Fallback: restore from .old directory if TMP_DIR backup was lost or failed
-    if [ ! -f "${INSTALL_DIR}/config/helixconfig.json" ] && [ -n "${INSTALL_BACKUP:-}" ]; then
+    }
+
+    # Restore helixconfig.json — try candidates in priority order
+    _config_dest="${INSTALL_DIR}/config/helixconfig.json"
+    if [ -n "${BACKUP_CONFIG:-}" ] && [ -s "$BACKUP_CONFIG" ]; then
+        _restore_config_file "$BACKUP_CONFIG" "$_config_dest" "helixconfig.json from TMP_DIR backup"
+    elif [ -n "${INSTALL_BACKUP:-}" ]; then
         if [ -f "${INSTALL_BACKUP}/config/helixconfig.json" ]; then
-            $(file_sudo "${INSTALL_DIR}/config") cp "${INSTALL_BACKUP}/config/helixconfig.json" "${INSTALL_DIR}/config/helixconfig.json" 2>/dev/null && \
-                log_info "Restored configuration from previous install backup" || \
-                log_warn "Failed to restore configuration from .old backup"
+            _restore_config_file "${INSTALL_BACKUP}/config/helixconfig.json" "$_config_dest" "helixconfig.json from .old backup"
         elif [ -f "${INSTALL_BACKUP}/helixconfig.json" ]; then
-            $(file_sudo "${INSTALL_DIR}/config") cp "${INSTALL_BACKUP}/helixconfig.json" "${INSTALL_DIR}/config/helixconfig.json" 2>/dev/null && \
-                log_info "Restored configuration from previous install backup (legacy location)" || \
-                log_warn "Failed to restore configuration from .old backup"
+            _restore_config_file "${INSTALL_BACKUP}/helixconfig.json" "$_config_dest" "helixconfig.json from .old backup (legacy location)"
         fi
     fi
-    if [ ! -f "${INSTALL_DIR}/config/helixconfig.json" ] && [ "$ORIGINAL_INSTALL_EXISTS" = true ]; then
+    if [ ! -f "$_config_dest" ] && [ "$ORIGINAL_INSTALL_EXISTS" = true ]; then
         log_warn "Could not restore helixconfig.json from any backup source!"
         log_warn "User configuration may have been lost."
     fi
 
-    # Restore helixscreen.env
-    if [ ! -f "${INSTALL_DIR}/config/helixscreen.env" ]; then
-        if [ -n "${BACKUP_ENV:-}" ] && [ -f "$BACKUP_ENV" ]; then
-            $(file_sudo "${INSTALL_DIR}/config") cp "$BACKUP_ENV" "${INSTALL_DIR}/config/helixscreen.env" 2>/dev/null && \
-                log_info "Restored helixscreen.env from backup" || \
-                log_warn "Failed to restore helixscreen.env from TMP_DIR backup"
-        fi
+    # Restore helixscreen.env — user may have customized HELIX_LOG_LEVEL,
+    # MOONRAKER_HOST, etc.  Overwrite the bundled default with their backup.
+    _env_dest="${INSTALL_DIR}/config/helixscreen.env"
+    if [ -n "${BACKUP_ENV:-}" ] && [ -s "$BACKUP_ENV" ]; then
+        _restore_config_file "$BACKUP_ENV" "$_env_dest" "helixscreen.env from TMP_DIR backup"
+    elif [ -n "${INSTALL_BACKUP:-}" ] && [ -f "${INSTALL_BACKUP}/config/helixscreen.env" ]; then
+        _restore_config_file "${INSTALL_BACKUP}/config/helixscreen.env" "$_env_dest" "helixscreen.env from .old backup"
     fi
-    if [ ! -f "${INSTALL_DIR}/config/helixscreen.env" ] && [ -n "${INSTALL_BACKUP:-}" ]; then
-        if [ -f "${INSTALL_BACKUP}/config/helixscreen.env" ]; then
-            $(file_sudo "${INSTALL_DIR}/config") cp "${INSTALL_BACKUP}/config/helixscreen.env" "${INSTALL_DIR}/config/helixscreen.env" 2>/dev/null && \
-                log_info "Restored helixscreen.env from previous install backup" || \
-                log_warn "Failed to restore helixscreen.env from .old backup"
-        fi
+
+    # Restore any remaining user data from previous config/ (custom_images/,
+    # printer_database.d/, etc.).  Only copies items that don't already exist in
+    # the new install so bundled files are never overwritten.
+    # Uses [ ! -e ] instead of cp -n for BusyBox compatibility.
+    # For directories that exist in both old and new installs (e.g. printer_database.d/),
+    # merge at the file level so user additions are preserved alongside new bundled files.
+    if [ -n "${INSTALL_BACKUP:-}" ] && [ -d "${INSTALL_BACKUP}/config" ]; then
+        for _item in "${INSTALL_BACKUP}/config"/*; do
+            [ -e "$_item" ] || continue
+            _base=$(basename "$_item")
+            if [ ! -e "${INSTALL_DIR}/config/${_base}" ]; then
+                # Item doesn't exist in new install — restore the whole thing
+                if $(file_sudo "${INSTALL_DIR}/config") cp -r "$_item" "${INSTALL_DIR}/config/${_base}" 2>/dev/null; then
+                    log_info "Restored user data: config/${_base}"
+                else
+                    log_warn "Failed to restore user data: config/${_base}"
+                fi
+            elif [ -d "$_item" ] && [ -d "${INSTALL_DIR}/config/${_base}" ]; then
+                # Both old and new have this directory — merge individual files
+                for _subitem in "$_item"/*; do
+                    [ -e "$_subitem" ] || continue
+                    _subbase=$(basename "$_subitem")
+                    if [ ! -e "${INSTALL_DIR}/config/${_base}/${_subbase}" ]; then
+                        if $(file_sudo "${INSTALL_DIR}/config/${_base}") cp -r "$_subitem" "${INSTALL_DIR}/config/${_base}/${_subbase}" 2>/dev/null; then
+                            log_info "Restored user data: config/${_base}/${_subbase}"
+                        else
+                            log_warn "Failed to restore user data: config/${_base}/${_subbase}"
+                        fi
+                    fi
+                done
+            fi
+        done
     fi
 
     # Cleanup

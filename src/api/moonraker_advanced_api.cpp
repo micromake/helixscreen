@@ -432,6 +432,243 @@ class PIDCalibrateCollector : public std::enable_shared_from_this<PIDCalibrateCo
 };
 
 /**
+ * @brief State machine for collecting MPC_CALIBRATE gcode responses
+ *
+ * Kalico/Danger Klipper sends MPC calibration output as multiple gcode_response lines.
+ * The collector tracks calibration phases for progress reporting and accumulates
+ * result values from multiple lines after "Finished MPC calibration".
+ *
+ * Result lines arrive separately:
+ *   block_heat_capacity=18.5432 [J/K]
+ *   sensor_responsiveness=0.123456 [K/s/K]
+ *   ambient_transfer=0.078901 [W/K]
+ *   fan_ambient_transfer=0.12, 0.18, 0.25 [W/K]
+ *
+ * The collector fires the success callback once the minimum required parameters
+ * (block_heat_capacity, sensor_responsiveness, ambient_transfer) have been parsed,
+ * with a short accumulation window to capture fan_ambient_transfer if present.
+ */
+class MPCCalibrateCollector : public std::enable_shared_from_this<MPCCalibrateCollector> {
+  public:
+    using MPCCallback = MoonrakerAdvancedAPI::MPCCalibrateCallback;
+    using MPCProgressCB = MoonrakerAdvancedAPI::MPCProgressCallback;
+    using MPCResult = MoonrakerAdvancedAPI::MPCResult;
+
+    MPCCalibrateCollector(MoonrakerClient& client, MPCCallback on_success,
+                          MoonrakerAdvancedAPI::ErrorCallback on_error,
+                          MPCProgressCB on_progress = nullptr, bool expect_fan_data = false)
+        : client_(client), on_success_(std::move(on_success)), on_error_(std::move(on_error)),
+          on_progress_(std::move(on_progress)) {
+        expect_fan_data_ = expect_fan_data;
+    }
+
+    ~MPCCalibrateCollector() {
+        unregister();
+    }
+
+    void start() {
+        static std::atomic<uint64_t> s_collector_id{0};
+        handler_name_ = "mpc_calibrate_collector_" + std::to_string(++s_collector_id);
+        auto self = shared_from_this();
+        client_.register_method_callback("notify_gcode_response", handler_name_,
+                                         [self](const json& msg) { self->on_gcode_response(msg); });
+        registered_.store(true);
+        spdlog::debug("[MPCCalibrateCollector] Started (handler: {})", handler_name_);
+    }
+
+    void unregister() {
+        bool was = registered_.exchange(false);
+        if (was) {
+            client_.unregister_method_callback("notify_gcode_response", handler_name_);
+            spdlog::debug("[MPCCalibrateCollector] Unregistered");
+        }
+    }
+
+    void mark_completed() {
+        completed_.store(true);
+    }
+
+    void on_gcode_response(const json& msg) {
+        if (completed_.load())
+            return;
+        if (!msg.contains("params") || !msg["params"].is_array() || msg["params"].empty())
+            return;
+
+        const std::string& line = msg["params"][0].get_ref<const std::string&>();
+        spdlog::trace("[MPCCalibrateCollector] Received: {}", line);
+
+        // If we're accumulating result lines after "Finished MPC calibration"
+        if (accumulating_results_) {
+            parse_result_line(line);
+            return;
+        }
+
+        // Check for "Finished MPC calibration" — begin result accumulation
+        if (line.find("Finished MPC calibration") != std::string::npos) {
+            spdlog::debug("[MPCCalibrateCollector] Calibration finished, accumulating results");
+            accumulating_results_ = true;
+            return;
+        }
+
+        // Progress: phase 1 — ambient settling
+        if (line.find("Waiting for heater to settle") != std::string::npos) {
+            report_progress(1, line);
+            return;
+        }
+
+        // Progress: phase 2 — heatup test
+        if (line.find("Performing heatup test") != std::string::npos) {
+            report_progress(2, line);
+            return;
+        }
+
+        // Progress: phase 3 — fan breakpoint measurements
+        if (line.find("measuring power usage with") != std::string::npos) {
+            report_progress(3, line);
+            return;
+        }
+
+        // Check for unknown command error
+        if (line.find("Unknown command") != std::string::npos &&
+            line.find("MPC_CALIBRATE") != std::string::npos) {
+            complete_error(
+                "MPC_CALIBRATE command not recognized. Requires Kalico or Danger Klipper.");
+            return;
+        }
+
+        // Broader error detection
+        if (line.find("Error") != std::string::npos || line.find("error") != std::string::npos ||
+            line.rfind("!! ", 0) == 0) {
+            complete_error(line);
+            return;
+        }
+    }
+
+  private:
+    void report_progress(int phase, const std::string& description) {
+        // Total phases: 1=settle, 2=heatup, 3=fan measurements
+        static constexpr int TOTAL_PHASES = 3;
+        spdlog::debug("[MPCCalibrateCollector] Progress: phase={} desc={}", phase, description);
+        if (on_progress_)
+            on_progress_(phase, TOTAL_PHASES, description);
+    }
+
+    void parse_result_line(const std::string& line) {
+        // Parse: fan_ambient_transfer=0.12, 0.18, 0.25 [W/K]
+        // Must check BEFORE ambient_transfer since both contain "ambient_transfer"
+        static const std::regex fat_regex(R"(fan_ambient_transfer=([\d., ]+)\s*\[W/K\])");
+        // Parse: block_heat_capacity=18.5432 [J/K]
+        static const std::regex bhc_regex(R"(block_heat_capacity=([\d.]+))");
+        // Parse: sensor_responsiveness=0.123456 [K/s/K]
+        static const std::regex sr_regex(R"(sensor_responsiveness=([\d.]+))");
+        // Parse: ambient_transfer=0.078901 [W/K]
+        static const std::regex at_regex(R"(ambient_transfer=([\d.]+)\s+\[W/K\])");
+
+        std::smatch match;
+
+        if (std::regex_search(line, match, fat_regex)) {
+            result_.fan_ambient_transfer = match[1].str();
+            // Trim trailing whitespace
+            auto end = result_.fan_ambient_transfer.find_last_not_of(' ');
+            if (end != std::string::npos)
+                result_.fan_ambient_transfer.resize(end + 1);
+            spdlog::debug("[MPCCalibrateCollector] fan_ambient_transfer={}",
+                          result_.fan_ambient_transfer);
+            parsed_fan_ambient_ = true;
+            // fan_ambient_transfer is always the last result line — complete now
+            if (has_required_params())
+                complete_success();
+            return;
+        }
+
+        if (std::regex_search(line, match, bhc_regex)) {
+            result_.block_heat_capacity = std::stof(match[1].str());
+            spdlog::debug("[MPCCalibrateCollector] block_heat_capacity={}",
+                          result_.block_heat_capacity);
+            parsed_bhc_ = true;
+            return;
+        }
+
+        if (std::regex_search(line, match, sr_regex)) {
+            result_.sensor_responsiveness = std::stof(match[1].str());
+            spdlog::debug("[MPCCalibrateCollector] sensor_responsiveness={}",
+                          result_.sensor_responsiveness);
+            parsed_sr_ = true;
+            return;
+        }
+
+        if (std::regex_search(line, match, at_regex)) {
+            result_.ambient_transfer = std::stof(match[1].str());
+            spdlog::debug("[MPCCalibrateCollector] ambient_transfer={}", result_.ambient_transfer);
+            parsed_at_ = true;
+            // ambient_transfer is the last required param. Complete now unless we're
+            // expecting fan_ambient_transfer data to follow.
+            if (has_required_params() && !expect_fan_data_)
+                complete_success();
+            return;
+        }
+
+        // Unrecognized line during accumulation — if we have all required params,
+        // complete (fan_ambient_transfer was not sent). Otherwise check for errors.
+        if (has_required_params()) {
+            complete_success();
+            return;
+        }
+
+        if (line.find("Error") != std::string::npos || line.rfind("!! ", 0) == 0) {
+            complete_error(line);
+            return;
+        }
+    }
+
+    bool has_required_params() const {
+        return parsed_bhc_ && parsed_sr_ && parsed_at_;
+    }
+
+    void complete_success() {
+        if (completed_.exchange(true))
+            return;
+        spdlog::info("[MPCCalibrateCollector] MPC result: bhc={:.4f} sr={:.6f} at={:.6f} fat={}",
+                     result_.block_heat_capacity, result_.sensor_responsiveness,
+                     result_.ambient_transfer, result_.fan_ambient_transfer);
+        unregister();
+        if (on_success_)
+            on_success_(result_);
+    }
+
+    void complete_error(const std::string& message) {
+        if (completed_.exchange(true))
+            return;
+        spdlog::error("[MPCCalibrateCollector] Error: {}", message);
+        unregister();
+        if (on_error_) {
+            MoonrakerError err;
+            err.type = MoonrakerErrorType::JSON_RPC_ERROR;
+            err.message = message;
+            err.method = "MPC_CALIBRATE";
+            on_error_(err);
+        }
+    }
+
+    MoonrakerClient& client_;
+    MPCCallback on_success_;
+    MoonrakerAdvancedAPI::ErrorCallback on_error_;
+    MPCProgressCB on_progress_;
+    std::string handler_name_;
+    std::atomic<bool> registered_{false};
+    std::atomic<bool> completed_{false};
+
+    // Result accumulation state
+    bool expect_fan_data_ = false;
+    bool accumulating_results_ = false;
+    MPCResult result_;
+    bool parsed_bhc_ = false;
+    bool parsed_sr_ = false;
+    bool parsed_at_ = false;
+    bool parsed_fan_ambient_ = false;
+};
+
+/**
  * @brief State machine for collecting SCREWS_TILT_CALCULATE responses
  *
  * Klipper sends screw tilt results as console output lines via notify_gcode_response.
@@ -1879,6 +2116,65 @@ void MoonrakerAdvancedAPI::get_heater_pid_values(
         });
 }
 
+void MoonrakerAdvancedAPI::get_heater_control_type(
+    const std::string& heater, MoonrakerAdvancedAPI::HeaterControlTypeCallback on_complete,
+    MoonrakerAdvancedAPI::ErrorCallback on_error) {
+    json params = {{"objects", json::object({{"configfile", json::array({"settings"})}})}};
+
+    client_.send_jsonrpc(
+        "printer.objects.query", params,
+        [heater, on_complete, on_error](json response) {
+            try {
+                if (!response.contains("result") || !response["result"].contains("status") ||
+                    !response["result"]["status"].contains("configfile") ||
+                    !response["result"]["status"]["configfile"].contains("settings")) {
+                    spdlog::debug(
+                        "[Moonraker API] configfile.settings not available for control type query");
+                    // Default to pid when settings unavailable
+                    if (on_complete) {
+                        on_complete("pid");
+                    }
+                    return;
+                }
+
+                const json& settings = response["result"]["status"]["configfile"]["settings"];
+
+                if (!settings.contains(heater)) {
+                    if (on_error) {
+                        on_error(MoonrakerError{MoonrakerErrorType::UNKNOWN,
+                                                0,
+                                                "Heater '" + heater + "' not in config",
+                                                "get_heater_control_type",
+                                                {}});
+                    }
+                    return;
+                }
+
+                const json& h = settings[heater];
+                std::string control = h.value("control", "pid");
+                spdlog::debug("[Moonraker API] Heater '{}' control type: {}", heater, control);
+                if (on_complete) {
+                    on_complete(control);
+                }
+            } catch (const std::exception& ex) {
+                spdlog::warn("[Moonraker API] Error parsing heater control type: {}", ex.what());
+                if (on_error) {
+                    on_error(MoonrakerError{MoonrakerErrorType::UNKNOWN,
+                                            0,
+                                            std::string("Parse error: ") + ex.what(),
+                                            "get_heater_control_type",
+                                            {}});
+                }
+            }
+        },
+        [on_error](const MoonrakerError& err) {
+            spdlog::debug("[Moonraker API] Failed to fetch heater control type: {}", err.message);
+            if (on_error) {
+                on_error(err);
+            }
+        });
+}
+
 void MoonrakerAdvancedAPI::start_pid_calibrate(
     const std::string& heater, int target_temp,
     MoonrakerAdvancedAPI::PIDCalibrateCallback on_complete, ErrorCallback on_error,
@@ -1908,6 +2204,40 @@ void MoonrakerAdvancedAPI::start_pid_calibrate(
                 on_error(err);
         },
         PID_TIMEOUT_MS, true);
+}
+
+void MoonrakerAdvancedAPI::start_mpc_calibrate(
+    const std::string& heater, int target_temp, int fan_breakpoints,
+    MoonrakerAdvancedAPI::MPCCalibrateCallback on_complete, ErrorCallback on_error,
+    MPCProgressCallback on_progress) {
+    spdlog::info("[MoonrakerAPI] Starting MPC calibration for {} at {}°C (fan_breakpoints={})",
+                 heater, target_temp, fan_breakpoints);
+
+    auto collector = std::make_shared<MPCCalibrateCollector>(
+        client_, std::move(on_complete), on_error, std::move(on_progress), fan_breakpoints > 0);
+    collector->start();
+
+    std::string cmd = fmt::format("MPC_CALIBRATE HEATER={} TARGET={}", heater, target_temp);
+    if (fan_breakpoints > 0) {
+        cmd += fmt::format(" FAN_BREAKPOINTS={}", fan_breakpoints);
+    }
+
+    // silent=true: MPC errors are handled by the collector and UI panel, not global toast
+    api_.execute_gcode(
+        cmd, nullptr,
+        [collector, on_error](const MoonrakerError& err) {
+            if (err.type == MoonrakerErrorType::TIMEOUT) {
+                spdlog::warn("[MoonrakerAPI] MPC_CALIBRATE response timed out "
+                             "(calibration may still be running)");
+            } else {
+                spdlog::error("[MoonrakerAPI] Failed to send MPC_CALIBRATE: {}", err.message);
+            }
+            collector->mark_completed();
+            collector->unregister();
+            if (on_error)
+                on_error(err);
+        },
+        MPC_TIMEOUT_MS, true);
 }
 
 // ============================================================================

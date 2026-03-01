@@ -516,7 +516,7 @@ lv_color_t theme_get_accent_color();
  * @param bg_color Background color to contrast against
  * @return Text color from the appropriate palette
  */
-lv_color_t theme_manager_get_contrast_text(lv_color_t bg_color);
+lv_color_t theme_manager_get_contrast_color(lv_color_t bg_color);
 
 /**
  * @brief Apply palette colors to a single widget based on its type

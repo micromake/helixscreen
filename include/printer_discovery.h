@@ -237,8 +237,15 @@ class PrinterDiscovery {
                     afc_lane_names_.push_back(lane_name); // Same vector as AFC_stepper lanes
                 }
             }
-            // AFC unit-level objects (BoxTurtle, OpenAMS)
-            else if (name.rfind("AFC_BoxTurtle ", 0) == 0 || name.rfind("AFC_OpenAMS ", 0) == 0) {
+            // AFC unit-level objects (BoxTurtle, OpenAMS, ViViD, NightOwl, etc.)
+            // Any AFC_ object not matching known component prefixes is a unit type
+            else if (name.rfind("AFC_", 0) == 0 &&
+                     name.rfind("AFC_stepper ", 0) != 0 &&
+                     name.rfind("AFC_hub ", 0) != 0 &&
+                     name.rfind("AFC_extruder ", 0) != 0 &&
+                     name.rfind("AFC_lane ", 0) != 0 &&
+                     name.rfind("AFC_buffer ", 0) != 0 &&
+                     name.rfind("AFC_led ", 0) != 0) {
                 afc_unit_object_names_.push_back(name); // Store FULL name for Klipper queries
             }
             // AFC buffer objects
@@ -258,6 +265,13 @@ class PrinterDiscovery {
                 if (!tool_name.empty()) {
                     tool_names_.push_back(tool_name);
                 }
+            }
+            // ================================================================
+            // Width sensors (filament diameter measurement)
+            // ================================================================
+            else if (name == "hall_filament_width_sensor" ||
+                     name == "tsl1401cl_filament_width_sensor") {
+                width_sensor_objects_.push_back(name);
             }
             // ================================================================
             // Filament sensors
@@ -342,12 +356,12 @@ class PrinterDiscovery {
             }
         }
 
-        // Sort AFC lane names for consistent ordering
+        // Sort AFC lane names using natural sort (lane2 before lane10)
         if (!afc_lane_names_.empty()) {
-            std::sort(afc_lane_names_.begin(), afc_lane_names_.end());
+            natural_sort(afc_lane_names_);
         }
         if (!afc_buffer_names_.empty()) {
-            std::sort(afc_buffer_names_.begin(), afc_buffer_names_.end());
+            natural_sort(afc_buffer_names_);
         }
 
         // Sort tool names for consistent ordering
@@ -440,6 +454,7 @@ class PrinterDiscovery {
         afc_buffer_names_.clear();
         tool_names_.clear();
         filament_sensor_names_.clear();
+        width_sensor_objects_.clear();
         mmu_encoder_names_.clear();
         mmu_servo_names_.clear();
 
@@ -473,6 +488,7 @@ class PrinterDiscovery {
         has_screws_tilt_ = false;
         has_klippain_shaketune_ = false;
         has_speaker_ = false;
+        is_kalico_ = false;
         mmu_type_ = AmsType::NONE;
         detected_ams_systems_.clear();
 
@@ -481,6 +497,7 @@ class PrinterDiscovery {
         software_version_.clear();
         moonraker_version_.clear();
         os_version_.clear();
+        cpu_arch_.clear();
         kinematics_.clear();
         build_volume_ = BuildVolume{};
         mcu_.clear();
@@ -613,6 +630,23 @@ class PrinterDiscovery {
         return has_speaker_;
     }
 
+    /**
+     * @brief Check if connected printer runs Kalico (Klipper fork with MPC support)
+     *
+     * Detected from printer.info "app" field returning "Kalico".
+     */
+    [[nodiscard]] bool is_kalico() const {
+        return is_kalico_;
+    }
+
+    /**
+     * @brief Set Kalico detection flag
+     * @param kalico true if printer.info reports app as "Kalico"
+     */
+    void set_is_kalico(bool kalico) {
+        is_kalico_ = kalico;
+    }
+
     [[nodiscard]] bool supports_leveling() const {
         return has_qgl() || has_z_tilt() || has_bed_mesh();
     }
@@ -681,6 +715,14 @@ class PrinterDiscovery {
     /// @brief Alias for filament_sensor_names() - compatibility with PrinterCapabilities API
     [[nodiscard]] const std::vector<std::string>& get_filament_sensor_names() const {
         return filament_sensor_names_;
+    }
+
+    [[nodiscard]] const std::vector<std::string>& width_sensor_objects() const {
+        return width_sensor_objects_;
+    }
+
+    [[nodiscard]] bool has_width_sensors() const {
+        return !width_sensor_objects_.empty();
     }
 
     [[nodiscard]] const std::vector<std::string>& mmu_encoder_names() const {
@@ -882,6 +924,17 @@ class PrinterDiscovery {
     }
 
     /**
+     * @brief Set host CPU architecture from machine.system_info
+     */
+    void set_cpu_arch(const std::string& cpu_arch) {
+        cpu_arch_ = cpu_arch;
+    }
+
+    [[nodiscard]] const std::string& cpu_arch() const {
+        return cpu_arch_;
+    }
+
+    /**
      * @brief Set MCU version strings (name→version pairs)
      * e.g., {"mcu", "v0.12.0-108-..."}, {"mcu EBBCan", "v0.12.0-..."}
      */
@@ -913,6 +966,29 @@ class PrinterDiscovery {
         return result;
     }
 
+    // Helper: natural sort — splits on trailing digits so "lane2" < "lane10"
+    static void natural_sort(std::vector<std::string>& names) {
+        std::sort(names.begin(), names.end(), [](const std::string& a, const std::string& b) {
+            // Find where trailing digits start
+            auto digit_start = [](const std::string& s) -> size_t {
+                size_t i = s.size();
+                while (i > 0 && std::isdigit(static_cast<unsigned char>(s[i - 1])))
+                    --i;
+                return i;
+            };
+            size_t da = digit_start(a);
+            size_t db = digit_start(b);
+            std::string prefix_a = a.substr(0, da);
+            std::string prefix_b = b.substr(0, db);
+            if (prefix_a != prefix_b)
+                return prefix_a < prefix_b;
+            // Same prefix — compare numeric suffixes
+            int num_a = (da < a.size()) ? std::stoi(a.substr(da)) : -1;
+            int num_b = (db < b.size()) ? std::stoi(b.substr(db)) : -1;
+            return num_a < num_b;
+        });
+    }
+
     // Helper: check if name matches any pattern
     static bool matches_any(const std::string& name, const std::vector<std::string>& patterns) {
         for (const auto& pattern : patterns) {
@@ -938,6 +1014,7 @@ class PrinterDiscovery {
     std::vector<std::string> afc_buffer_names_; // Buffer suffixes: "TN", "TN1", etc.
     std::vector<std::string> tool_names_;
     std::vector<std::string> filament_sensor_names_;
+    std::vector<std::string> width_sensor_objects_;
     std::vector<std::string> mmu_encoder_names_;
     std::vector<std::string> mmu_servo_names_;
 
@@ -971,6 +1048,7 @@ class PrinterDiscovery {
     bool has_screws_tilt_ = false;
     bool has_klippain_shaketune_ = false;
     bool has_speaker_ = false;
+    bool is_kalico_ = false;
     AmsType mmu_type_ = AmsType::NONE;
     std::vector<DetectedAmsSystem> detected_ams_systems_;
 
@@ -979,6 +1057,7 @@ class PrinterDiscovery {
     std::string software_version_;
     std::string moonraker_version_;
     std::string os_version_;
+    std::string cpu_arch_;
     std::string kinematics_;
     BuildVolume build_volume_;
     std::string mcu_;

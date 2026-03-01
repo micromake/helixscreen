@@ -3,8 +3,11 @@
 
 #include "led/led_backend.h"
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
+#include <lvgl.h>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -406,6 +409,10 @@ class LedController {
     /// Get composite on/off state across all selected backends.
     [[nodiscard]] bool light_is_on() const;
 
+    /// Sync internal light state from actual hardware (e.g., from PrinterLedState subjects).
+    /// Call this when the real LED state is known so that light_toggle() sends the correct command.
+    void sync_light_state(bool is_on);
+
     // LED on at start preference
     [[nodiscard]] bool get_led_on_at_start() const;
     void set_led_on_at_start(bool enabled);
@@ -418,6 +425,12 @@ class LedController {
         return selected_strips_;
     }
     void set_selected_strips(const std::vector<std::string>& strips);
+
+    /// Version subject bumped on discover_from_hardware() and set_selected_strips().
+    /// UI widgets observe this to rebind when LED config changes.
+    lv_subject_t* get_led_config_version_subject() {
+        return &led_config_version_;
+    }
 
     [[nodiscard]] uint32_t last_color() const {
         return last_color_;
@@ -456,6 +469,7 @@ class LedController {
     bool initialized_ = false;
     MoonrakerAPI* api_ = nullptr;
     MoonrakerClient* client_ = nullptr;
+    std::shared_ptr<std::atomic<bool>> alive_ = std::make_shared<std::atomic<bool>>(true);
 
     NativeBackend native_;
     LedEffectBackend effects_;
@@ -471,7 +485,9 @@ class LedController {
     std::vector<LedMacroInfo> configured_macros_;
     std::vector<std::string> discovered_led_macros_; // Raw macro names from hardware
     bool led_on_at_start_ = false;
-    bool light_on_ = false; // Internal light state for abstract API
+    bool light_on_ = false;             // Internal light state for abstract API
+    lv_subject_t led_config_version_{}; // Bumped on discover/config changes
+    bool version_subject_initialized_ = false;
 
     // Default color presets
     static constexpr uint32_t DEFAULT_COLOR_PRESETS[] = {0xFFFFFF, 0xFFD700, 0xFF6B35, 0x4FC3F7,

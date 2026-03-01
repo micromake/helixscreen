@@ -129,6 +129,16 @@ class Config {
     };
 
     /**
+     * @brief Check if a configuration key exists
+     *
+     * @param json_ptr JSON pointer path (e.g., "/display/rotate")
+     * @return true if the key exists in the configuration
+     */
+    bool exists(const std::string& json_ptr) {
+        return data.contains(json::json_pointer(json_ptr));
+    }
+
+    /**
      * @brief Set configuration value at JSON pointer path
      *
      * Creates intermediate paths if they don't exist.

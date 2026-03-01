@@ -10,6 +10,7 @@
 
 #include "app_globals.h"
 #include "config.h"
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "observer_factory.h"
 #include "panel_widget_config.h"
 #include "panel_widget_manager.h"
@@ -21,15 +22,20 @@
 
 #include <cstring>
 
-namespace {
-const bool s_registered = [] {
-    helix::register_widget_factory("thermistor", []() {
+namespace helix {
+void register_thermistor_widget() {
+    register_widget_factory("thermistor", []() {
         auto& ps = get_printer_state();
-        return std::make_unique<helix::ThermistorWidget>(ps);
+        return std::make_unique<ThermistorWidget>(ps);
     });
-    return true;
-}();
-} // namespace
+
+    // Register XML event callbacks at startup (before any XML is parsed)
+    lv_xml_register_event_cb(nullptr, "thermistor_clicked_cb",
+                             ThermistorWidget::thermistor_clicked_cb);
+    lv_xml_register_event_cb(nullptr, "thermistor_picker_backdrop_cb",
+                             ThermistorWidget::thermistor_picker_backdrop_cb);
+}
+} // namespace helix
 
 using namespace helix;
 using helix::ui::temperature::centi_to_degrees_f;
@@ -206,7 +212,7 @@ void ThermistorWidget::update_display() {
 
     if (name_label_) {
         if (selected_sensor_.empty()) {
-            lv_label_set_text(name_label_, "Select sensor");
+            lv_label_set_text(name_label_, lv_tr("Select sensor"));
         } else {
             lv_label_set_text(name_label_, display_name_.c_str());
         }

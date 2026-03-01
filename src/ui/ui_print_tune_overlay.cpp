@@ -19,6 +19,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -45,42 +46,20 @@ PrintTuneOverlay& get_print_tune_overlay() {
 // XML EVENT CALLBACKS (free functions using global accessor)
 // ============================================================================
 
-// Speed slider: display update while dragging (no G-code)
-static void on_tune_speed_display_cb(lv_event_t* e) {
-    lv_obj_t* slider = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    if (slider) {
-        int value = lv_slider_get_value(slider);
-        get_print_tune_overlay().handle_speed_display(value);
-    }
+// Speed adjust: increment/decrement by delta from user_data
+static void on_tune_speed_adjust_cb(lv_event_t* e) {
+    const char* delta_str = static_cast<const char*>(lv_event_get_user_data(e));
+    if (!delta_str)
+        return;
+    get_print_tune_overlay().handle_speed_adjust(atoi(delta_str));
 }
 
-// Speed slider: send G-code on release
-static void on_tune_speed_send_cb(lv_event_t* e) {
-    lv_obj_t* slider = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    if (slider) {
-        int value = lv_slider_get_value(slider);
-        spdlog::debug("[PrintTuneOverlay] Speed slider released at {}", value);
-        get_print_tune_overlay().handle_speed_send(value);
-    }
-}
-
-// Flow slider: display update while dragging (no G-code)
-static void on_tune_flow_display_cb(lv_event_t* e) {
-    lv_obj_t* slider = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    if (slider) {
-        int value = lv_slider_get_value(slider);
-        get_print_tune_overlay().handle_flow_display(value);
-    }
-}
-
-// Flow slider: send G-code on release
-static void on_tune_flow_send_cb(lv_event_t* e) {
-    lv_obj_t* slider = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    if (slider) {
-        int value = lv_slider_get_value(slider);
-        spdlog::debug("[PrintTuneOverlay] Flow slider released at {}", value);
-        get_print_tune_overlay().handle_flow_send(value);
-    }
+// Flow adjust: increment/decrement by delta from user_data
+static void on_tune_flow_adjust_cb(lv_event_t* e) {
+    const char* delta_str = static_cast<const char*>(lv_event_get_user_data(e));
+    if (!delta_str)
+        return;
+    get_print_tune_overlay().handle_flow_adjust(atoi(delta_str));
 }
 
 static void on_tune_reset_clicked_cb(lv_event_t* /*e*/) {
@@ -209,10 +188,8 @@ void PrintTuneOverlay::init_subjects_internal() {
 
     // Register XML event callbacks
     register_xml_callbacks({
-        {"on_tune_speed_display", on_tune_speed_display_cb},
-        {"on_tune_speed_send", on_tune_speed_send_cb},
-        {"on_tune_flow_display", on_tune_flow_display_cb},
-        {"on_tune_flow_send", on_tune_flow_send_cb},
+        {"on_tune_speed_adjust", on_tune_speed_adjust_cb},
+        {"on_tune_flow_adjust", on_tune_flow_adjust_cb},
         {"on_tune_reset_clicked", on_tune_reset_clicked_cb},
         {"on_tune_save_z_offset", on_tune_save_z_offset_cb},
         {"on_tune_z_step", on_tune_z_step_cb},
@@ -229,8 +206,8 @@ void PrintTuneOverlay::init_subjects_internal() {
 
 void PrintTuneOverlay::on_activate() {
     OverlayBase::on_activate();
-    sync_sliders_to_state();
-    spdlog::debug("[PrintTuneOverlay] Activated - sliders synced to state");
+    sync_to_state();
+    spdlog::debug("[PrintTuneOverlay] Activated - synced to state");
 }
 
 void PrintTuneOverlay::on_deactivate() {
@@ -253,7 +230,7 @@ void PrintTuneOverlay::setup_panel() {
     spdlog::debug("[PrintTuneOverlay] Panel setup complete");
 }
 
-void PrintTuneOverlay::sync_sliders_to_state() {
+void PrintTuneOverlay::sync_to_state() {
     if (!tune_panel_ || !printer_state_) {
         return;
     }
@@ -262,9 +239,10 @@ void PrintTuneOverlay::sync_sliders_to_state() {
     int speed = lv_subject_get_int(printer_state_->get_speed_factor_subject());
     int flow = lv_subject_get_int(printer_state_->get_flow_factor_subject());
 
-    // Update our cached values
+    // Update our cached values and displays
     speed_percent_ = speed;
     flow_percent_ = flow;
+    update_display();
 
     // Sync Z offset from PrinterState
     int z_offset_microns = lv_subject_get_int(printer_state_->get_gcode_z_offset_subject());
@@ -274,23 +252,6 @@ void PrintTuneOverlay::sync_sliders_to_state() {
     lv_obj_t* indicator = lv_obj_find_by_name(tune_panel_, "z_offset_indicator");
     if (indicator) {
         ui_z_offset_indicator_set_value(indicator, z_offset_microns);
-    }
-
-    // Update displays
-    update_display();
-
-    // Set slider positions
-    lv_obj_t* overlay_content = lv_obj_find_by_name(tune_panel_, "overlay_content");
-    if (overlay_content) {
-        lv_obj_t* speed_slider = lv_obj_find_by_name(overlay_content, "speed_slider");
-        lv_obj_t* flow_slider = lv_obj_find_by_name(overlay_content, "flow_slider");
-
-        if (speed_slider) {
-            lv_slider_set_value(speed_slider, speed, LV_ANIM_OFF);
-        }
-        if (flow_slider) {
-            lv_slider_set_value(flow_slider, flow, LV_ANIM_OFF);
-        }
     }
 
     spdlog::debug("[PrintTuneOverlay] Synced to state: speed={}%, flow={}%", speed, flow);
@@ -312,8 +273,10 @@ void PrintTuneOverlay::update_z_offset_icons(lv_obj_t* /*panel*/) {
     bool bed_moves_z = (kin == 1);
 
     // Set icon names via string subjects (bind_icon in XML)
-    const char* closer_icon = bed_moves_z ? "arrow_expand_down" : "arrow_down";
-    const char* farther_icon = bed_moves_z ? "arrow_expand_up" : "arrow_up";
+    // Closer = more squish. On bed-moves-Z (CoreXY): bed rises (expand_up).
+    // On head-moves-Z (Cartesian): head descends (arrow_down).
+    const char* closer_icon = bed_moves_z ? "arrow_expand_up" : "arrow_down";
+    const char* farther_icon = bed_moves_z ? "arrow_expand_down" : "arrow_up";
 
     std::strncpy(z_closer_icon_buf_, closer_icon, sizeof(z_closer_icon_buf_) - 1);
     lv_subject_copy_string(&z_closer_icon_subject_, z_closer_icon_buf_);
@@ -363,17 +326,12 @@ void PrintTuneOverlay::update_z_offset_display(int microns) {
 // EVENT HANDLERS
 // ============================================================================
 
-void PrintTuneOverlay::handle_speed_display(int value) {
-    speed_percent_ = value;
+void PrintTuneOverlay::handle_speed_adjust(int delta) {
+    speed_percent_ = std::clamp(speed_percent_ + delta, 50, 200);
+    update_display();
 
-    // Update display while dragging (no G-code)
-    helix::format::format_percent(value, tune_speed_buf_, sizeof(tune_speed_buf_));
-    lv_subject_copy_string(&tune_speed_subject_, tune_speed_buf_);
-}
-
-void PrintTuneOverlay::handle_speed_send(int value) {
-    // Send G-code when slider is released
     if (api_) {
+        int value = speed_percent_;
         std::string gcode = "M220 S" + std::to_string(value);
         api_->execute_gcode(
             gcode, [value]() { spdlog::debug("[PrintTuneOverlay] Speed set to {}%", value); },
@@ -384,17 +342,12 @@ void PrintTuneOverlay::handle_speed_send(int value) {
     }
 }
 
-void PrintTuneOverlay::handle_flow_display(int value) {
-    flow_percent_ = value;
+void PrintTuneOverlay::handle_flow_adjust(int delta) {
+    flow_percent_ = std::clamp(flow_percent_ + delta, 75, 125);
+    update_display();
 
-    // Update display while dragging (no G-code)
-    helix::format::format_percent(value, tune_flow_buf_, sizeof(tune_flow_buf_));
-    lv_subject_copy_string(&tune_flow_subject_, tune_flow_buf_);
-}
-
-void PrintTuneOverlay::handle_flow_send(int value) {
-    // Send G-code when slider is released
     if (api_) {
+        int value = flow_percent_;
         std::string gcode = "M221 S" + std::to_string(value);
         api_->execute_gcode(
             gcode, [value]() { spdlog::debug("[PrintTuneOverlay] Flow set to {}%", value); },
@@ -406,35 +359,10 @@ void PrintTuneOverlay::handle_flow_send(int value) {
 }
 
 void PrintTuneOverlay::handle_reset() {
-    if (!tune_panel_) {
-        return;
-    }
-
-    lv_obj_t* overlay_content = lv_obj_find_by_name(tune_panel_, "overlay_content");
-    if (!overlay_content) {
-        return;
-    }
-
-    // Reset sliders to 100%
-    lv_obj_t* speed_slider = lv_obj_find_by_name(overlay_content, "speed_slider");
-    lv_obj_t* flow_slider = lv_obj_find_by_name(overlay_content, "flow_slider");
-
-    if (speed_slider) {
-        lv_slider_set_value(speed_slider, 100, LV_ANIM_ON);
-    }
-    if (flow_slider) {
-        lv_slider_set_value(flow_slider, 100, LV_ANIM_ON);
-    }
-
-    // Update displays
     speed_percent_ = 100;
     flow_percent_ = 100;
-    std::snprintf(tune_speed_buf_, sizeof(tune_speed_buf_), "100%%");
-    lv_subject_copy_string(&tune_speed_subject_, tune_speed_buf_);
-    std::snprintf(tune_flow_buf_, sizeof(tune_flow_buf_), "100%%");
-    lv_subject_copy_string(&tune_flow_subject_, tune_flow_buf_);
+    update_display();
 
-    // Send G-code commands
     if (api_) {
         api_->execute_gcode(
             "M220 S100", []() { spdlog::debug("[PrintTuneOverlay] Speed reset to 100%"); },

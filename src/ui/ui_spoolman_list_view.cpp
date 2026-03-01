@@ -74,6 +74,8 @@ void SpoolmanListView::cleanup() {
     total_items_ = 0;
     cached_row_height_ = 0;
     cached_row_gap_ = 0;
+    last_leading_height_ = -1;
+    last_trailing_height_ = -1;
     spdlog::debug("[SpoolmanListView] cleanup()");
 }
 
@@ -238,9 +240,14 @@ void SpoolmanListView::populate(const std::vector<SpoolInfo>& spools, int active
                       cached_row_height_, cached_row_gap_);
     }
 
-    // Reset visible range and scroll
+    // Reset visible range, spacer caches, and scroll
     visible_start_ = -1;
     visible_end_ = -1;
+    last_leading_height_ = -1;
+    last_trailing_height_ = -1;
+
+    // Invalidate pool indices to force reconfiguration on data change
+    std::fill(pool_indices_.begin(), pool_indices_.end(), static_cast<ssize_t>(-1));
 
     lv_obj_scroll_to_y(container_, 0, LV_ANIM_OFF);
 
@@ -256,10 +263,14 @@ void SpoolmanListView::update_visible(const std::vector<SpoolInfo>& spools, int 
         for (auto* row : pool_) {
             lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);
         }
-        if (leading_spacer_)
+        if (leading_spacer_) {
             lv_obj_set_height(leading_spacer_, 0);
-        if (trailing_spacer_)
+            last_leading_height_ = 0;
+        }
+        if (trailing_spacer_) {
             lv_obj_set_height(trailing_spacer_, 0);
+            last_trailing_height_ = 0;
+        }
         visible_start_ = -1;
         visible_end_ = -1;
         total_items_ = 0;
@@ -294,32 +305,42 @@ void SpoolmanListView::update_visible(const std::vector<SpoolInfo>& spools, int 
         "[SpoolmanListView] Rendering rows {}-{} of {} (scroll_y={} viewport={} data_changed={})",
         first_visible, last_visible, total_rows, scroll_y, viewport_height, data_changed);
 
-    // Update leading spacer
+    // Update spacer heights (only when changed to avoid redundant relayout)
     int leading_height = first_visible * row_stride;
     if (leading_spacer_) {
-        lv_obj_set_height(leading_spacer_, leading_height);
-        lv_obj_move_to_index(leading_spacer_, 0);
+        if (leading_height != last_leading_height_) {
+            lv_obj_set_height(leading_spacer_, leading_height);
+            last_leading_height_ = leading_height;
+        }
+        if (lv_obj_get_index(leading_spacer_) != 0) {
+            lv_obj_move_to_index(leading_spacer_, 0);
+        }
     }
 
-    // Update trailing spacer
-    int trailing_height = (total_rows - last_visible) * row_stride;
+    int trailing_height = std::max(0, (total_rows - last_visible) * row_stride);
     if (trailing_spacer_) {
-        lv_obj_set_height(trailing_spacer_, std::max(0, trailing_height));
+        if (trailing_height != last_trailing_height_) {
+            lv_obj_set_height(trailing_spacer_, trailing_height);
+            last_trailing_height_ = trailing_height;
+        }
     }
 
-    // Mark all pool slots as available
-    std::fill(pool_indices_.begin(), pool_indices_.end(), static_cast<ssize_t>(-1));
-
-    // Assign pool rows to visible indices
+    // Assign pool rows to visible indices, skipping rows that already show correct data
     size_t pool_idx = 0;
     for (int spool_idx = first_visible; spool_idx < last_visible && pool_idx < pool_.size();
          spool_idx++, pool_idx++) {
         lv_obj_t* row = pool_[pool_idx];
-        configure_row(row, spools[spool_idx], active_spool_id);
-        pool_indices_[pool_idx] = spool_idx;
 
-        // Position after leading spacer
-        lv_obj_move_to_index(row, static_cast<int>(pool_idx) + 1);
+        if (data_changed || pool_indices_[pool_idx] != spool_idx) {
+            configure_row(row, spools[spool_idx], active_spool_id);
+            pool_indices_[pool_idx] = spool_idx;
+        }
+
+        // Ensure row is in correct position (guard to avoid redundant relayout)
+        int target_index = static_cast<int>(pool_idx) + 1;
+        if (lv_obj_get_index(row) != target_index) {
+            lv_obj_move_to_index(row, target_index);
+        }
     }
 
     // Hide unused pool rows

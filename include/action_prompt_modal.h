@@ -7,6 +7,7 @@
 
 #include "action_prompt_manager.h"
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <string>
@@ -93,13 +94,29 @@ class ActionPromptModal : public Modal {
     void on_hide() override;
 
   private:
+    /**
+     * @brief Data passed as user_data to button event callbacks
+     *
+     * Owns a copy of the gcode string (not a pointer into prompt_data_.buttons)
+     * and holds a weak_ptr to the alive flag to detect modal destruction.
+     */
+    struct ButtonCallbackData {
+        ActionPromptModal* modal;
+        std::weak_ptr<std::atomic<bool>> alive;
+        std::string gcode; // Owned copy, safe from vector reallocation
+    };
+
     // === State ===
     PromptData prompt_data_;
     GcodeCallback gcode_callback_;
 
+    // === Lifetime safety ===
+    std::shared_ptr<std::atomic<bool>> alive_ = std::make_shared<std::atomic<bool>>(true);
+
     // === Dynamic button tracking ===
     std::vector<lv_obj_t*> created_buttons_;
     std::vector<lv_obj_t*> created_text_labels_;
+    std::vector<std::unique_ptr<ButtonCallbackData>> button_callback_data_;
 
     // === Internal Methods ===
     void populate_content();
@@ -118,11 +135,6 @@ class ActionPromptModal : public Modal {
 
     // === Static Callbacks ===
     static void on_button_cb(lv_event_t* e);
-
-    /**
-     * @brief Find ActionPromptModal instance from event target
-     */
-    static ActionPromptModal* get_instance_from_event(lv_event_t* e);
 };
 
 } // namespace helix::ui

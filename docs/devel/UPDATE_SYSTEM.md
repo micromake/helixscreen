@@ -64,7 +64,7 @@ Three channels are available. The channel is stored in config at `/update/channe
 
 ### Channel Selection in UI
 
-The Update Channel dropdown is gated behind **beta features** (7-tap version easter egg in About). It appears in the About overlay (`about_overlay.xml`) and is bound to the `update_channel` LVGL subject managed by `SettingsManager`.
+The Update Channel dropdown is gated behind **beta features** (7-tap version easter egg in About). It appears in the About Settings overlay (`about_settings_overlay.xml`) and is bound to the `update_channel` LVGL subject managed by `SettingsManager`.
 
 Options string: `"Stable\nBeta\nDev"`
 
@@ -191,7 +191,7 @@ The platform key is determined at compile time via preprocessor defines:
 | Define | Platform Key | Devices |
 |--------|-------------|---------|
 | `HELIX_PLATFORM_AD5M` | `ad5m` | Flashforge Adventurer 5M |
-| `HELIX_PLATFORM_K1` | `k1` | Creality K1 series |
+| `HELIX_PLATFORM_MIPS` | `k1` or `ad5x` | MIPS32 devices (Creality K1, FlashForge AD5X). Runtime detection via `/usr/prog` presence. |
 | `HELIX_PLATFORM_K2` | `k2` | Creality K2 series. **Note:** K2 is supported in the UpdateChecker code but is not yet included in `generate-manifest.sh`. R2 manifests do not currently include K2 binaries. |
 | `HELIX_PLATFORM_PI32` | `pi32` | Raspberry Pi (32-bit) |
 | (default) | `pi` | Raspberry Pi (64-bit) |
@@ -303,9 +303,9 @@ Moonraker integration is configured on **all platforms except AD5M** (which typi
 
 ## User-Facing UI
 
-### About Overlay (`about_overlay.xml`)
+### About Settings Overlay (`about_settings_overlay.xml`)
 
-Located under Settings, the About overlay contains:
+Located under Settings (tap the "About" action row), the About Settings overlay contains:
 - **Current Version** row (7-tap to enable beta features)
 - **Check for Updates** row (triggers manual check, description bound to `update_version_text` subject)
 - **Install Update** row (visible only when `update_status == UpdateAvailable`)
@@ -339,7 +339,7 @@ Multi-state modal driven by `download_status` subject:
 | `update_checking` | int | 1 while check is in progress, 0 otherwise |
 | `update_version_text` | string | Status text for the Check for Updates row |
 | `update_new_version` | string | New version number (e.g., "0.9.6") |
-| `update_current_version` | string | Current installed version. **Note:** This subject is owned by SettingsPanel, not UpdateChecker. |
+| `update_current_version` | string | Current installed version. **Note:** This subject is owned by AboutSettingsOverlay, not UpdateChecker. |
 | `update_channel` | int | Selected channel (managed by SettingsManager) |
 | `download_status` | int | `DownloadStatus` enum |
 | `download_progress` | int | 0-100 percentage |
@@ -584,10 +584,10 @@ Or for deployed installations, set `HELIX_LOG_LEVEL=debug` in `~/helixscreen/con
 | `src/system/update_checker.cpp` | Full implementation (check, download, install, auto-check) |
 | `src/system/settings_manager.cpp` | Channel subject and persistence |
 | `src/ui/ui_panel_settings.cpp` | Download modal callbacks, channel change handler |
-| `src/ui/ui_settings_about.cpp` | About overlay with check/install rows |
+| `src/ui/ui_settings_about.cpp` | AboutSettingsOverlay — version info, updates, branding, easter eggs |
 | `ui_xml/update_notify_modal.xml` | Auto-check notification modal |
 | `ui_xml/update_download_modal.xml` | Multi-state download/install modal |
-| `ui_xml/about_overlay.xml` | About panel with update controls |
+| `ui_xml/about_settings_overlay.xml` | About Settings overlay with update controls, branding, contributors |
 | `scripts/generate-manifest.sh` | Manifest generator for CI and dev |
 | `scripts/install.sh` | Bundled installer (used for `--update` mode) |
 | `scripts/lib/installer/moonraker.sh` | Moonraker update_manager configuration |

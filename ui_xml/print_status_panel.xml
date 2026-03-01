@@ -65,7 +65,7 @@
         <!-- Rotate hint icon (shown in 3D[1] mode only, hidden in thumbnail[0] and 2D[2]) -->
         <lv_label name="rotate_hint"
                   text="#icon_rotate_3d" style_text_font="mdi_icons_24" style_text_color="#text_muted"
-                  style_text_opa="180" align="top_right" style_translate_x="-#space_md" style_translate_y="#space_md">
+                  style_text_opa="180" align="top_right" style_translate_x="-12" style_translate_y="#space_md">
           <bind_flag_if_not_eq subject="gcode_viewer_mode" flag="hidden" ref_value="1"/>
         </lv_label>
 
@@ -79,9 +79,7 @@
           <text_heading name="preparing_operation_label"
                         width="100%" bind_text="preparing_operation" text="Preparing..." translation_tag="Preparing..."
                         style_text_color="#overlay_text" style_text_align="center"/>
-          <lv_bar name="preparing_progress_bar"
-                  width="80%" height="#space_md" bind_value="preparing_progress" style_bg_opa="255"
-                  style_bg_color="#overlay_bg" style_radius="#space_xs" style_border_width="0"/>
+          <progress_bar name="preparing_progress_bar" width="80%" bind_value="preparing_progress"/>
           <text_small name="preparing_eta"
                       bind_text="print_start_time_left" style_text_color="#overlay_text" style_text_opa="180"/>
         </lv_obj>
@@ -98,12 +96,14 @@
 
         <!-- PRINT COMPLETE OVERLAY: Shown when print finishes successfully -->
         <!-- Hidden by default. Binding removes hidden ONLY when outcome == COMPLETE (1) -->
+        <!-- Tap to dismiss overlay and interact with 3D viewer underneath -->
         <lv_obj name="print_complete_overlay"
                 width="100%" height="100%" align="top_mid" style_radius="0" style_pad_all="#space_lg"
                 style_pad_bottom="#metadata_clip_height" flex_flow="column" style_flex_main_place="center"
                 style_flex_cross_place="center" style_flex_track_place="center" style_pad_gap="#space_sm"
-                scrollable="false" hidden="true">
+                scrollable="false" clickable="true" hidden="true">
           <bind_flag_if_not_eq subject="print_outcome" flag="hidden" ref_value="1"/>
+          <event_cb trigger="clicked" callback="on_print_status_dismiss_overlay"/>
           <!-- Green success badge with checkmark (animated on appearance) -->
           <!-- Uses ui_button for auto-contrast text via update_button_text_contrast() -->
           <ui_button name="success_badge"
@@ -115,12 +115,14 @@
 
         <!-- PRINT CANCELLED OVERLAY: Shown when print is cancelled -->
         <!-- Hidden by default. Binding removes hidden ONLY when outcome == CANCELLED (2) -->
+        <!-- Tap to dismiss overlay and interact with 3D viewer underneath -->
         <lv_obj name="print_cancelled_overlay"
                 width="100%" height="100%" align="top_mid" style_radius="0" style_pad_all="#space_lg"
                 style_pad_bottom="#metadata_clip_height" flex_flow="column" style_flex_main_place="center"
                 style_flex_cross_place="center" style_flex_track_place="center" style_pad_gap="#space_sm"
-                scrollable="false" hidden="true">
+                scrollable="false" clickable="true" hidden="true">
           <bind_flag_if_not_eq subject="print_outcome" flag="hidden" ref_value="2"/>
+          <event_cb trigger="clicked" callback="on_print_status_dismiss_overlay"/>
           <!-- Orange warning badge with cancel icon (animated on appearance) -->
           <!-- Uses ui_button for auto-contrast text via update_button_text_contrast() -->
           <ui_button name="cancel_badge"
@@ -132,12 +134,14 @@
 
         <!-- PRINT ERROR OVERLAY: Shown when print fails with error -->
         <!-- Hidden by default. Binding removes hidden ONLY when outcome == ERROR (3) -->
+        <!-- Tap to dismiss overlay and interact with 3D viewer underneath -->
         <lv_obj name="print_error_overlay"
                 width="100%" height="100%" align="top_mid" style_radius="0" style_pad_all="#space_lg"
                 style_pad_bottom="#metadata_clip_height" flex_flow="column" style_flex_main_place="center"
                 style_flex_cross_place="center" style_flex_track_place="center" style_pad_gap="#space_sm"
-                scrollable="false" hidden="true">
+                scrollable="false" clickable="true" hidden="true">
           <bind_flag_if_not_eq subject="print_outcome" flag="hidden" ref_value="3"/>
+          <event_cb trigger="clicked" callback="on_print_status_dismiss_overlay"/>
           <!-- Red danger badge with alert icon (animated on appearance) -->
           <!-- Uses ui_button for auto-contrast text via update_button_text_contrast() -->
           <ui_button name="error_badge"
@@ -158,12 +162,9 @@
                   style_pad_top="#space_md" style_pad_bottom="#space_md" style_pad_gap="#space_xs" flex_flow="column"
                   scrollable="false">
             <!-- Print Progress Bar (invisible during pre-print operations, but keeps layout space) -->
-            <lv_bar name="print_progress"
-                    width="100%" height="#space_md" style_bg_opa="255" style_bg_color="#overlay_bg"
-                    style_border_width="0" style_radius="#space_xs" min_value="0" max_value="100"
-                    bind_value="print_progress">
+            <progress_bar name="print_progress" bind_value="print_progress">
               <bind_style name="invisible" subject="preparing_visible" ref_value="1"/>
-            </lv_bar>
+            </progress_bar>
             <!-- Layer Progress (Layer X / Y) + Objects Count -->
             <lv_obj width="100%"
                     height="content" style_pad_all="0" flex_flow="row" style_flex_main_place="space_between"
@@ -251,15 +252,21 @@
                   width="content" height="content" style_pad_all="0" flex_flow="row" style_flex_cross_place="center"
                   style_pad_gap="#space_sm">
             <bind_flag_if_eq subject="filament_sensor_count" flag="hidden" ref_value="0"/>
-            <text_small text="Filament" translation_tag="Filament"/>
             <filament_sensor_indicator/>
+          </lv_obj>
+          <!-- Tool Change Progress (hidden when no multi-color swaps expected) -->
+          <lv_obj name="toolchange_status"
+                  width="content" height="content" style_pad_all="0" flex_flow="row" style_flex_cross_place="center"
+                  style_pad_gap="#space_xs">
+            <bind_flag_if_eq subject="toolchange_visible" flag="hidden" ref_value="0"/>
+            <icon src="swap_vertical" size="sm" variant="muted"/>
+            <text_small bind_text="toolchange_text"/>
           </lv_obj>
           <!-- AMS Current Tool Status (hidden if no AMS) -->
           <lv_obj name="ams_status_row"
                   width="content" height="content" style_pad_all="0" flex_flow="row" style_flex_cross_place="center"
                   style_pad_gap="#space_sm">
             <bind_flag_if_eq subject="ams_slot_count" flag="hidden" ref_value="0"/>
-            <text_small text="Active" translation_tag="Active"/>
             <ams_current_tool name="ams_current_tool_indicator"/>
           </lv_obj>
         </lv_obj>

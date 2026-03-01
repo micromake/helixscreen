@@ -18,6 +18,7 @@
 #include "printer_state.h" // For KlippyState enum
 #include "sound_manager.h"
 #include "static_subject_registry.h"
+#include "system/telemetry_manager.h"
 #include "theme_manager.h"
 
 #include <spdlog/spdlog.h>
@@ -118,6 +119,9 @@ void NavigationManager::clear_overlay_stack() {
 // ============================================================================
 
 void NavigationManager::overlay_slide_out_complete_cb(lv_anim_t* anim) {
+    if (NavigationManager::instance().is_shutting_down()) {
+        return; // Shutdown in progress — widget may be freed
+    }
     lv_obj_t* panel = static_cast<lv_obj_t*>(anim->var);
     lv_obj_add_flag(panel, LV_OBJ_FLAG_HIDDEN);
     // Reset all transform and opacity properties for potential reuse
@@ -659,9 +663,10 @@ void NavigationManager::nav_button_clicked_cb(lv_event_t* event) {
                   static_cast<int>(code), panel_id, static_cast<int>(mgr.active_panel_));
 
     if (code == LV_EVENT_CLICKED) {
-        // Skip if already on this panel
-        if (panel_id == static_cast<int>(mgr.active_panel_)) {
-            spdlog::info("[NavigationManager] Skipping - already on panel {}", panel_id);
+        // Skip if already on this panel AND no overlays are open
+        if (panel_id == static_cast<int>(mgr.active_panel_) && !mgr.has_open_overlays()) {
+            spdlog::info("[NavigationManager] Skipping - already on panel {} with no overlays",
+                         panel_id);
             return;
         }
 
@@ -1076,6 +1081,9 @@ void NavigationManager::push_overlay(lv_obj_t* overlay_panel, bool hide_previous
 
         bool is_first_overlay = (mgr.panel_stack_.size() == 1);
 
+        // Track overlay opens for telemetry panel_usage event
+        TelemetryManager::instance().notify_overlay_opened();
+
         // Lifecycle: Deactivate what's currently visible before showing new overlay
         if (is_first_overlay) {
             // Deactivate main panel when first overlay covers it
@@ -1316,6 +1324,19 @@ bool NavigationManager::go_back() {
                 }
                 if (!is_main && !lv_obj_has_flag(child, LV_OBJ_FLAG_HIDDEN)) {
                     lv_obj_add_flag(child, LV_OBJ_FLAG_HIDDEN);
+                    // Always reset styles unconditionally. The conditional check
+                    // (reading transform_scale_x/y before writing) was an ARM perf
+                    // optimization but may cause display corruption on Android where
+                    // stale transform values interact with SDL's logical scaling.
+                    // TODO: Re-enable conditional reset if this doesn't fix Android
+                    // corruption (see prestonbrown/helixscreen — v0.13.7 regression).
+                    //
+                    // Was:
+                    //   bool needs_reset =
+                    //       lv_obj_get_style_translate_x(child, LV_PART_MAIN) != 0 ||
+                    //       ...transform_scale_x != 256 || ...scale_y != 256...
+                    //       ...opa != LV_OPA_COVER;
+                    //   if (needs_reset) { ... }
                     lv_obj_set_style_translate_x(child, 0, LV_PART_MAIN);
                     lv_obj_set_style_translate_y(child, 0, LV_PART_MAIN);
                     lv_obj_set_style_transform_scale(child, 256, LV_PART_MAIN);
@@ -1380,6 +1401,10 @@ bool NavigationManager::is_panel_in_stack(lv_obj_t* panel) const {
         return false;
     }
     return std::find(panel_stack_.begin(), panel_stack_.end(), panel) != panel_stack_.end();
+}
+
+bool NavigationManager::has_open_overlays() const {
+    return !overlay_instances_.empty() || panel_stack_.size() > 1;
 }
 
 void NavigationManager::shutdown() {

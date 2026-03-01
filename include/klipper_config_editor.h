@@ -49,6 +49,13 @@ struct SectionLocation {
     ConfigSection section; ///< Section info from that file
 };
 
+struct ConfigEdit {
+    enum class Type { SET_VALUE, ADD_KEY, REMOVE_KEY };
+    Type type;
+    std::string key;
+    std::string value; // ignored for REMOVE_KEY
+};
+
 class KlipperConfigEditor {
   public:
     using SuccessCallback = std::function<void()>;
@@ -128,6 +135,18 @@ class KlipperConfigEditor {
     /// @param restart_timeout_ms How long to wait for Klipper to come back (default 15000ms)
     void safe_edit_value(MoonrakerAPI& api, const std::string& section, const std::string& key,
                          const std::string& new_value, SuccessCallback on_success,
+                         ErrorCallback on_error, int restart_timeout_ms = 15000);
+
+    /// Apply multiple edits to the same section atomically.
+    /// All edits are applied to the in-memory content string before uploading.
+    /// Returns modified content, or std::nullopt if section not found.
+    std::optional<std::string> apply_edits(const std::string& content, const std::string& section,
+                                           const std::vector<ConfigEdit>& edits) const;
+
+    /// Safe multi-edit: load config, apply edits, backup, upload, restart, monitor health.
+    /// If Klipper fails to restart, auto-restore backups.
+    void safe_multi_edit(MoonrakerAPI& api, const std::string& section,
+                         const std::vector<ConfigEdit>& edits, SuccessCallback on_success,
                          ErrorCallback on_error, int restart_timeout_ms = 15000);
 
   private:

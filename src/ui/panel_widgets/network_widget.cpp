@@ -8,6 +8,7 @@
 #include "ui_overlay_network_settings.h"
 
 #include "ethernet_manager.h"
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "panel_widget_registry.h"
 #include "static_subject_registry.h"
 #include "subject_debug_registry.h"
@@ -58,14 +59,15 @@ static void network_widget_init_subjects() {
     spdlog::debug("[NetworkWidget] Subjects initialized (icon_state + label)");
 }
 
-namespace {
-const bool s_registered = [] {
-    helix::register_widget_factory("network",
-                                   []() { return std::make_unique<helix::NetworkWidget>(); });
-    helix::register_widget_subjects("network", network_widget_init_subjects);
-    return true;
-}();
-} // namespace
+namespace helix {
+void register_network_widget() {
+    register_widget_factory("network", []() { return std::make_unique<NetworkWidget>(); });
+    register_widget_subjects("network", network_widget_init_subjects);
+
+    // Register XML event callbacks at startup (before any XML is parsed)
+    lv_xml_register_event_cb(nullptr, "network_clicked_cb", NetworkWidget::network_clicked_cb);
+}
+} // namespace helix
 
 using namespace helix;
 
@@ -81,6 +83,13 @@ void NetworkWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
 
     // Store this pointer for event callback recovery
     lv_obj_set_user_data(widget_obj_, this);
+
+    // Set user_data on the network_btn child (where event_cb is registered in XML)
+    // so the callback can recover this widget instance via lv_obj_get_user_data()
+    auto* network_btn = lv_obj_find_by_name(widget_obj_, "network_btn");
+    if (network_btn) {
+        lv_obj_set_user_data(network_btn, this);
+    }
 
     // Use module-owned subjects (initialized via network_widget_init_subjects)
     network_icon_state_ = &s_network_icon_state;
@@ -102,9 +111,6 @@ void NetworkWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
                       SIGNAL_POLL_INTERVAL_MS);
     }
 
-    // Register XML callback
-    lv_xml_register_event_cb(nullptr, "network_clicked_cb", network_clicked_cb);
-
     spdlog::debug("[NetworkWidget] Attached");
 }
 
@@ -120,6 +126,10 @@ void NetworkWidget::detach() {
     network_label_subject_ = nullptr;
 
     if (widget_obj_) {
+        auto* network_btn = lv_obj_find_by_name(widget_obj_, "network_btn");
+        if (network_btn) {
+            lv_obj_set_user_data(network_btn, nullptr);
+        }
         lv_obj_set_user_data(widget_obj_, nullptr);
         widget_obj_ = nullptr;
     }
@@ -184,13 +194,13 @@ void NetworkWidget::set_network(NetworkType type) {
     if (network_label_subject_) {
         switch (type) {
         case NetworkType::Wifi:
-            lv_subject_copy_string(network_label_subject_, "WiFi");
+            lv_subject_copy_string(network_label_subject_, lv_tr("WiFi"));
             break;
         case NetworkType::Ethernet:
-            lv_subject_copy_string(network_label_subject_, "Ethernet");
+            lv_subject_copy_string(network_label_subject_, lv_tr("Ethernet"));
             break;
         case NetworkType::Disconnected:
-            lv_subject_copy_string(network_label_subject_, "Disconnected");
+            lv_subject_copy_string(network_label_subject_, lv_tr("Disconnected"));
             break;
         }
     }
@@ -284,19 +294,8 @@ void NetworkWidget::signal_poll_timer_cb(lv_timer_t* timer) {
 void NetworkWidget::network_clicked_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[NetworkWidget] network_clicked_cb");
 
-    // Recover NetworkWidget instance from the widget's user_data
-    auto* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    // Walk up to find the widget root that has user_data set
+    auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
     auto* self = static_cast<NetworkWidget*>(lv_obj_get_user_data(target));
-    if (!self) {
-        // Walk up parent chain to find the widget object with user_data
-        lv_obj_t* parent = lv_obj_get_parent(target);
-        while (parent && !self) {
-            self = static_cast<NetworkWidget*>(lv_obj_get_user_data(parent));
-            parent = lv_obj_get_parent(parent);
-        }
-    }
-
     if (self) {
         self->handle_network_clicked();
     } else {

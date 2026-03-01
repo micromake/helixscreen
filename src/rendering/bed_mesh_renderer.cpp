@@ -5,6 +5,7 @@
 
 #include "ui_fonts.h"
 
+#include "bed_mesh_buffer.h"
 #include "bed_mesh_coordinate_transform.h"
 #include "bed_mesh_geometry.h"
 #include "bed_mesh_gradient.h"
@@ -69,6 +70,17 @@ static void render_mesh_surface(lv_layer_t* layer, bed_mesh_renderer_t* renderer
                                 int canvas_height);
 static void render_decorations(lv_layer_t* layer, bed_mesh_renderer_t* renderer, int canvas_width,
                                int canvas_height);
+
+// Buffer-targeted rendering helpers (forward declarations)
+static void render_quad_to_buffer(helix::mesh::PixelBuffer& buf, const bed_mesh_quad_3d_t& quad,
+                                  bool use_gradient);
+static void render_mesh_surface_to_buffer(helix::mesh::PixelBuffer& buf,
+                                          bed_mesh_renderer_t* renderer, int canvas_width,
+                                          int canvas_height);
+static void render_decorations_to_buffer(helix::mesh::PixelBuffer& buf,
+                                         bed_mesh_renderer_t* renderer, int canvas_width,
+                                         int canvas_height, uint8_t grid_r, uint8_t grid_g,
+                                         uint8_t grid_b);
 
 // Phase 4: Adaptive render mode helpers (forward declarations)
 static void record_frame_time(bed_mesh_renderer_t* renderer, float frame_ms);
@@ -574,6 +586,89 @@ bool bed_mesh_renderer_render(bed_mesh_renderer_t* renderer, lv_layer_t* layer, 
     }
 
     spdlog::trace("[Bed Mesh Renderer] Mesh rendering complete");
+    return true;
+}
+
+// ============================================================================
+// Buffer-targeted rendering (no LVGL calls — safe for background threads)
+// ============================================================================
+
+bool bed_mesh_renderer_render_to_buffer(bed_mesh_renderer_t* renderer,
+                                        helix::mesh::PixelBuffer& buffer,
+                                        const bed_mesh_render_colors_t& colors) {
+    if (!renderer) {
+        spdlog::error("[Bed Mesh Renderer] render_to_buffer: NULL renderer");
+        return false;
+    }
+
+    // State validation
+    if (renderer->state == RendererState::UNINITIALIZED) {
+        spdlog::debug("[Bed Mesh Renderer] render_to_buffer: no mesh data (UNINITIALIZED)");
+        return false;
+    }
+    if (renderer->state == RendererState::ERROR) {
+        spdlog::error("[Bed Mesh Renderer] render_to_buffer: renderer in ERROR state");
+        return false;
+    }
+    if (!renderer->has_mesh_data) {
+        spdlog::debug("[Bed Mesh Renderer] render_to_buffer: no mesh data");
+        return false;
+    }
+
+    int canvas_width = buffer.width();
+    int canvas_height = buffer.height();
+    if (canvas_width <= 0 || canvas_height <= 0) {
+        spdlog::debug("[Bed Mesh Renderer] render_to_buffer: invalid dimensions {}x{}",
+                      canvas_width, canvas_height);
+        return false;
+    }
+
+    spdlog::debug("[Bed Mesh Renderer] render_to_buffer: {}x{} (dragging={})", canvas_width,
+                  canvas_height, renderer->view_state.is_dragging);
+
+    // Step 1: Clear buffer with background color
+    buffer.clear(colors.bg_r, colors.bg_g, colors.bg_b, 255);
+
+    auto t_frame_start = std::chrono::high_resolution_clock::now();
+
+    // Step 2: Prepare render frame (pure math, no LVGL calls)
+    // For buffer rendering, layer offset is (0,0) since we render into local widget space
+    prepare_render_frame(renderer, canvas_width, canvas_height, 0, 0);
+    auto t_prepare = std::chrono::high_resolution_clock::now();
+
+    // Step 3: Render reference grids FIRST (behind mesh)
+    helix::mesh::render_reference_grids(buffer, renderer, canvas_width, canvas_height,
+                                        colors.grid_r, colors.grid_g, colors.grid_b);
+
+    // Step 4: Render mesh surface (quads with gradient/solid colors)
+    render_mesh_surface_to_buffer(buffer, renderer, canvas_width, canvas_height);
+    auto t_surface = std::chrono::high_resolution_clock::now();
+
+    // Step 5: Render overlay decorations (grid lines on top of mesh)
+    render_decorations_to_buffer(buffer, renderer, canvas_width, canvas_height, colors.grid_r,
+                                 colors.grid_g, colors.grid_b);
+    auto t_decorations = std::chrono::high_resolution_clock::now();
+
+    // Record frame time for FPS tracking
+    auto ms_prepare = std::chrono::duration<double, std::milli>(t_prepare - t_frame_start).count();
+    auto ms_surface = std::chrono::duration<double, std::milli>(t_surface - t_prepare).count();
+    auto ms_decorations =
+        std::chrono::duration<double, std::milli>(t_decorations - t_surface).count();
+    auto ms_total =
+        std::chrono::duration<double, std::milli>(t_decorations - t_frame_start).count();
+
+    record_frame_time(renderer, static_cast<float>(ms_total));
+
+    spdlog::trace("[Bed Mesh Renderer] [PERF] Buffer render: {:.2f}ms | Prepare: {:.2f}ms | "
+                  "Surface: {:.2f}ms | Decorations: {:.2f}ms | FPS: {:.1f}",
+                  ms_total, ms_prepare, ms_surface, ms_decorations,
+                  calculate_average_fps(renderer));
+
+    // State transition
+    if (renderer->state == RendererState::MESH_LOADED) {
+        renderer->state = RendererState::READY_TO_RENDER;
+    }
+
     return true;
 }
 
@@ -1296,6 +1391,85 @@ static void render_quad(lv_layer_t* layer, const bed_mesh_quad_3d_t& quad, bool 
 }
 
 // ============================================================================
+// Buffer-targeted quad/surface/decorations (no LVGL calls)
+// ============================================================================
+
+/**
+ * @brief Render a single quad into a pixel buffer using cached screen coordinates
+ *
+ * For translucent quads (zero plane), renders as two solid-color triangles.
+ * For opaque mesh quads, uses gradient or solid fill via buffer rasterizer.
+ */
+static void render_quad_to_buffer(helix::mesh::PixelBuffer& buf, const bed_mesh_quad_3d_t& quad,
+                                  bool use_gradient) {
+    lv_opa_t opacity = quad.opacity;
+
+    // For both translucent and opaque quads, render as 2 triangles
+    // (PixelBuffer doesn't have polygon fill, but triangle seams are acceptable
+    // for translucent quads in off-screen rendering)
+    if (use_gradient && opacity == LV_OPA_COVER) {
+        // Triangle 1: [0]BL -> [1]BR -> [2]TL
+        helix::mesh::fill_triangle_gradient(
+            buf, quad.screen_x[0], quad.screen_y[0], quad.vertices[0].color, quad.screen_x[1],
+            quad.screen_y[1], quad.vertices[1].color, quad.screen_x[2], quad.screen_y[2],
+            quad.vertices[2].color, opacity);
+        // Triangle 2: [1]BR -> [3]TR -> [2]TL
+        helix::mesh::fill_triangle_gradient(
+            buf, quad.screen_x[1], quad.screen_y[1], quad.vertices[1].color, quad.screen_x[2],
+            quad.screen_y[2], quad.vertices[2].color, quad.screen_x[3], quad.screen_y[3],
+            quad.vertices[3].color, opacity);
+    } else {
+        // Solid color (dragging mode or translucent zero plane)
+        helix::mesh::fill_triangle_solid(buf, quad.screen_x[0], quad.screen_y[0], quad.screen_x[1],
+                                         quad.screen_y[1], quad.screen_x[2], quad.screen_y[2],
+                                         quad.center_color, opacity);
+        helix::mesh::fill_triangle_solid(buf, quad.screen_x[1], quad.screen_y[1], quad.screen_x[2],
+                                         quad.screen_y[2], quad.screen_x[3], quad.screen_y[3],
+                                         quad.center_color, opacity);
+    }
+}
+
+/**
+ * @brief Render mesh surface into a pixel buffer
+ *
+ * Projects quad vertices, sorts by depth, and renders each quad into the buffer.
+ */
+static void render_mesh_surface_to_buffer(helix::mesh::PixelBuffer& buf,
+                                          bed_mesh_renderer_t* renderer, int canvas_width,
+                                          int canvas_height) {
+    // Project all quad vertices and cache screen coordinates + depths
+    project_and_cache_quads(renderer, canvas_width, canvas_height);
+
+    // Sort quads by depth (painter's algorithm - furthest first)
+    helix::mesh::sort_quads_by_depth(renderer->quads);
+
+    // Render quads using cached screen coordinates
+    bool use_gradient = !renderer->view_state.is_dragging;
+    for (const auto& quad : renderer->quads) {
+        render_quad_to_buffer(buf, quad, use_gradient);
+    }
+}
+
+/**
+ * @brief Render decorations (grid lines) into a pixel buffer
+ *
+ * Renders wireframe grid on top of mesh surface.
+ * Note: axis labels and tick labels are NOT rendered to buffer
+ * (text rendering requires LVGL font engine, will be handled on main thread).
+ */
+static void render_decorations_to_buffer(helix::mesh::PixelBuffer& buf,
+                                         bed_mesh_renderer_t* renderer, int canvas_width,
+                                         int canvas_height, uint8_t grid_r, uint8_t grid_g,
+                                         uint8_t grid_b) {
+    // Render wireframe grid on top of mesh surface
+    helix::mesh::render_grid_lines(buf, renderer, canvas_width, canvas_height, grid_r, grid_g,
+                                   grid_b);
+
+    // Note: axis labels and numeric tick labels are skipped for buffer rendering.
+    // They require LVGL's font engine and will be composited on the main thread.
+}
+
+// ============================================================================
 // Phase 4: Adaptive Render Mode (FPS-based 3D/2D switching)
 // ============================================================================
 
@@ -1776,4 +1950,26 @@ void bed_mesh_renderer_set_z_display_offset(bed_mesh_renderer_t* renderer, doubl
         return;
     renderer->z_display_offset = offset_mm;
     spdlog::debug("[Bed Mesh Renderer] Z display offset set to {:.4f}mm", offset_mm);
+}
+
+void bed_mesh_renderer_set_layer_offset(bed_mesh_renderer_t* renderer, int offset_x, int offset_y) {
+    if (!renderer)
+        return;
+    renderer->view_state.layer_offset_x = offset_x;
+    renderer->view_state.layer_offset_y = offset_y;
+}
+
+void bed_mesh_renderer_get_layer_offset(const bed_mesh_renderer_t* renderer, int* offset_x,
+                                        int* offset_y) {
+    if (!renderer) {
+        if (offset_x)
+            *offset_x = 0;
+        if (offset_y)
+            *offset_y = 0;
+        return;
+    }
+    if (offset_x)
+        *offset_x = renderer->view_state.layer_offset_x;
+    if (offset_y)
+        *offset_y = renderer->view_state.layer_offset_y;
 }

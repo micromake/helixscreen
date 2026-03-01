@@ -117,6 +117,7 @@ static void print_help(const char* program_name) {
     printf("  --keyboard           Show keyboard for testing (no textarea)\n");
     printf("  -w, --wizard         Force first-run configuration wizard\n");
     printf("  --wizard-step <step> Jump to specific wizard step for testing\n");
+    printf("  --calibrate-touch    Force touch calibration on startup\n");
     printf("  -d, --display <n>    Display number for window placement (0, 1, 2...)\n");
     printf("  -x, --x-pos <n>      X coordinate for window position\n");
     printf("  -y, --y-pos <n>      Y coordinate for window position\n");
@@ -134,6 +135,7 @@ static void print_help(const char* program_name) {
     printf("  --show-memory        Show memory stats overlay (press M to toggle)\n");
     printf("  --release-notes      Fetch latest release notes and show in update modal\n");
     printf("  --debug-subjects     Enable verbose subject debugging with stack traces\n");
+    printf("  --debug-touches      Draw ripple effects at each touch point for debugging\n");
     printf("  --moonraker <url>    Override Moonraker URL (e.g., ws://192.168.1.112:7125)\n");
     printf("  --rotate <degrees>   Display rotation: 0, 90, 180, 270\n");
     printf("  --layout <type>      Override auto-detected layout (auto, standard, ultrawide, "
@@ -161,7 +163,7 @@ static void print_help(const char* program_name) {
     printf("  --gcode-zoom <n>     Set camera zoom level (positive number)\n");
     printf("  --gcode-debug-colors Enable per-face debug coloring\n");
     printf("  --render-2d          Force 2D layer renderer (fast, no 3D)\n");
-    printf("  --render-3d          Force 3D TinyGL renderer\n");
+    printf("  --render-3d          Force 3D GLES renderer\n");
     printf("\nAvailable panels:\n");
     printf("  Base: home, controls, filament, settings, advanced\n");
     printf("  Print: print-select (cards), print-select-list, print-detail\n");
@@ -435,6 +437,10 @@ bool parse_cli_args(int argc, char** argv, CliArgs& args, int& screen_width, int
         } else if (strcmp(argv[i], "-w") == 0 || strcmp(argv[i], "--wizard") == 0) {
             args.force_wizard = true;
         }
+        // Touch calibration
+        else if (strcmp(argv[i], "--calibrate-touch") == 0) {
+            args.calibrate_touch = true;
+        }
         // Wizard step
         else if (strcmp(argv[i], "--wizard-step") == 0) {
             if (i + 1 >= argc) {
@@ -665,6 +671,8 @@ bool parse_cli_args(int argc, char** argv, CliArgs& args, int& screen_width, int
             args.overlays.release_notes = true;
         } else if (strcmp(argv[i], "--debug-subjects") == 0) {
             RuntimeConfig::set_debug_subjects(true);
+        } else if (strcmp(argv[i], "--debug-touches") == 0) {
+            RuntimeConfig::set_debug_touches(true);
         }
         // Moonraker URL override
         else if (strcmp(argv[i], "--moonraker") == 0 || strncmp(argv[i], "--moonraker=", 12) == 0) {

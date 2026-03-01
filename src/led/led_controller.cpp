@@ -7,6 +7,7 @@
 #include "moonraker_api.h"
 #include "moonraker_error.h"
 #include "printer_discovery.h"
+#include "static_subject_registry.h"
 
 #include <spdlog/spdlog.h>
 
@@ -55,6 +56,7 @@ LedController& LedController::instance() {
 }
 
 void LedController::init(MoonrakerAPI* api, MoonrakerClient* client) {
+    alive_ = std::make_shared<std::atomic<bool>>(true);
     api_ = api;
     client_ = client;
 
@@ -65,12 +67,26 @@ void LedController::init(MoonrakerAPI* api, MoonrakerClient* client) {
     macro_.set_api(api);
     output_pin_.set_api(api);
 
+    // Initialize version subject for UI binding (idempotent)
+    if (!version_subject_initialized_) {
+        lv_subject_init_int(&led_config_version_, 0);
+        version_subject_initialized_ = true;
+        StaticSubjectRegistry::instance().register_deinit("LedController", [this]() {
+            if (version_subject_initialized_) {
+                lv_subject_deinit(&led_config_version_);
+                version_subject_initialized_ = false;
+            }
+        });
+    }
+
     initialized_ = true;
     load_config();
     spdlog::info("[LedController] Initialized");
 }
 
 void LedController::deinit() {
+    alive_->store(false);
+
     native_.clear();
     effects_.clear();
     wled_.clear();
@@ -274,6 +290,13 @@ void LedController::discover_from_hardware(const helix::PrinterDiscovery& hardwa
         spdlog::info("[LedController] Auto-selected {} native strip(s) (first run)",
                      selected_strips_.size());
     }
+
+    // Bump version to notify UI widgets to rebind
+    if (version_subject_initialized_) {
+        lv_subject_set_int(&led_config_version_, lv_subject_get_int(&led_config_version_) + 1);
+        spdlog::debug("[LedController] LED config version bumped to {}",
+                      lv_subject_get_int(&led_config_version_));
+    }
 }
 
 void LedController::discover_wled_strips() {
@@ -284,8 +307,13 @@ void LedController::discover_wled_strips() {
 
     spdlog::debug("[LedController] Starting WLED strip discovery via Moonraker");
 
+    std::weak_ptr<std::atomic<bool>> weak_alive = alive_;
     api_->rest().wled_get_strips(
-        [this](const RestResponse& resp) {
+        [this, weak_alive](const RestResponse& resp) {
+            auto alive = weak_alive.lock();
+            if (!alive || !alive->load())
+                return;
+
             // Response format: {"result": {strip_name: {details...}, ...}}
             if (!resp.data.is_object()) {
                 spdlog::warn("[LedController] WLED strips response is not a JSON object");
@@ -360,7 +388,11 @@ void LedController::discover_wled_strips() {
 
                 // Fetch server config to get WLED device addresses
                 this->api_->rest().get_server_config(
-                    [this](const RestResponse& cfg_resp) {
+                    [this, weak_alive](const RestResponse& cfg_resp) {
+                        auto alive = weak_alive.lock();
+                        if (!alive || !alive->load())
+                            return;
+
                         if (!cfg_resp.data.is_object())
                             return;
 
@@ -384,19 +416,25 @@ void LedController::discover_wled_strips() {
                                 std::string addr = it.value()["address"].get<std::string>();
                                 wled_.set_strip_address(strip_name, addr);
                                 // Attempt to fetch preset names from the WLED device
-                                wled_.fetch_presets_from_device(strip_name, [this, strip_name]() {
-                                    // If fetch didn't populate presets (mock/offline), set defaults
-                                    if (wled_.get_strip_presets(strip_name).empty()) {
-                                        wled_.set_strip_presets(strip_name, {{1, "Preset 1"},
-                                                                             {2, "Preset 2"},
-                                                                             {3, "Preset 3"},
-                                                                             {4, "Preset 4"},
-                                                                             {5, "Preset 5"}});
-                                        spdlog::debug(
-                                            "[LedController] Set default presets for '{}'",
-                                            strip_name);
-                                    }
-                                });
+                                wled_.fetch_presets_from_device(
+                                    strip_name, [this, strip_name, weak_alive]() {
+                                        auto alive = weak_alive.lock();
+                                        if (!alive || !alive->load())
+                                            return;
+
+                                        // If fetch didn't populate presets (mock/offline), set
+                                        // defaults
+                                        if (wled_.get_strip_presets(strip_name).empty()) {
+                                            wled_.set_strip_presets(strip_name, {{1, "Preset 1"},
+                                                                                 {2, "Preset 2"},
+                                                                                 {3, "Preset 3"},
+                                                                                 {4, "Preset 4"},
+                                                                                 {5, "Preset 5"}});
+                                            spdlog::debug(
+                                                "[LedController] Set default presets for '{}'",
+                                                strip_name);
+                                        }
+                                    });
                             }
                         }
                     },
@@ -1846,6 +1884,14 @@ bool LedController::light_is_on() const {
     return light_on_;
 }
 
+void LedController::sync_light_state(bool is_on) {
+    if (light_on_ != is_on) {
+        spdlog::debug("[LedController] Syncing light state: {} -> {}", light_on_ ? "ON" : "OFF",
+                      is_on ? "ON" : "OFF");
+        light_on_ = is_on;
+    }
+}
+
 bool LedController::get_led_on_at_start() const {
     return led_on_at_start_;
 }
@@ -1871,6 +1917,11 @@ void LedController::apply_startup_preference() {
 
 void LedController::set_selected_strips(const std::vector<std::string>& strips) {
     selected_strips_ = strips;
+
+    // Bump version to notify UI widgets to rebind
+    if (version_subject_initialized_) {
+        lv_subject_set_int(&led_config_version_, lv_subject_get_int(&led_config_version_) + 1);
+    }
 }
 
 void LedController::set_last_color(uint32_t color) {

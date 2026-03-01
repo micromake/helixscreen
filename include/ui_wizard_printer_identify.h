@@ -130,8 +130,14 @@ class WizardPrinterIdentifyStep {
     // Printer preview image widget
     lv_obj_t* printer_preview_image_ = nullptr;
 
-    // Printer type list container
+    // Printer type list container (populated once, reparented across wizard visits)
     lv_obj_t* printer_type_list_ = nullptr;
+
+    // Persistent off-screen container to cache the populated list across wizard
+    // step transitions. The wizard framework destroys the step's widget tree on
+    // navigation, but we keep the list alive here to avoid expensive rebuild on
+    // revisit (68 buttons + labels = slow on MIPS, see issue #231).
+    lv_obj_t* list_cache_container_ = nullptr;
 
     // Subjects (3 total)
     lv_subject_t printer_name_;

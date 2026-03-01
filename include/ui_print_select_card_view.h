@@ -229,6 +229,10 @@ class PrintSelectCardView {
     int visible_start_row_ = -1;
     int visible_end_row_ = -1;
 
+    // === Cached Spacer Heights (avoid redundant lv_obj_set_height → relayout) ===
+    int last_leading_height_ = -1;
+    int last_trailing_height_ = -1;
+
     // === Callbacks ===
     FileClickCallback on_file_click_;
     MetadataFetchCallback on_metadata_fetch_;

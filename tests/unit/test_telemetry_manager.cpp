@@ -20,6 +20,7 @@
 #include <regex>
 #include <set>
 #include <string>
+#include <unistd.h>
 
 #include "../catch_amalgamated.hpp"
 #include "hv/json.hpp"
@@ -1134,5 +1135,511 @@ TEST_CASE_METHOD(TelemetryTestFixture,
         INFO("Testing filament_type: " << ftype);
         REQUIRE(batch[0]["filament_type"] == ftype);
         REQUIRE(batch[0]["filament_used_mm"].get<float>() == Catch::Approx(fmm));
+    }
+}
+
+// ============================================================================
+// Update Failed Event [telemetry][update]
+// ============================================================================
+
+TEST_CASE_METHOD(TelemetryTestFixture, "Update failed event: has required envelope fields",
+                 "[telemetry][update]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    tm.record_update_failure("download_failed", "0.14.0", "ad5m");
+
+    REQUIRE(tm.queue_size() == 1);
+    auto snapshot = tm.get_queue_snapshot();
+    auto event = snapshot[0];
+
+    REQUIRE(event["schema_version"] == 2);
+    REQUIRE(event["event"] == "update_failed");
+    REQUIRE(event.contains("device_id"));
+    REQUIRE(event.contains("timestamp"));
+    REQUIRE(event["reason"] == "download_failed");
+    REQUIRE(event["version"] == "0.14.0");
+    REQUIRE(event["platform"] == "ad5m");
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture,
+                 "Update failed event: includes optional fields when provided",
+                 "[telemetry][update]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    tm.record_update_failure("corrupt_download", "0.14.0", "pi", 200, 1048576);
+
+    auto snapshot = tm.get_queue_snapshot();
+    auto event = snapshot[0];
+
+    REQUIRE(event["reason"] == "corrupt_download");
+    REQUIRE(event["http_code"] == 200);
+    REQUIRE(event["file_size"] == 1048576);
+    REQUIRE_FALSE(event.contains("exit_code"));
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture,
+                 "Update failed event: includes exit_code for install failures",
+                 "[telemetry][update]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    tm.record_update_failure("install_failed", "0.14.0", "ad5m", -1, -1, 127);
+
+    auto snapshot = tm.get_queue_snapshot();
+    auto event = snapshot[0];
+
+    REQUIRE(event["reason"] == "install_failed");
+    REQUIRE(event["exit_code"] == 127);
+    REQUIRE_FALSE(event.contains("http_code"));
+    REQUIRE_FALSE(event.contains("file_size"));
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture, "Update failed event: not recorded when telemetry disabled",
+                 "[telemetry][update]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(false);
+
+    tm.record_update_failure("download_failed", "0.14.0", "pi");
+
+    REQUIRE(tm.queue_size() == 0);
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture, "Update failed event: from_version included when available",
+                 "[telemetry][update]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    tm.record_update_failure("download_failed", "0.14.0", "pi");
+
+    auto snapshot = tm.get_queue_snapshot();
+    auto event = snapshot[0];
+
+    // from_version should be current HELIX_VERSION
+    REQUIRE(event.contains("from_version"));
+}
+
+// ============================================================================
+// Update Success Event [telemetry][update]
+// ============================================================================
+
+TEST_CASE_METHOD(TelemetryTestFixture,
+                 "Update success: check_previous_update enqueues event from flag file",
+                 "[telemetry][update]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    // Write a flag file simulating a successful update
+    json flag;
+    flag["version"] = "0.14.0";
+    flag["from_version"] = "0.13.4";
+    flag["platform"] = "pi";
+    flag["timestamp"] = "2026-02-26T12:00:00Z";
+    write_file("update_success.json", flag.dump());
+
+    tm.check_previous_update();
+
+    REQUIRE(tm.queue_size() == 1);
+    auto snapshot = tm.get_queue_snapshot();
+    auto event = snapshot[0];
+
+    REQUIRE(event["schema_version"] == 2);
+    REQUIRE(event["event"] == "update_success");
+    REQUIRE(event["version"] == "0.14.0");
+    REQUIRE(event["from_version"] == "0.13.4");
+    REQUIRE(event["platform"] == "pi");
+    REQUIRE(event.contains("device_id"));
+    REQUIRE(event.contains("timestamp"));
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture, "Update success: flag file deleted after reading",
+                 "[telemetry][update]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    json flag;
+    flag["version"] = "0.14.0";
+    flag["from_version"] = "0.13.4";
+    flag["platform"] = "pi";
+    flag["timestamp"] = "2026-02-26T12:00:00Z";
+    write_file("update_success.json", flag.dump());
+
+    tm.check_previous_update();
+
+    REQUIRE_FALSE(fs::exists(temp_dir() / "update_success.json"));
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture, "Update success: no-op when no flag file exists",
+                 "[telemetry][update]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    tm.check_previous_update();
+
+    REQUIRE(tm.queue_size() == 0);
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture, "Update success: discarded when telemetry disabled",
+                 "[telemetry][update]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(false);
+
+    json flag;
+    flag["version"] = "0.14.0";
+    flag["from_version"] = "0.13.4";
+    flag["platform"] = "pi";
+    flag["timestamp"] = "2026-02-26T12:00:00Z";
+    write_file("update_success.json", flag.dump());
+
+    tm.check_previous_update();
+
+    REQUIRE(tm.queue_size() == 0);
+    // Flag file should still be removed even if telemetry is disabled
+    REQUIRE_FALSE(fs::exists(temp_dir() / "update_success.json"));
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture, "Update success: malformed flag file handled gracefully",
+                 "[telemetry][update]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    write_file("update_success.json", "not valid json {{{{");
+
+    tm.check_previous_update();
+
+    REQUIRE(tm.queue_size() == 0);
+    // Malformed file should still be cleaned up
+    REQUIRE_FALSE(fs::exists(temp_dir() / "update_success.json"));
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture, "Write update success flag: creates valid JSON file",
+                 "[telemetry][update]") {
+    TelemetryManager::write_update_success_flag(temp_dir().string(), "0.14.0", "0.13.4", "pi");
+
+    REQUIRE(fs::exists(temp_dir() / "update_success.json"));
+    auto content = read_file("update_success.json");
+    auto flag = json::parse(content);
+
+    REQUIRE(flag["version"] == "0.14.0");
+    REQUIRE(flag["from_version"] == "0.13.4");
+    REQUIRE(flag["platform"] == "pi");
+    REQUIRE(flag.contains("timestamp"));
+}
+
+// ============================================================================
+// Memory Snapshot Event [telemetry][memory]
+// ============================================================================
+
+TEST_CASE_METHOD(TelemetryTestFixture, "record_memory_snapshot creates valid event",
+                 "[telemetry][memory]") {
+    TelemetryManager::instance().set_enabled(true);
+    TelemetryManager::instance().record_memory_snapshot("session_start");
+
+    REQUIRE(TelemetryManager::instance().queue_size() == 1);
+
+    auto snapshot = TelemetryManager::instance().get_queue_snapshot();
+    auto& event = snapshot[0];
+
+    CHECK(event["event"] == "memory_snapshot");
+    CHECK(event["schema_version"] == TelemetryManager::SCHEMA_VERSION);
+    CHECK(event.contains("device_id"));
+    CHECK(event.contains("timestamp"));
+    CHECK(event["trigger"] == "session_start");
+    CHECK(event.contains("uptime_sec"));
+    CHECK(event.contains("rss_kb"));
+    CHECK(event.contains("vm_size_kb"));
+    CHECK(event.contains("vm_data_kb"));
+    CHECK(event.contains("vm_swap_kb"));
+    CHECK(event.contains("vm_peak_kb"));
+    CHECK(event.contains("vm_hwm_kb"));
+
+    // uptime should be non-negative
+    CHECK(event["uptime_sec"].get<int>() >= 0);
+}
+
+// ============================================================================
+// Hardware Profile Event [telemetry][hardware]
+// ============================================================================
+
+TEST_CASE_METHOD(TelemetryTestFixture, "record_hardware_profile creates valid event",
+                 "[telemetry][hardware]") {
+    TelemetryManager::instance().set_enabled(true);
+    TelemetryManager::instance().record_hardware_profile();
+
+    REQUIRE(TelemetryManager::instance().queue_size() == 1);
+
+    auto snapshot = TelemetryManager::instance().get_queue_snapshot();
+    auto& event = snapshot[0];
+
+    CHECK(event["event"] == "hardware_profile");
+    CHECK(event["schema_version"] == TelemetryManager::SCHEMA_VERSION);
+    CHECK(event.contains("device_id"));
+    CHECK(event.contains("timestamp"));
+    // Hardware profile may have empty sections in test mode (no printer connected)
+    // but the event itself should be valid
+}
+
+// ============================================================================
+// Settings Snapshot Event [telemetry][settings]
+// ============================================================================
+
+TEST_CASE_METHOD(TelemetryTestFixture, "record_settings_snapshot creates valid event",
+                 "[telemetry][settings]") {
+    TelemetryManager::instance().set_enabled(true);
+    TelemetryManager::instance().record_settings_snapshot();
+
+    REQUIRE(TelemetryManager::instance().queue_size() == 1);
+
+    auto snapshot = TelemetryManager::instance().get_queue_snapshot();
+    auto& event = snapshot[0];
+
+    CHECK(event["event"] == "settings_snapshot");
+    CHECK(event["schema_version"] == TelemetryManager::SCHEMA_VERSION);
+    CHECK(event.contains("device_id"));
+    CHECK(event.contains("timestamp"));
+    // Settings should have at least theme and locale
+    CHECK(event.contains("theme"));
+    CHECK(event.contains("locale"));
+}
+
+// ============================================================================
+// Panel Usage Event [telemetry][panel_usage]
+// ============================================================================
+
+TEST_CASE_METHOD(TelemetryTestFixture, "record_panel_usage creates valid event",
+                 "[telemetry][panel_usage]") {
+    TelemetryManager::instance().set_enabled(true);
+
+    // Simulate panel navigation
+    TelemetryManager::instance().notify_panel_changed("home");
+    TelemetryManager::instance().notify_panel_changed("controls");
+    TelemetryManager::instance().notify_panel_changed("settings");
+    TelemetryManager::instance().notify_overlay_opened();
+    TelemetryManager::instance().notify_overlay_opened();
+
+    TelemetryManager::instance().record_panel_usage();
+
+    REQUIRE(TelemetryManager::instance().queue_size() == 1);
+
+    auto snapshot = TelemetryManager::instance().get_queue_snapshot();
+    auto& event = snapshot[0];
+
+    CHECK(event["event"] == "panel_usage");
+    CHECK(event.contains("session_duration_sec"));
+    CHECK(event.contains("panel_time_sec"));
+    CHECK(event.contains("panel_visits"));
+    CHECK(event["overlay_open_count"] == 2);
+
+    // Check panel visits are tracked
+    auto& visits = event["panel_visits"];
+    CHECK(visits["home"] == 1);
+    CHECK(visits["controls"] == 1);
+    CHECK(visits["settings"] == 1);
+}
+
+// ============================================================================
+// Connection Stability Event [telemetry][connection]
+// ============================================================================
+
+TEST_CASE_METHOD(TelemetryTestFixture, "record_connection_stability creates valid event",
+                 "[telemetry][connection]") {
+    TelemetryManager::instance().set_enabled(true);
+
+    // Simulate connection lifecycle
+    TelemetryManager::instance().notify_connection_state_changed(2); // connected
+    TelemetryManager::instance().notify_connection_state_changed(0); // disconnected
+    TelemetryManager::instance().notify_connection_state_changed(2); // reconnected
+    TelemetryManager::instance().notify_klippy_state_changed(3);     // klippy error
+
+    TelemetryManager::instance().record_connection_stability();
+
+    REQUIRE(TelemetryManager::instance().queue_size() == 1);
+
+    auto snapshot = TelemetryManager::instance().get_queue_snapshot();
+    auto& event = snapshot[0];
+
+    CHECK(event["event"] == "connection_stability");
+    CHECK(event.contains("session_duration_sec"));
+    CHECK(event["connect_count"] == 2);
+    CHECK(event["disconnect_count"] == 1);
+    CHECK(event.contains("total_connected_sec"));
+    CHECK(event.contains("total_disconnected_sec"));
+    CHECK(event.contains("longest_disconnect_sec"));
+    CHECK(event["klippy_error_count"] == 1);
+    CHECK(event["klippy_shutdown_count"] == 0);
+}
+
+// ============================================================================
+// Print Start Context Event [telemetry][print_start]
+// ============================================================================
+
+TEST_CASE_METHOD(TelemetryTestFixture, "record_print_start_context creates valid event",
+                 "[telemetry][print_start]") {
+    TelemetryManager::instance().set_enabled(true);
+    TelemetryManager::instance().record_print_start_context("local", true, 5 * 1024 * 1024, 7200,
+                                                            "PrusaSlicer", 1, false);
+
+    REQUIRE(TelemetryManager::instance().queue_size() == 1);
+
+    auto snapshot = TelemetryManager::instance().get_queue_snapshot();
+    auto& event = snapshot[0];
+
+    CHECK(event["event"] == "print_start_context");
+    CHECK(event["source"] == "local");
+    CHECK(event["has_thumbnail"] == true);
+    CHECK(event["file_size_bucket"] == "1-10MB");
+    CHECK(event["estimated_duration_bucket"] == "1-4hr");
+    CHECK(event["slicer"] == "PrusaSlicer");
+    CHECK(event["tool_count_used"] == 1);
+    CHECK(event["ams_active"] == false);
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture, "print_start_context file size bucketing",
+                 "[telemetry][print_start]") {
+    TelemetryManager::instance().set_enabled(true);
+
+    // Test various file size buckets
+    TelemetryManager::instance().record_print_start_context("local", false, 500 * 1024, 300, "Cura",
+                                                            1, false); // <1MB, <30min
+
+    auto snapshot = TelemetryManager::instance().get_queue_snapshot();
+    auto& event = snapshot[0];
+    CHECK(event["file_size_bucket"] == "<1MB");
+    CHECK(event["estimated_duration_bucket"] == "<30min");
+}
+
+// ============================================================================
+// Error Encountered Event [telemetry][error]
+// ============================================================================
+
+TEST_CASE_METHOD(TelemetryTestFixture, "record_error creates valid event", "[telemetry][error]") {
+    TelemetryManager::instance().set_enabled(true);
+    TelemetryManager::instance().record_error("moonraker_api", "timeout", "get_printer_objects");
+
+    REQUIRE(TelemetryManager::instance().queue_size() == 1);
+
+    auto snapshot = TelemetryManager::instance().get_queue_snapshot();
+    auto& event = snapshot[0];
+
+    CHECK(event["event"] == "error_encountered");
+    CHECK(event["category"] == "moonraker_api");
+    CHECK(event["code"] == "timeout");
+    CHECK(event["context"] == "get_printer_objects");
+    CHECK(event.contains("uptime_sec"));
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture, "record_error rate limits by category",
+                 "[telemetry][error]") {
+    TelemetryManager::instance().set_enabled(true);
+
+    // First error should be recorded
+    TelemetryManager::instance().record_error("moonraker_api", "timeout", "ctx1");
+    CHECK(TelemetryManager::instance().queue_size() == 1);
+
+    // Second error in same category should be rate-limited
+    TelemetryManager::instance().record_error("moonraker_api", "timeout", "ctx2");
+    CHECK(TelemetryManager::instance().queue_size() == 1); // Still 1
+
+    // Different category should NOT be rate-limited
+    TelemetryManager::instance().record_error("websocket", "connection_refused", "reconnect");
+    CHECK(TelemetryManager::instance().queue_size() == 2);
+}
+
+// ============================================================================
+// New Events Disabled Behavior [telemetry][disabled]
+// ============================================================================
+
+TEST_CASE_METHOD(TelemetryTestFixture, "new events are no-op when disabled",
+                 "[telemetry][disabled]") {
+    // Telemetry disabled by default
+    CHECK_FALSE(TelemetryManager::instance().is_enabled());
+
+    TelemetryManager::instance().record_memory_snapshot("session_start");
+    TelemetryManager::instance().record_hardware_profile();
+    TelemetryManager::instance().record_settings_snapshot();
+    TelemetryManager::instance().record_panel_usage();
+    TelemetryManager::instance().record_connection_stability();
+    TelemetryManager::instance().record_print_start_context("local", true, 1000, 60, "Slicer", 1,
+                                                            false);
+    TelemetryManager::instance().record_error("moonraker_api", "timeout", "get_objects");
+
+    CHECK(TelemetryManager::instance().queue_size() == 0);
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture, "record_error rejects unknown categories",
+                 "[telemetry][error]") {
+    TelemetryManager::instance().set_enabled(true);
+
+    TelemetryManager::instance().record_error("invalid_category", "code", "ctx");
+    CHECK(TelemetryManager::instance().queue_size() == 0);
+
+    TelemetryManager::instance().record_error("", "code", "ctx");
+    CHECK(TelemetryManager::instance().queue_size() == 0);
+
+    // Valid category should work
+    TelemetryManager::instance().record_error("moonraker_api", "timeout", "ctx");
+    CHECK(TelemetryManager::instance().queue_size() == 1);
+}
+
+// ============================================================================
+// PII Absence Tests for New Event Types [telemetry][pii]
+// ============================================================================
+
+TEST_CASE_METHOD(TelemetryTestFixture, "New events do not leak PII", "[telemetry]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    // Record each new event type
+    tm.record_memory_snapshot("session_start");
+    tm.record_hardware_profile();
+    tm.record_settings_snapshot();
+    tm.record_print_start_context("local", true, 5000000, 3600, "PrusaSlicer", 1, false);
+    tm.record_error("moonraker_api", "timeout", "get_printer_objects");
+
+    // Panel usage requires panel navigation first
+    tm.notify_panel_changed("home");
+    tm.record_panel_usage();
+
+    // Connection stability requires connection state changes first
+    tm.notify_connection_state_changed(2);
+    tm.record_connection_stability();
+
+    auto snapshot = tm.get_queue_snapshot();
+    REQUIRE(snapshot.size() == 7);
+
+    // Get the test machine's hostname for checking
+    char hostname_buf[256] = {};
+    gethostname(hostname_buf, sizeof(hostname_buf));
+    std::string machine_hostname(hostname_buf);
+
+    // IP address regex pattern
+    std::regex ip_regex("\\d+\\.\\d+\\.\\d+\\.\\d+");
+
+    for (size_t i = 0; i < snapshot.size(); i++) {
+        auto& event = snapshot[i];
+        std::string event_str = event.dump();
+        std::string event_type = event.value("event", "unknown");
+
+        INFO("Checking event: " << event_type << " (index " << i << ")");
+
+        // Must NOT contain hostname of the test machine
+        if (!machine_hostname.empty()) {
+            REQUIRE(event_str.find(machine_hostname) == std::string::npos);
+        }
+
+        // Must NOT contain IP address patterns
+        REQUIRE_FALSE(std::regex_search(event_str, ip_regex));
+
+        // Must NOT contain serial number references
+        REQUIRE(event_str.find("\"serial\"") == std::string::npos);
+
+        // Must NOT contain file paths
+        REQUIRE(event_str.find("/home/") == std::string::npos);
+        REQUIRE(event_str.find("/tmp/") == std::string::npos);
+
+        // Must NOT contain username-like fields
+        REQUIRE(event_str.find("\"root\"") == std::string::npos);
+        REQUIRE(event_str.find("\"username\"") == std::string::npos);
     }
 }

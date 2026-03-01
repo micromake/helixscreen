@@ -741,6 +741,20 @@ TEST_CASE("UpdateChecker download status enum values", "[update_checker]") {
     REQUIRE(static_cast<int>(UpdateChecker::DownloadStatus::Installing) == 4);
     REQUIRE(static_cast<int>(UpdateChecker::DownloadStatus::Complete) == 5);
     REQUIRE(static_cast<int>(UpdateChecker::DownloadStatus::Error) == 6);
+    REQUIRE(static_cast<int>(UpdateChecker::DownloadStatus::Restarting) == 7);
+}
+
+TEST_CASE("UpdateChecker report_download_status transitions to Restarting", "[update_checker]") {
+    auto& checker = UpdateChecker::instance();
+    checker.init();
+
+    checker.report_download_status(UpdateChecker::DownloadStatus::Restarting, 100, "v1.0.0 installed!");
+    REQUIRE(checker.get_download_status() == UpdateChecker::DownloadStatus::Restarting);
+    REQUIRE(checker.get_download_progress() == 100);
+
+    // Reset back to idle for other tests
+    checker.report_download_status(UpdateChecker::DownloadStatus::Idle, 0, "");
+    checker.shutdown();
 }
 
 TEST_CASE("UpdateChecker download state initial values", "[update_checker]") {
@@ -1306,4 +1320,59 @@ TEST_CASE("extract_installer_from_tarball: works with empty PATH (systemd regres
 
     // Must succeed: resolve_tool() finds tar/cp/gunzip via absolute paths
     REQUIRE(!result.empty());
+}
+
+// ============================================================================
+// Platform Key & Architecture Validation
+// ============================================================================
+
+TEST_CASE("get_platform_key returns a known platform", "[update_checker][platform]") {
+    std::string platform = UpdateChecker::get_platform_key();
+    REQUIRE(!platform.empty());
+
+    // Must be one of the supported platform keys
+    std::vector<std::string> known_platforms = {"pi", "pi32", "ad5m", "k1", "k2", "ad5x", "cc1"};
+    bool found = false;
+    for (const auto& p : known_platforms) {
+        if (platform == p) {
+            found = true;
+            break;
+        }
+    }
+    REQUIRE(found);
+}
+
+TEST_CASE("get_platform_key matches compiled binary architecture",
+          "[update_checker][platform][arch]") {
+#ifndef __linux__
+    SKIP("Linux-only: requires /proc/self/exe and ELF binary format");
+#else
+    // The platform key must agree with what we actually compiled as.
+    // This catches the bug where uname() returned "aarch64" on a pi32 build.
+    std::string platform = UpdateChecker::get_platform_key();
+
+    // Check that our own binary's ELF class matches the platform expectation
+    FILE* f = fopen("/proc/self/exe", "rb");
+    REQUIRE(f != nullptr);
+
+    unsigned char elf_header[20];
+    size_t n = fread(elf_header, 1, 20, f);
+    fclose(f);
+    REQUIRE(n == 20);
+
+    // Verify ELF magic
+    REQUIRE(elf_header[0] == 0x7F);
+    REQUIRE(elf_header[1] == 'E');
+    REQUIRE(elf_header[2] == 'L');
+    REQUIRE(elf_header[3] == 'F');
+
+    uint8_t elf_class = elf_header[4]; // 1 = 32-bit, 2 = 64-bit
+
+    if (platform == "pi32" || platform == "ad5m") {
+        REQUIRE(elf_class == 1); // ELFCLASS32
+    } else if (platform == "pi") {
+        REQUIRE(elf_class == 2); // ELFCLASS64
+    }
+    // Other platforms (k1, k2, ad5x, cc1) may vary — no assertion
+#endif
 }

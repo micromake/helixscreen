@@ -15,11 +15,14 @@
 #include "ui_overlay_network_settings.h"
 #include "ui_panel_history_dashboard.h"
 #include "ui_panel_memory_stats.h"
+#include "ui_panel_power.h"
+#include "ui_settings_about.h"
 #include "ui_settings_display.h"
 #include "ui_settings_hardware_health.h"
 #include "ui_settings_led.h"
 #include "ui_settings_machine_limits.h"
 #include "ui_settings_macro_buttons.h"
+#include "ui_settings_material_temps.h"
 #include "ui_settings_panel_widgets.h"
 #include "ui_settings_plugins.h"
 #include "ui_settings_sensors.h"
@@ -163,8 +166,9 @@ static void on_z_movement_style_changed(lv_event_t* e) {
 static void on_gcode_mode_changed(lv_event_t* e) {
     lv_obj_t* dropdown = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
     int mode = static_cast<int>(lv_dropdown_get_selected(dropdown));
+    static const char* MODE_NAMES[] = {"Auto", "3D", "2D Layers", "Thumbnail Only"};
     spdlog::info("[SettingsPanel] G-code render mode changed: {} ({})", mode,
-                 mode == 0 ? "Auto" : (mode == 1 ? "3D" : "2D Layers"));
+                 (mode >= 0 && mode <= 3) ? MODE_NAMES[mode] : "Unknown");
     DisplaySettingsManager::instance().set_gcode_render_mode(mode);
 }
 
@@ -187,161 +191,10 @@ static void on_language_changed(lv_event_t* e) {
     SystemSettingsManager::instance().set_language_by_index(index);
 }
 
-// Static callback for update channel dropdown
-static void on_update_channel_changed(lv_event_t* e) {
-    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_update_channel_changed");
-    lv_obj_t* dropdown = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    int index = static_cast<int>(lv_dropdown_get_selected(dropdown));
-
-    // Dev channel (2) requires dev_url to be configured
-    bool rejected = false;
-    if (index == 2) {
-        auto* config = Config::get_instance();
-        std::string dev_url = config ? config->get<std::string>("/update/dev_url", "") : "";
-        if (dev_url.empty()) {
-            spdlog::warn("[SettingsPanel] Dev channel selected but no dev_url configured");
-            // Revert to previous value
-            int current = SystemSettingsManager::instance().get_update_channel();
-            lv_dropdown_set_selected(dropdown, static_cast<uint32_t>(current));
-            ToastManager::instance().show(ToastSeverity::WARNING,
-                                          lv_tr("Dev channel requires dev_url in config"), 3000);
-            rejected = true;
-        }
-    }
-
-    if (!rejected) {
-        spdlog::info("[SettingsPanel] Update channel changed: {} ({})", index,
-                     index == 0 ? "Stable" : (index == 1 ? "Beta" : "Dev"));
-        SystemSettingsManager::instance().set_update_channel(index);
-    }
-    LVGL_SAFE_EVENT_CB_END();
-}
-
-// Static callback for version row tap (toggle beta_features via 7-tap secret)
-// Like Android's "tap build number 7 times" to enable developer mode
-static constexpr int kSecretTapCount = 7;
-static constexpr uint32_t kSecretTapTimeoutMs = 2000; // Reset counter after 2s of no taps
-
-static void on_version_clicked(lv_event_t*) {
-    static int tap_count = 0;
-    static uint32_t last_tap_time = 0;
-
-    uint32_t now = lv_tick_get();
-
-    // Reset counter if too much time has passed
-    if (now - last_tap_time > kSecretTapTimeoutMs) {
-        tap_count = 0;
-    }
-    last_tap_time = now;
-    tap_count++;
-
-    int remaining = kSecretTapCount - tap_count;
-
-    if (remaining > 0 && remaining <= 3) {
-        // Show countdown - say "enable" or "disable" based on current state
-        Config* config = Config::get_instance();
-        bool currently_on = config && config->is_beta_features_enabled();
-        const char* action = currently_on ? lv_tr("disable") : lv_tr("enable");
-        std::string msg =
-            remaining == 1
-                ? fmt::format(lv_tr("1 more tap to {} beta features"), action)
-                : fmt::format(lv_tr("{} more taps to {} beta features"), remaining, action);
-        ToastManager::instance().show(ToastSeverity::INFO, msg.c_str(), 1000);
-    } else if (remaining == 0) {
-        // Toggle beta_features config flag and reactive subject
-        Config* config = Config::get_instance();
-        if (config) {
-            bool currently_enabled = config->is_beta_features_enabled();
-            bool new_value = !currently_enabled;
-            config->set("/beta_features", new_value);
-            config->save();
-
-            // Update the reactive subject so UI elements respond immediately
-            lv_subject_t* subject = lv_xml_get_subject(nullptr, "show_beta_features");
-            if (subject) {
-                lv_subject_set_int(subject, new_value ? 1 : 0);
-            }
-
-            ToastManager::instance().show(
-                ToastSeverity::SUCCESS,
-                new_value ? lv_tr("Beta features: ON") : lv_tr("Beta features: OFF"), 1500);
-            spdlog::info("[SettingsPanel] Beta features toggled via 7-tap secret: {}",
-                         new_value ? "ON" : "OFF");
-        }
-        tap_count = 0; // Reset for next time
-    }
-}
-
-// Static callback for printer name row tap — 7-tap snake easter egg
-static void on_printer_name_clicked(lv_event_t*) {
-    static int tap_count = 0;
-    static uint32_t last_tap_time = 0;
-
-    uint32_t now = lv_tick_get();
-
-    if (now - last_tap_time > kSecretTapTimeoutMs) {
-        tap_count = 0;
-    }
-    last_tap_time = now;
-    tap_count++;
-
-    int remaining = kSecretTapCount - tap_count;
-
-    if (remaining > 0 && remaining <= 3) {
-        char buf[32];
-        snprintf(buf, sizeof(buf), "%d more tap%s...", remaining, remaining == 1 ? "" : "s");
-        ToastManager::instance().show(ToastSeverity::INFO, buf, 800);
-    } else if (remaining == 0) {
-        tap_count = 0;
-        spdlog::info("[SettingsPanel] Snake easter egg triggered!");
-        helix::SnakeGame::show();
-    }
-}
-
 // Note: Sensors overlay callbacks are now in SensorSettingsOverlay class
 // See ui_settings_sensors.cpp
 // Note: Macro Buttons overlay callbacks are now in MacroButtonsOverlay class
 // See ui_settings_macro_buttons.cpp
-
-// Static callback for check updates button
-static void on_check_updates_clicked(lv_event_t* /*e*/) {
-    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_check_updates_clicked");
-    spdlog::info("[SettingsPanel] Check for updates requested");
-    UpdateChecker::instance().check_for_updates();
-    LVGL_SAFE_EVENT_CB_END();
-}
-
-// Static callback for install update row (opens download modal)
-static void on_install_update_clicked(lv_event_t* /*e*/) {
-    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_install_update_clicked");
-    spdlog::info("[SettingsPanel] Install update requested");
-    get_global_settings_panel().show_update_download_modal();
-    LVGL_SAFE_EVENT_CB_END();
-}
-
-// Static callback to start downloading update
-static void on_update_download_start(lv_event_t* /*e*/) {
-    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_update_download_start");
-    spdlog::info("[SettingsPanel] Starting update download");
-    UpdateChecker::instance().start_download();
-    LVGL_SAFE_EVENT_CB_END();
-}
-
-// Static callback to cancel download
-static void on_update_download_cancel(lv_event_t* /*e*/) {
-    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_update_download_cancel");
-    spdlog::info("[SettingsPanel] Download cancelled by user");
-    UpdateChecker::instance().cancel_download();
-    get_global_settings_panel().hide_update_download_modal();
-    LVGL_SAFE_EVENT_CB_END();
-}
-
-// Static callback to dismiss download modal (close without action)
-static void on_update_download_dismiss(lv_event_t* /*e*/) {
-    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_update_download_dismiss");
-    get_global_settings_panel().hide_update_download_modal();
-    LVGL_SAFE_EVENT_CB_END();
-}
 
 // ============================================================================
 // MODAL DIALOG STATIC CALLBACKS (XML event_cb)
@@ -377,25 +230,9 @@ void SettingsPanel::init_subjects() {
     // Note: brightness_value subject is now managed by DisplaySettingsOverlay
     // See ui_settings_display.cpp
 
-    // Initialize info row subjects (for reactive binding)
-    UI_MANAGED_SUBJECT_STRING(version_value_subject_, version_value_buf_, "—", "version_value",
-                              subjects_);
-
-    // Formatted version for About row description (e.g., "Current Version: 1.2.3")
-    UI_MANAGED_SUBJECT_STRING(about_version_description_subject_, about_version_description_buf_,
-                              "—", "about_version_description", subjects_);
-
-    UI_MANAGED_SUBJECT_STRING(printer_value_subject_, printer_value_buf_, "—", "printer_value",
-                              subjects_);
-
-    UI_MANAGED_SUBJECT_STRING(printer_host_value_subject_, printer_host_value_buf_, "—",
+    // Initialize info row subjects that remain in SettingsPanel
+    UI_MANAGED_SUBJECT_STRING(printer_host_value_subject_, printer_host_value_buf_, "\xe2\x80\x94",
                               "printer_host_value", subjects_);
-
-    UI_MANAGED_SUBJECT_STRING(print_hours_value_subject_, print_hours_value_buf_, "—",
-                              "print_hours_value", subjects_);
-
-    UI_MANAGED_SUBJECT_STRING(update_current_version_subject_, update_current_version_buf_,
-                              helix_version(), "update_current_version", subjects_);
 
     // LED chip selection (no subject needed - chips handle their own state)
 
@@ -446,9 +283,6 @@ void SettingsPanel::init_subjects() {
         {"on_z_movement_style_changed", on_z_movement_style_changed},
         {"on_time_format_changed", on_time_format_changed},
         {"on_language_changed", on_language_changed},
-        {"on_update_channel_changed", on_update_channel_changed},
-        {"on_version_clicked", on_version_clicked},
-        {"on_printer_name_clicked", on_printer_name_clicked},
 
         // Toggle switches
         {"on_dark_mode_changed", on_dark_mode_changed},
@@ -485,14 +319,10 @@ void SettingsPanel::init_subjects() {
         {"on_macro_buttons_clicked", on_macro_buttons_clicked},
         {"on_machine_limits_clicked", on_machine_limits_clicked},
         {"on_network_clicked", on_network_clicked},
+        {"on_power_devices_clicked", on_power_devices_clicked},
         {"on_factory_reset_clicked", on_factory_reset_clicked},
         {"on_hardware_health_clicked", on_hardware_health_clicked},
         {"on_plugins_clicked", on_plugins_clicked},
-        // Note: on_check_updates_clicked, on_install_update_clicked registered in
-        // register_settings_panel_callbacks()
-        {"on_update_download_start", on_update_download_start},
-        {"on_update_download_cancel", on_update_download_cancel},
-        {"on_update_download_dismiss", on_update_download_dismiss},
 
         // Overlay callbacks
         {"on_restart_later_clicked", on_restart_later_clicked},
@@ -725,42 +555,9 @@ void SettingsPanel::setup_action_handlers() {
             spdlog::trace("[{}]   ✓ Touch calibration row with reactive description", get_name());
         }
     }
-
-    // === About HelixScreen Row (description shows formatted version) ===
-    lv_obj_t* about_row = lv_obj_find_by_name(panel_, "row_about");
-    if (about_row) {
-        lv_obj_t* description = lv_obj_find_by_name(about_row, "description");
-        if (description) {
-            lv_label_bind_text(description, &about_version_description_subject_, "%s");
-            spdlog::trace("[{}]   About row with version description", get_name());
-        }
-    }
-
-    // Note: Check for Updates row bound declaratively in XML
 }
 
 void SettingsPanel::populate_info_rows() {
-    // === Version (subject used by About overlay and About row description) ===
-    lv_subject_copy_string(&version_value_subject_, helix_version());
-    std::string about_desc = std::string(lv_tr("Current Version")) + ": " + helix_version();
-    lv_subject_copy_string(&about_version_description_subject_, about_desc.c_str());
-    spdlog::trace("[{}]   Version subject: {}", get_name(), helix_version());
-
-    // === Printer Name (from PrinterState or Config) ===
-    lv_obj_t* printer_row = lv_obj_find_by_name(panel_, "row_printer");
-    if (printer_row) {
-        printer_value_ = lv_obj_find_by_name(printer_row, "value");
-        if (printer_value_) {
-            // Try to get printer name from config (wizard stores under active printer)
-            Config* config = Config::get_instance();
-            std::string printer_name =
-                config->get<std::string>(config->df() + helix::wizard::PRINTER_NAME, "Unknown");
-            // Update subject (label binding happens in XML)
-            lv_subject_copy_string(&printer_value_subject_, printer_name.c_str());
-            spdlog::trace("[{}]   ✓ Printer: {}", get_name(), printer_name);
-        }
-    }
-
     // === Printer Host (action row - shows IP/hostname:port as description) ===
     lv_obj_t* host_row = lv_obj_find_by_name(panel_, "row_printer_host");
     if (host_row) {
@@ -775,38 +572,9 @@ void SettingsPanel::populate_info_rows() {
                 lv_subject_copy_string(&printer_host_value_subject_, host_display.c_str());
             }
             lv_label_bind_text(description, &printer_host_value_subject_, "%s");
-            spdlog::trace("[{}]   ✓ Printer Host action row with reactive description", get_name());
+            spdlog::trace("[{}]   Printer Host action row with reactive description", get_name());
         }
     }
-
-    // Note: Klipper/Moonraker/OS version rows bound declaratively in settings_panel.xml
-
-    // Print hours: fetched on-demand via fetch_print_hours() after connection is live.
-    // Called from discovery complete callback and on notify_history_changed events.
-}
-
-// ============================================================================
-// LIVE DATA FETCHING
-// ============================================================================
-
-void SettingsPanel::fetch_print_hours() {
-    if (!api_ || !subjects_initialized_) {
-        return;
-    }
-
-    api_->history().get_history_totals(
-        [this](const PrintHistoryTotals& totals) {
-            std::string formatted = helix::format::duration(static_cast<int>(totals.total_time));
-            helix::ui::queue_update([this, formatted]() {
-                if (subjects_initialized_) {
-                    lv_subject_copy_string(&print_hours_value_subject_, formatted.c_str());
-                    spdlog::trace("[{}] Print hours updated: {}", get_name(), formatted);
-                }
-            });
-        },
-        [this](const MoonrakerError& err) {
-            spdlog::warn("[{}] Failed to fetch print hours: {}", get_name(), err.message);
-        });
 }
 
 void SettingsPanel::populate_led_chips() {
@@ -994,6 +762,13 @@ void SettingsPanel::handle_machine_limits_clicked() {
     overlay.show(parent_screen_);
 }
 
+void SettingsPanel::handle_material_temps_clicked() {
+    spdlog::debug("[{}] Material Temperatures clicked", get_name());
+
+    auto& overlay = helix::settings::get_material_temps_overlay();
+    overlay.show(parent_screen_);
+}
+
 void SettingsPanel::handle_change_host_clicked() {
     spdlog::debug("[{}] Change Host clicked", get_name());
 
@@ -1052,6 +827,18 @@ void SettingsPanel::handle_network_clicked() {
     overlay.show();
 }
 
+void SettingsPanel::handle_power_devices_clicked() {
+    spdlog::debug("[{}] Power Devices clicked", get_name());
+
+    auto& panel = get_global_power_panel();
+    lv_obj_t* overlay = panel.get_or_create_overlay(parent_screen_);
+    if (overlay) {
+        NavigationManager::instance().push_overlay(overlay);
+    } else {
+        spdlog::error("[{}] Failed to open Power panel", get_name());
+    }
+}
+
 void SettingsPanel::handle_touch_calibration_clicked() {
     DisplayManager* dm = DisplayManager::instance();
     if (dm && !dm->needs_touch_calibration()) {
@@ -1069,8 +856,6 @@ void SettingsPanel::handle_touch_calibration_clicked() {
         overlay.create(parent_screen_);
     }
 
-    // Auto-start: skip IDLE state since user explicitly chose to recalibrate
-    overlay.set_auto_start(true);
     overlay.show([this](bool success) {
         if (success) {
             // Update status when calibration completes successfully
@@ -1145,28 +930,6 @@ void SettingsPanel::handle_plugins_clicked() {
         NavigationManager::instance().register_overlay_instance(overlay.get_root(), &overlay);
         NavigationManager::instance().push_overlay(overlay.get_root());
     }
-}
-
-void SettingsPanel::show_update_download_modal() {
-    if (!update_download_modal_) {
-        update_download_modal_ = helix::ui::modal_show("update_download_modal");
-    }
-
-    // Set to Confirming state with version info
-    auto info = UpdateChecker::instance().get_cached_update();
-    std::string text = info ? fmt::format(lv_tr("Download v{}?"), info->version)
-                            : std::string(lv_tr("Download update?"));
-    UpdateChecker::instance().report_download_status(UpdateChecker::DownloadStatus::Confirming, 0,
-                                                     text);
-}
-
-void SettingsPanel::hide_update_download_modal() {
-    if (update_download_modal_) {
-        helix::ui::modal_hide(update_download_modal_);
-        update_download_modal_ = nullptr;
-    }
-    // Reset download state
-    UpdateChecker::instance().report_download_status(UpdateChecker::DownloadStatus::Idle, 0, "");
 }
 
 void SettingsPanel::perform_factory_reset() {
@@ -1358,6 +1121,12 @@ void SettingsPanel::on_machine_limits_clicked(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
+void SettingsPanel::on_material_temps_clicked(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_material_temps_clicked");
+    get_global_settings_panel().handle_material_temps_clicked();
+    LVGL_SAFE_EVENT_CB_END();
+}
+
 void SettingsPanel::on_change_host_clicked(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_change_host_clicked");
     get_global_settings_panel().handle_change_host_clicked();
@@ -1367,6 +1136,12 @@ void SettingsPanel::on_change_host_clicked(lv_event_t* /*e*/) {
 void SettingsPanel::on_network_clicked(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_network_clicked");
     get_global_settings_panel().handle_network_clicked();
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void SettingsPanel::on_power_devices_clicked(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_power_devices_clicked");
+    get_global_settings_panel().handle_power_devices_clicked();
     LVGL_SAFE_EVENT_CB_END();
 }
 
@@ -1400,16 +1175,16 @@ void SettingsPanel::on_restart_helix_settings_clicked(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
-void SettingsPanel::on_print_hours_clicked(lv_event_t* /*e*/) {
-    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_print_hours_clicked");
-    get_global_settings_panel().handle_print_hours_clicked();
+void SettingsPanel::on_about_clicked(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_about_clicked");
+    get_global_settings_panel().handle_about_clicked();
     LVGL_SAFE_EVENT_CB_END();
 }
 
-void SettingsPanel::handle_print_hours_clicked() {
-    helix::ui::lazy_create_and_push_overlay<HistoryDashboardPanel>(
-        get_global_history_dashboard_panel, history_dashboard_panel_, parent_screen_,
-        "Print History", get_name());
+void SettingsPanel::handle_about_clicked() {
+    spdlog::debug("[{}] About clicked - opening AboutSettingsOverlay", get_name());
+    auto& overlay = helix::settings::get_about_settings_overlay();
+    overlay.show(parent_screen_);
 }
 
 // ============================================================================
@@ -1483,19 +1258,18 @@ void register_settings_panel_callbacks() {
         {"on_filament_sensors_clicked", SettingsPanel::on_filament_sensors_clicked},
         {"on_macro_buttons_clicked", SettingsPanel::on_macro_buttons_clicked},
         {"on_machine_limits_clicked", SettingsPanel::on_machine_limits_clicked},
+        {"on_material_temps_clicked", SettingsPanel::on_material_temps_clicked},
         {"on_network_clicked", SettingsPanel::on_network_clicked},
+        {"on_power_devices_clicked", SettingsPanel::on_power_devices_clicked},
         {"on_touch_calibration_clicked", SettingsPanel::on_touch_calibration_clicked},
         {"on_factory_reset_clicked", SettingsPanel::on_factory_reset_clicked},
         {"on_hardware_health_clicked", SettingsPanel::on_hardware_health_clicked},
         {"on_restart_helix_settings_clicked", SettingsPanel::on_restart_helix_settings_clicked},
-        {"on_print_hours_clicked", SettingsPanel::on_print_hours_clicked},
+        {"on_about_clicked", SettingsPanel::on_about_clicked},
         {"on_change_host_clicked", SettingsPanel::on_change_host_clicked},
         // Help & Support callbacks
         {"on_debug_bundle_clicked", SettingsPanel::on_debug_bundle_clicked},
         {"on_discord_clicked", SettingsPanel::on_discord_clicked},
         {"on_docs_clicked", SettingsPanel::on_docs_clicked},
-
-        {"on_check_updates_clicked", on_check_updates_clicked},
-        {"on_install_update_clicked", on_install_update_clicked},
     });
 }

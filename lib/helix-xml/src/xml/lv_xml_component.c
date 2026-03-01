@@ -183,6 +183,10 @@ lv_result_t lv_xml_register_component_from_data(const char * name, const char * 
     }
     else {
         lv_xml_component_scope_t * scope = lv_ll_ins_head(&component_scope_ll);
+        if(scope == NULL) {
+            LV_LOG_ERROR("OOM: failed to register component '%s'", name);
+            return LV_RESULT_INVALID;
+        }
         lv_memzero(scope, sizeof(lv_xml_component_scope_t));
         lv_memcpy(scope, &state.scope, sizeof(lv_xml_component_scope_t));
 
@@ -623,6 +627,10 @@ static void process_animation_element(lv_xml_parser_state_t * state, const char 
     }
 
     lv_xml_anim_timeline_child_t * child = lv_ll_ins_tail(&at->anims_ll);
+    if(child == NULL) {
+        LV_LOG_ERROR("OOM: failed to allocate animation child");
+        return;
+    }
     child->is_anim = true;
     lv_anim_t * a = &child->data.anim;
 
@@ -717,6 +725,10 @@ static void process_include_timeline_element(lv_xml_parser_state_t * state, cons
 static void process_grad_element(lv_xml_parser_state_t * state, const char * tag_name, const char ** attrs)
 {
     lv_xml_grad_t * grad = lv_ll_ins_tail(&state->scope.gradient_ll);
+    if(grad == NULL) {
+        LV_LOG_ERROR("OOM: failed to allocate gradient");
+        return;
+    }
     lv_memzero(grad, sizeof(lv_xml_grad_t));
 
     grad->name = lv_strdup(lv_xml_get_value_of(attrs, "name"));
@@ -875,6 +887,10 @@ static void process_prop_element(lv_xml_parser_state_t * state, const char * nam
     if(!lv_streq(name, "prop")) return;
 
     lv_xml_param_t * prop = lv_ll_ins_tail(&state->scope.param_ll);
+    if(prop == NULL) {
+        LV_LOG_ERROR("OOM: failed to allocate prop");
+        return;
+    }
     lv_memzero(prop, sizeof(lv_xml_param_t));
 
     prop->name = lv_strdup(lv_xml_get_value_of(attrs, "name"));

@@ -136,7 +136,7 @@ class DisplaySettingsManager {
     /** @brief Get dropdown options string "Auto\n3D View\n2D Heatmap" */
     static const char* get_bed_mesh_render_mode_options();
 
-    /** @brief Get G-code render mode (0=Auto, 1=3D, 2=2D) */
+    /** @brief Get G-code render mode (0=Auto, 1=3D, 2=2D, 3=Thumbnail Only) */
     int get_gcode_render_mode() const;
 
     /** @brief Set G-code render mode (updates subject + persists) */
@@ -153,6 +153,18 @@ class DisplaySettingsManager {
 
     /** @brief Get dropdown options string "12 Hour\n24 Hour" */
     static const char* get_time_format_options();
+
+    // =========================================================================
+    // SCREENSAVER
+    // =========================================================================
+
+#ifdef HELIX_ENABLE_SCREENSAVER
+    /** @brief Get screensaver enabled state */
+    bool get_screensaver_enabled() const;
+
+    /** @brief Set screensaver enabled state (updates subject + persists) */
+    void set_screensaver_enabled(bool enabled);
+#endif
 
     // =========================================================================
     // CONFIG-ONLY SETTINGS (no subjects)
@@ -252,7 +264,7 @@ class DisplaySettingsManager {
         return &bed_mesh_render_mode_subject_;
     }
 
-    /** @brief G-code render mode subject (integer: 0=auto, 1=3D, 2=2D) */
+    /** @brief G-code render mode subject (integer: 0=auto, 1=3D, 2=2D, 3=thumbnail only) */
     lv_subject_t* subject_gcode_render_mode() {
         return &gcode_render_mode_subject_;
     }
@@ -261,6 +273,13 @@ class DisplaySettingsManager {
     lv_subject_t* subject_time_format() {
         return &time_format_subject_;
     }
+
+#ifdef HELIX_ENABLE_SCREENSAVER
+    /** @brief Screensaver enabled subject (integer: 0=off, 1=on) */
+    lv_subject_t* subject_screensaver_enabled() {
+        return &screensaver_enabled_subject_;
+    }
+#endif
 
   private:
     DisplaySettingsManager();
@@ -281,6 +300,10 @@ class DisplaySettingsManager {
     lv_subject_t bed_mesh_render_mode_subject_;
     lv_subject_t gcode_render_mode_subject_;
     lv_subject_t time_format_subject_;
+
+#ifdef HELIX_ENABLE_SCREENSAVER
+    lv_subject_t screensaver_enabled_subject_;
+#endif
 
     bool subjects_initialized_ = false;
 };

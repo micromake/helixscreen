@@ -28,17 +28,6 @@ set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 add_subdirectory(${LIBHV_DIR} libhv)
 
 # ============================================================================
-# TinyGL (static library from source globs)
-# TinyGL's CMakeLists.txt has an incomplete source list (missing zdither.c),
-# so we build from source globs directly, like we do for LVGL.
-# ============================================================================
-set(TINYGL_DIR "${PROJECT_ROOT}/lib/tinygl")
-file(GLOB TINYGL_SOURCES "${TINYGL_DIR}/src/*.c")
-add_library(tinygl STATIC ${TINYGL_SOURCES})
-target_include_directories(tinygl PUBLIC "${TINYGL_DIR}/include")
-target_compile_options(tinygl PRIVATE -Wno-unused-but-set-variable)
-
-# ============================================================================
 # LVGL (static library from source globs)
 # ============================================================================
 file(GLOB_RECURSE LVGL_SOURCES "${PROJECT_ROOT}/lib/lvgl/src/*.c")
@@ -132,7 +121,6 @@ target_include_directories(main PRIVATE
     "${PROJECT_ROOT}/lib/libhv/cpputil"     # For json.hpp (nlohmann)
     "${PROJECT_ROOT}/lib/libhv"             # For hv/ includes
     "${PROJECT_ROOT}/lib/spdlog/include"
-    "${PROJECT_ROOT}/lib/tinygl/include"
     "${PROJECT_ROOT}/lib/tinygl/include-demo" # For stb_image.h
     "${PROJECT_ROOT}/lib/glm"
     "${PROJECT_ROOT}/lib/lv_markdown/src"
@@ -185,7 +173,6 @@ target_link_libraries(main
     helix_xml
     lv_markdown
     hv_static
-    tinygl
     ${log-lib}
     ${z-lib}
     android

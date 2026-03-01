@@ -9,6 +9,6 @@
     <!-- Hidden when no sensor -->
     <bind_flag_if_eq subject="width_sensor_count" flag="hidden" ref_value="0"/>
     <icon src="ruler" size="sm" variant="secondary"/>
-    <text_tiny bind_text="filament_diameter_text"/>
+    <text_tiny name="width_value" bind_text="filament_diameter_text"/>
   </view>
 </component>

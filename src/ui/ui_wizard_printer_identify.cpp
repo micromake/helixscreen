@@ -70,6 +70,8 @@ WizardPrinterIdentifyStep::~WizardPrinterIdentifyStep() {
     // NOTE: Do NOT log here - spdlog may be destroyed first
     screen_root_ = nullptr;
     printer_preview_image_ = nullptr;
+    // list_cache_container_ is parented to lv_layer_sys() — lv_deinit() handles it
+    list_cache_container_ = nullptr;
 }
 
 // ============================================================================
@@ -138,6 +140,11 @@ void WizardPrinterIdentifyStep::init_subjects() {
         spdlog::info("[{}] Printer URL changed from '{}' to '{}' - forcing re-detection",
                      get_name(), last_detected_url_, current_url);
         subjects_initialized_ = false; // Force re-initialization
+
+        // Invalidate cached list — kinematics filter may differ for new printer
+        if (list_cache_container_) {
+            lv_obj_clean(list_cache_container_);
+        }
 
         // Clear saved printer type so detection runs fresh for new printer
         Config* config = Config::get_instance();
@@ -396,12 +403,37 @@ lv_obj_t* WizardPrinterIdentifyStep::create(lv_obj_t* parent) {
         return nullptr;
     }
 
-    // Find and set up the scrollable printer type list
-    printer_type_list_ = lv_obj_find_by_name(screen_root_, "printer_type_list");
-    if (printer_type_list_) {
-        populate_printer_type_list();
-        spdlog::debug("[{}] Printer type list populated with {} items", get_name(),
-                      PrinterDetector::get_list_names(detected_kinematics_).size());
+    // Find the printer type list container from XML
+    lv_obj_t* xml_list = lv_obj_find_by_name(screen_root_, "printer_type_list");
+    if (xml_list) {
+        if (list_cache_container_ && lv_obj_get_child_count(list_cache_container_) > 0) {
+            // Cached list exists from a previous visit — reparent children back
+            // instead of rebuilding 68+ buttons (slow on MIPS, see issue #231)
+            printer_type_list_ = xml_list;
+            while (lv_obj_get_child_count(list_cache_container_) > 0) {
+                lv_obj_t* child = lv_obj_get_child(list_cache_container_, 0);
+                lv_obj_set_parent(child, printer_type_list_);
+            }
+            // Update selection highlight to reflect current state
+            int selected = lv_subject_get_int(&printer_type_selected_);
+            update_list_selection(selected);
+            // Scroll to selected item
+            if (selected >= 0 &&
+                selected < static_cast<int>(lv_obj_get_child_count(printer_type_list_))) {
+                lv_obj_t* selected_btn = lv_obj_get_child(printer_type_list_, selected);
+                if (selected_btn) {
+                    lv_obj_scroll_to_view(selected_btn, LV_ANIM_OFF);
+                }
+            }
+            spdlog::debug("[{}] Restored cached printer type list ({} items)", get_name(),
+                          lv_obj_get_child_count(printer_type_list_));
+        } else {
+            // First visit — build the list from scratch
+            printer_type_list_ = xml_list;
+            populate_printer_type_list();
+            spdlog::debug("[{}] Printer type list populated with {} items", get_name(),
+                          PrinterDetector::get_list_names(detected_kinematics_).size());
+        }
     } else {
         spdlog::warn("[{}] Printer type list not found in XML", get_name());
     }
@@ -487,6 +519,24 @@ void WizardPrinterIdentifyStep::cleanup() {
     } catch (const std::exception& e) {
         NOTIFY_ERROR("Error saving printer settings: {}", e.what());
         LOG_ERROR_INTERNAL("[{}] Failed to save config: {}", get_name(), e.what());
+    }
+
+    // Cache the printer type list so we don't rebuild 68+ buttons on revisit.
+    // Reparent children to a persistent off-screen container before the wizard
+    // framework deletes the step's widget tree. (issue #231)
+    if (printer_type_list_ && lv_obj_get_child_count(printer_type_list_) > 0) {
+        if (!list_cache_container_) {
+            // Create a persistent off-screen container (parented to active screen's layer)
+            list_cache_container_ = lv_obj_create(lv_layer_sys());
+            lv_obj_add_flag(list_cache_container_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_size(list_cache_container_, 0, 0);
+        }
+        while (lv_obj_get_child_count(printer_type_list_) > 0) {
+            lv_obj_t* child = lv_obj_get_child(printer_type_list_, 0);
+            lv_obj_set_parent(child, list_cache_container_);
+        }
+        spdlog::debug("[{}] Cached {} printer list items for reuse", get_name(),
+                      lv_obj_get_child_count(list_cache_container_));
     }
 
     // Reset UI references (wizard framework handles deletion)

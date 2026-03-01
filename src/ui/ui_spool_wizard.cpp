@@ -509,9 +509,9 @@ void SpoolWizardOverlay::create_filament_then_spool(int vendor_id) {
     if (!selected_filament_.color_hex.empty()) {
         data["color_hex"] = selected_filament_.color_hex;
     }
-    if (selected_filament_.density > 0) {
-        data["density"] = selected_filament_.density;
-    }
+    // density and diameter are REQUIRED by Spoolman (no defaults in their API)
+    data["density"] = selected_filament_.density > 0 ? selected_filament_.density : 1.24;
+    data["diameter"] = selected_filament_.diameter > 0 ? selected_filament_.diameter : 1.75;
     if (selected_filament_.weight > 0) {
         data["weight"] = selected_filament_.weight;
     }
@@ -1118,6 +1118,7 @@ SpoolWizardOverlay::merge_filaments(const std::vector<FilamentInfo>& server_fila
         entry.server_id = is_server ? fi.id : -1;
         entry.vendor_id = is_server ? fi.vendor_id : -1;
         entry.density = fi.density;
+        entry.diameter = fi.diameter;
         entry.weight = fi.weight;
         entry.spool_weight = fi.spool_weight;
         entry.nozzle_temp_min = fi.nozzle_temp_min;
@@ -1257,6 +1258,7 @@ void SpoolWizardOverlay::load_filaments() {
                     entry.server_id = fi.id;
                     entry.vendor_id = fi.vendor_id;
                     entry.density = fi.density;
+                    entry.diameter = fi.diameter;
                     entry.weight = fi.weight;
                     entry.spool_weight = fi.spool_weight;
                     entry.nozzle_temp_min = fi.nozzle_temp_min;

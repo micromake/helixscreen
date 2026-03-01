@@ -302,3 +302,127 @@ TEST_CASE("KlipperConfigEditor - include resolution", "[config][includes]") {
         REQUIRE(result["probe"].file_path == "printer.cfg");
     }
 }
+
+// ============================================================================
+// apply_edits() tests
+// ============================================================================
+
+TEST_CASE("apply_edits changes existing key value", "[mpc_config_edit]") {
+    KlipperConfigEditor editor;
+    std::string content = "[extruder]\ncontrol: pid\npid_kp: 22.865\n";
+
+    std::vector<ConfigEdit> edits = {
+        {ConfigEdit::Type::SET_VALUE, "control", "mpc"},
+    };
+
+    auto result = editor.apply_edits(content, "extruder", edits);
+    REQUIRE(result.has_value());
+    REQUIRE(result->find("control: mpc") != std::string::npos);
+    // Other keys unchanged
+    REQUIRE(result->find("pid_kp: 22.865") != std::string::npos);
+}
+
+TEST_CASE("apply_edits adds new key to section", "[mpc_config_edit]") {
+    KlipperConfigEditor editor;
+    std::string content = "[extruder]\ncontrol: mpc\n";
+
+    std::vector<ConfigEdit> edits = {
+        {ConfigEdit::Type::ADD_KEY, "heater_power", "50"},
+    };
+
+    auto result = editor.apply_edits(content, "extruder", edits);
+    REQUIRE(result.has_value());
+    REQUIRE(result->find("heater_power: 50") != std::string::npos);
+}
+
+TEST_CASE("apply_edits ADD_KEY uses SET if key already exists", "[mpc_config_edit]") {
+    KlipperConfigEditor editor;
+    std::string content = "[extruder]\ncontrol: pid\nheater_power: 40\n";
+
+    std::vector<ConfigEdit> edits = {
+        {ConfigEdit::Type::ADD_KEY, "heater_power", "50"},
+    };
+
+    auto result = editor.apply_edits(content, "extruder", edits);
+    REQUIRE(result.has_value());
+    REQUIRE(result->find("heater_power: 50") != std::string::npos);
+    // Should not have duplicate heater_power lines
+    auto first = result->find("heater_power");
+    auto second = result->find("heater_power", first + 1);
+    REQUIRE(second == std::string::npos);
+}
+
+TEST_CASE("apply_edits preserves formatting and comments", "[mpc_config_edit]") {
+    KlipperConfigEditor editor;
+    std::string content =
+        "# Extruder config\n[extruder]\n# Control algorithm\ncontrol: pid\npid_kp: 22.865\n\n"
+        "[printer]\nkinematics: corexy\n";
+
+    std::vector<ConfigEdit> edits = {
+        {ConfigEdit::Type::SET_VALUE, "control", "mpc"},
+    };
+
+    auto result = editor.apply_edits(content, "extruder", edits);
+    REQUIRE(result.has_value());
+    REQUIRE(result->find("# Extruder config") != std::string::npos);
+    REQUIRE(result->find("# Control algorithm") != std::string::npos);
+    REQUIRE(result->find("[printer]") != std::string::npos);
+    REQUIRE(result->find("kinematics: corexy") != std::string::npos);
+}
+
+TEST_CASE("apply_edits returns nullopt for missing section", "[mpc_config_edit]") {
+    KlipperConfigEditor editor;
+    std::string content = "[printer]\nkinematics: corexy\n";
+
+    std::vector<ConfigEdit> edits = {
+        {ConfigEdit::Type::SET_VALUE, "extruder", "mpc"},
+    };
+
+    auto result = editor.apply_edits(content, "extruder", edits);
+    REQUIRE_FALSE(result.has_value());
+}
+
+TEST_CASE("apply_edits with empty edits returns content unchanged", "[mpc_config_edit]") {
+    KlipperConfigEditor editor;
+    std::string content = "[extruder]\ncontrol: pid\n";
+
+    std::vector<ConfigEdit> edits;
+
+    auto result = editor.apply_edits(content, "extruder", edits);
+    REQUIRE(result.has_value());
+    REQUIRE(*result == content);
+}
+
+TEST_CASE("apply_edits changes control type and adds heater_power", "[mpc_config_edit]") {
+    KlipperConfigEditor editor;
+    std::string content =
+        "[extruder]\ncontrol: pid\npid_kp: 22.865\npid_ki: 1.292\npid_kd: 101.178\n";
+
+    std::vector<ConfigEdit> edits = {
+        {ConfigEdit::Type::SET_VALUE, "control", "mpc"},
+        {ConfigEdit::Type::ADD_KEY, "heater_power", "50"},
+    };
+
+    auto result = editor.apply_edits(content, "extruder", edits);
+    REQUIRE(result.has_value());
+    REQUIRE(result->find("control: mpc") != std::string::npos);
+    REQUIRE(result->find("heater_power: 50") != std::string::npos);
+    // PID values preserved (Kalico ignores them when control is mpc)
+    REQUIRE(result->find("pid_kp: 22.865") != std::string::npos);
+}
+
+TEST_CASE("apply_edits REMOVE_KEY comments out the key", "[mpc_config_edit]") {
+    KlipperConfigEditor editor;
+    std::string content = "[extruder]\ncontrol: pid\npid_kp: 22.865\npid_ki: 1.292\n";
+
+    std::vector<ConfigEdit> edits = {
+        {ConfigEdit::Type::REMOVE_KEY, "pid_kp", ""},
+    };
+
+    auto result = editor.apply_edits(content, "extruder", edits);
+    REQUIRE(result.has_value());
+    REQUIRE(result->find("#pid_kp: 22.865") != std::string::npos);
+    // Other keys unchanged
+    REQUIRE(result->find("control: pid") != std::string::npos);
+    REQUIRE(result->find("pid_ki: 1.292") != std::string::npos);
+}

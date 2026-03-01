@@ -13,7 +13,7 @@
  * @brief G-Code Viewer test/demonstration panel (class-based)
  *
  * Test panel for the 3D G-code visualization widget. Provides:
- * - Full-screen G-code viewer with TinyGL rendering
+ * - Full-screen G-code viewer with 3D rendering
  * - Camera control buttons (preset views: top, front, side, isometric)
  * - Zoom controls and camera reset
  * - File picker for loading different G-code files

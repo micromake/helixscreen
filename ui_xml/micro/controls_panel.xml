@@ -2,11 +2,6 @@
 <!-- Copyright (C) 2025-2026 356C LLC -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <!-- MICRO OVERRIDE of ui_xml/controls_panel.xml for 480x272 displays -->
-<!-- Divergences from standard:
-     - Row 1 height: 50% (vs 55%) to reclaim vertical space
-     - Padding: #space_xs throughout (vs #space_sm/#space_md)
-     - Row 2: flex_grow (vs explicit 45%) since Row 1 is explicit 50%
--->
 <component>
   <styles>
     <!-- Homing button styles -->
@@ -152,7 +147,7 @@
                 <temp_display name="nozzle_temp_display"
                               size="md" show_target="true" bind_current="extruder_temp" bind_target="extruder_target"
                               event_cb="on_nozzle_temp_clicked"/>
-                <icon src="pencil" size="xs" variant="secondary" clickable="false" event_bubble="true"/>
+                <icon src="pencil" size="xs" variant="tertiary" clickable="false" event_bubble="true"/>
               </lv_obj>
             </lv_obj>
             <text_small name="nozzle_status"
@@ -181,7 +176,7 @@
                 <temp_display name="bed_temp_display"
                               size="md" show_target="true" bind_current="bed_temp" bind_target="bed_target"
                               event_cb="on_bed_temp_clicked"/>
-                <icon src="pencil" size="xs" variant="secondary" clickable="false" event_bubble="true"/>
+                <icon src="pencil" size="xs" variant="tertiary" clickable="false" event_bubble="true"/>
               </lv_obj>
             </lv_obj>
             <text_small name="bed_status"
@@ -191,10 +186,13 @@
             <!-- Chamber section (visible only if printer has chamber sensor) -->
             <lv_obj name="chamber_section"
                     width="100%" flex_flow="row" style_flex_main_place="space_between" style_flex_cross_place="center"
-                    hidden="true">
+                    clickable="true" hidden="true">
+              <event_cb trigger="clicked" callback="on_chamber_temp_clicked"/>
               <bind_flag_if_eq subject="printer_has_chamber_sensor" flag="hidden" ref_value="0"/>
-              <text_small text="Chamber:" translation_tag="Chamber:"/>
-              <temp_display name="chamber_temp_display" size="md" show_target="false" bind_current="chamber_temp"/>
+              <text_small text="Chamber:" translation_tag="Chamber:" clickable="false" event_bubble="true"/>
+              <temp_display name="chamber_temp_display"
+                            size="md" show_target="false" bind_current="chamber_temp" clickable="false"
+                            event_bubble="true"/>
             </lv_obj>
             <!-- Secondary temperature sensors list (populated dynamically) -->
             <lv_obj name="secondary_temps_list"

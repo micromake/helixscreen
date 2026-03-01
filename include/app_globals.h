@@ -17,6 +17,7 @@ class MoonrakerManager;
 namespace helix {
 class PrinterState;
 }
+class JobQueueState;
 class PrintHistoryManager;
 class TemperatureHistoryManager;
 
@@ -55,6 +56,21 @@ MoonrakerManager* get_moonraker_manager();
  * @param manager Pointer to MoonrakerManager instance
  */
 void set_moonraker_manager(MoonrakerManager* manager);
+
+/**
+ * @brief Get global JobQueueState instance
+ *
+ * Provides centralized job queue state for queue panels and status indicators.
+ *
+ * @return Pointer to global JobQueueState (may be nullptr if not initialized)
+ */
+JobQueueState* get_job_queue_state();
+
+/**
+ * @brief Set global JobQueueState instance (called by Application during init)
+ * @param state Pointer to JobQueueState instance
+ */
+void set_job_queue_state(JobQueueState* state);
 
 /**
  * @brief Get global PrintHistoryManager instance
@@ -111,6 +127,16 @@ helix::PrinterState& get_printer_state();
  * @return Reference to the global notification subject
  */
 lv_subject_t& get_notification_subject();
+
+/**
+ * @brief Get the global home edit mode subject
+ *
+ * Controls navbar done button visibility during grid edit mode.
+ * Value 0 = not editing, 1 = editing.
+ *
+ * @return Reference to the home edit mode subject
+ */
+lv_subject_t& get_home_edit_mode_subject();
 
 /**
  * @brief Initialize all global subjects

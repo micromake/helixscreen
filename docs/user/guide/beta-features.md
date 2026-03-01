@@ -8,7 +8,7 @@ HelixScreen includes several features that are functional but still being refine
 
 **Method 1: Secret tap (recommended)**
 
-1. Go to **Settings > About**
+1. Go to **Settings** → tap the **About** row to open the About overlay
 2. Tap the **Current Version** button **7 times** (like enabling Android Developer Mode)
 3. A countdown appears after 4 taps ("3 more taps...", "2 more taps...", etc.)
 4. A toast confirms "Beta features: ON"
@@ -44,6 +44,7 @@ When beta features are enabled, the following appear in the UI with an orange "B
 | **Macro Browser** | Advanced panel | Browse and execute custom Klipper macros | Functional; hides system macros, confirms dangerous ones |
 | **G-code Console** | Advanced panel | Send G-code commands directly to the printer and view responses | Functional |
 | **Z Calibration** | Controls panel | Quick-access Z calibration button | Functional; requires probe hardware |
+| **MPC Calibration** | Heater Calibration panel | Model Predictive Control calibration as an alternative to PID | Functional; requires Kalico firmware |
 
 > **Graduated from beta:** PID Calibration, Input Shaper, and the **Spool Wizard** are now available to all users without enabling beta features.
 
@@ -51,7 +52,7 @@ When beta features are enabled, the following appear in the UI with an orange "B
 
 ## Update Channel Selection
 
-When beta features are enabled, a channel selector appears in **Settings > About**:
+When beta features are enabled, a channel selector appears in **Settings** → **About**:
 
 | Channel | Description |
 |---------|-------------|

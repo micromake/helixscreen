@@ -22,23 +22,20 @@ enum class GcodeViewerState {
  * @brief Render mode for G-code visualization
  *
  * Controls which renderer is used for displaying G-code:
- * - Auto: Uses 2D layer view by default. Can be overridden via HELIX_GCODE_MODE env var.
- * - Render3D: Forces 3D TinyGL renderer (isometric ribbon view with full camera control).
- *       Only useful for development/testing - TinyGL is too slow for production use.
+ * - Auto: Uses GLES 3D if available, falls back to 2D layer view.
+ *         Can be overridden via HELIX_GCODE_MODE env var.
+ * - Render3D: Forces 3D GLES renderer (isometric ribbon view with full camera control).
  * - Layer2D: Forces 2D orthographic layer view (front/top view, single layer at a time)
  *
- * The 2D layer view is the default because TinyGL software rasterization is too slow
- * for smooth interaction (~3-4 FPS) on ALL platforms, not just low-power hardware.
- *
  * Environment variable override (checked at widget creation):
- * - HELIX_GCODE_MODE=3D  -> Use 3D TinyGL (for development/testing)
+ * - HELIX_GCODE_MODE=3D  -> Use 3D GLES renderer
  * - HELIX_GCODE_MODE=2D  -> Use 2D layer view (explicit)
- * - Not set              -> Use 2D layer view (default)
+ * - Not set              -> Auto-detect
  */
 enum class GcodeViewerRenderMode {
-    Auto,     ///< Auto-select (2D default, env var override)
-    Render3D, ///< Force 3D TinyGL renderer (dev/testing only)
-    Layer2D   ///< Force 2D orthographic layer view (default)
+    Auto,     ///< Auto-select (GLES 3D if available, else 2D)
+    Render3D, ///< Force 3D GLES renderer
+    Layer2D   ///< Force 2D orthographic layer view
 };
 
 /**
@@ -127,10 +124,11 @@ void ui_gcode_viewer_set_load_callback(lv_obj_t* obj, gcode_viewer_load_callback
 /**
  * @brief Set G-code data directly (already parsed)
  * @param obj Viewer widget
- * @param gcode_data Parsed G-code file (widget takes ownership)
+ * @param gcode_data Parsed G-code file (widget takes ownership, must be heap-allocated)
  *
  * Use this when you've already parsed the file elsewhere.
- * Widget will NOT free the data - caller retains ownership.
+ * The widget takes ownership of the data and will free it on clear/destroy.
+ * Caller must NOT use or free gcode_data after this call.
  */
 void ui_gcode_viewer_set_gcode_data(lv_obj_t* obj, void* gcode_data);
 
@@ -159,7 +157,7 @@ helix::GcodeViewerState ui_gcode_viewer_get_state(lv_obj_t* obj);
  * @param paused true to pause rendering (skip draw callbacks), false to resume
  *
  * When paused, the draw callback returns immediately without performing
- * any TinyGL rendering. Use this to stop rendering when the viewer is
+ * any 3D rendering. Use this to stop rendering when the viewer is
  * not visible (panel navigated away, obscured by overlay, or in thumbnail mode).
  *
  * Resuming triggers an immediate invalidate to refresh the view.
@@ -182,8 +180,8 @@ bool ui_gcode_viewer_is_paused(lv_obj_t* obj);
  * @param obj Viewer widget
  * @param mode Render mode to use
  *
- * - AUTO: Monitors FPS and falls back to 2D layer view if performance is poor
- * - 3D: Forces 3D TinyGL renderer with full camera control
+ * - AUTO: Uses GLES 3D if available, falls back to 2D layer view
+ * - 3D: Forces 3D GLES renderer with full camera control
  * - 2D_LAYER: Forces top-down orthographic single-layer view (fast on AD5M)
  *
  * Default is AUTO. Settings are persisted in SettingsManager.
@@ -213,6 +211,15 @@ void ui_gcode_viewer_evaluate_render_mode(lv_obj_t* obj);
  * @return true if 2D layer renderer is active (either forced or via AUTO fallback)
  */
 bool ui_gcode_viewer_is_using_2d_mode(lv_obj_t* obj);
+
+/**
+ * @brief Disable streaming mode for this viewer instance.
+ *
+ * When disabled, large files will use full-load + budget system instead of
+ * streaming 2D layer renderer. Use for detail panel previews where 3D is
+ * preferred and 2D streaming is not useful.
+ */
+void ui_gcode_viewer_disable_streaming(lv_obj_t* obj);
 
 /**
  * @brief Show/hide support structures in 2D layer view
@@ -390,14 +397,14 @@ void ui_gcode_viewer_set_opacity(lv_obj_t* obj, lv_opa_t opacity);
 void ui_gcode_viewer_set_brightness(lv_obj_t* obj, float factor);
 
 /**
- * @brief Set material specular lighting parameters (TinyGL 3D only)
+ * @brief Set material specular lighting parameters (3D only)
  * @param obj Viewer widget
  * @param intensity Specular intensity (0.0-0.2, where 0.0 = matte, 0.075 = OrcaSlicer default)
  * @param shininess Specular shininess/focus (5.0-50.0, where 20.0 = OrcaSlicer default)
  *
  * Controls the appearance of reflective highlights on G-code extrusion surfaces.
  * Higher intensity = brighter highlights. Higher shininess = tighter/sharper highlights.
- * Only affects TinyGL 3D renderer; ignored by 2D renderer.
+ * Only affects 3D GLES renderer; ignored by 2D renderer.
  */
 void ui_gcode_viewer_set_specular(lv_obj_t* obj, float intensity, float shininess);
 
@@ -602,8 +609,31 @@ void ui_gcode_viewer_register(void);
 // C++ API Extensions
 // ==============================================
 
+#include <cstdint>
 #include <string>
 #include <unordered_set>
+#include <vector>
+
+/**
+ * @brief Set per-tool AMS color overrides for multi-color prints
+ * @param obj Viewer widget
+ * @param colors Vector of RGB colors indexed by tool (0xRRGGBB)
+ *
+ * Overrides slicer-embedded colors with real AMS filament colors.
+ * For 3D: updates geometry palette and triggers VBO re-upload.
+ * For 2D: replaces tool_palette_ entries; resolves at render time.
+ */
+void ui_gcode_viewer_set_tool_colors(lv_obj_t* obj, const std::vector<uint32_t>& colors);
+
+/**
+ * @brief Apply AMS filament colors to the viewer from AmsState
+ * @param obj Viewer widget
+ * @return true if AMS colors were applied, false if no AMS backend or all defaults
+ *
+ * Reads the current AMS tool-to-slot mapping and applies slot colors.
+ * Shared by print status panel and print file detail view.
+ */
+bool ui_gcode_viewer_apply_ams_tool_colors(lv_obj_t* obj);
 
 /**
  * @brief Set highlighted objects (multi-select support)

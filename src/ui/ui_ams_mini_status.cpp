@@ -75,8 +75,8 @@ struct AmsMiniStatusData {
     int slot_count = 0;
     int max_visible = AMS_MINI_STATUS_MAX_VISIBLE;
 
-    // Row density (how many widgets share this home panel row)
-    int row_density = 0; // 0 = unknown/default, set by set_row_density()
+    // Available pixel width for responsive sizing
+    int width_px = 0; // 0 = unknown/default, set by set_width()
 
     // Multi-unit support
     int unit_count = 0;       // Number of AMS units (0 or 1 = single row, 2+ = stacked rows)
@@ -143,27 +143,27 @@ static lv_obj_t* ensure_unit_row(AmsMiniStatusData* data, int unit_index) {
 }
 
 /**
- * @brief Compute effective max bar width based on row density
+ * @brief Compute effective max bar width based on available width
  *
- * When squeezed into a row with 5+ widgets, bars shrink to stay proportional.
+ * When squeezed into a narrow cell, bars shrink to stay proportional.
  */
 static int32_t effective_max_bar_width(const AmsMiniStatusData* data) {
-    if (data->row_density >= 5)
+    if (data->width_px > 0 && data->width_px < 100)
         return 8; // Tight layout: narrow bars
-    if (data->row_density >= 4)
+    if (data->width_px > 0 && data->width_px < 150)
         return 10;           // Medium layout: slightly reduced
     return MAX_BAR_WIDTH_PX; // Default: 16
 }
 
 /**
- * @brief Compute effective max visible slots based on row density
+ * @brief Compute effective max visible slots based on available width
  *
- * In tight layouts, reduce visible slots to avoid overflow/clipping.
+ * In narrow cells, reduce visible slots to avoid overflow/clipping.
  */
 static int effective_max_visible(const AmsMiniStatusData* data) {
-    if (data->row_density >= 5)
+    if (data->width_px > 0 && data->width_px < 100)
         return std::min(data->max_visible, 6); // Tight: show max 6 bars
-    if (data->row_density >= 4)
+    if (data->width_px > 0 && data->width_px < 150)
         return std::min(data->max_visible, 8); // Medium: show all
     return data->max_visible;
 }
@@ -202,6 +202,8 @@ static void rebuild_bars(AmsMiniStatusData* data) {
     if (effective_height < 20) {
         effective_height = 32; // Minimum fallback height
     }
+    // Cap bars at 80% of container height so they don't fill the entire widget
+    effective_height = effective_height * 80 / 100;
 
     bool is_multi_unit = (data->unit_count >= 2);
 
@@ -398,8 +400,8 @@ static void on_delete(lv_event_t* e) {
     if (it != s_registry.end()) {
         std::unique_ptr<AmsMiniStatusData> data(it->second);
         if (data) {
-            // Release observer before delete to prevent destructor from calling
-            // lv_observer_remove() on potentially destroyed subjects during shutdown
+            // release() skips lv_observer_remove() — safe during both normal
+            // widget deletion and shutdown (subjects may already be deinited).
             data->slots_version_observer.release();
         }
         // data automatically freed when unique_ptr goes out of scope
@@ -556,11 +558,13 @@ void ui_ams_mini_status_set_slot(lv_obj_t* obj, int slot_index, uint32_t color_r
 /** Timer callback for deferred refresh */
 static void deferred_refresh_cb(lv_timer_t* timer) {
     lv_obj_t* container = static_cast<lv_obj_t*>(lv_timer_get_user_data(timer));
-    if (!container) {
+    if (!container || !lv_is_initialized()) {
         lv_timer_delete(timer);
         return;
     }
 
+    // Registry lookup validates the widget is still alive — on_delete() removes
+    // the entry before freeing data, so get_data() returns nullptr for dead widgets.
     auto* data = get_data(container);
     if (data) {
         rebuild_bars(data);
@@ -590,18 +594,18 @@ void ui_ams_mini_status_refresh(lv_obj_t* obj) {
     }
 }
 
-void ui_ams_mini_status_set_row_density(lv_obj_t* obj, int widgets_in_row) {
+void ui_ams_mini_status_set_width(lv_obj_t* obj, int width_px) {
     auto* data = get_data(obj);
     if (!data)
         return;
 
-    if (data->row_density == widgets_in_row)
+    if (data->width_px == width_px)
         return;
 
-    data->row_density = widgets_in_row;
-    spdlog::debug("[AmsMiniStatus] Row density set to {}", widgets_in_row);
+    data->width_px = width_px;
+    spdlog::debug("[AmsMiniStatus] Width set to {}px", width_px);
 
-    // Rebuild bars if we already have slots (density affects max bar width)
+    // Rebuild bars if we already have slots (width affects max bar width)
     if (data->slot_count > 0)
         rebuild_bars(data);
 }

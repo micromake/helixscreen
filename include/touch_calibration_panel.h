@@ -60,7 +60,7 @@ class TouchCalibrationPanel {
 
     /**
      * @brief Callback invoked each second during verify countdown
-     * @param seconds_remaining Seconds until timeout (15, 14, 13, ...)
+     * @param seconds_remaining Seconds until timeout (10, 9, 8, ...)
      */
     using CountdownCallback = std::function<void(int seconds_remaining)>;
 
@@ -69,6 +69,26 @@ class TouchCalibrationPanel {
      */
     using TimeoutCallback = std::function<void()>;
 
+    /**
+     * @brief Callback invoked when fast-revert triggers (broken matrix detected)
+     */
+    using FastRevertCallback = std::function<void()>;
+
+    /**
+     * @brief Callback invoked after each sample is added (for UI updates)
+     */
+    using SampleProgressCallback = std::function<void()>;
+
+    /**
+     * @brief Snapshot of calibration progress for UI display
+     */
+    struct Progress {
+        State state;
+        int point_num;      ///< 1-3 for POINT states, 0 otherwise
+        int current_sample; ///< Samples collected for current point (0 to total_samples)
+        int total_samples;  ///< Samples required per point (SAMPLES_REQUIRED)
+    };
+
     TouchCalibrationPanel();
     ~TouchCalibrationPanel();
 
@@ -76,9 +96,9 @@ class TouchCalibrationPanel {
     TouchCalibrationPanel(const TouchCalibrationPanel&) = delete;
     TouchCalibrationPanel& operator=(const TouchCalibrationPanel&) = delete;
 
-    // Movable
-    TouchCalibrationPanel(TouchCalibrationPanel&&) = default;
-    TouchCalibrationPanel& operator=(TouchCalibrationPanel&&) = default;
+    // Non-movable (LVGL timer user-data holds raw 'this' pointer)
+    TouchCalibrationPanel(TouchCalibrationPanel&&) = delete;
+    TouchCalibrationPanel& operator=(TouchCalibrationPanel&&) = delete;
 
     /**
      * @brief Set the completion callback
@@ -103,9 +123,25 @@ class TouchCalibrationPanel {
     void set_timeout_callback(TimeoutCallback cb);
 
     /**
-     * @brief Set verify timeout duration (default: 15 seconds)
+     * @brief Set callback for fast-revert (broken matrix during verify)
+     */
+    void set_fast_revert_callback(FastRevertCallback cb);
+
+    /**
+     * @brief Set callback for sample progress during point capture
+     */
+    void set_sample_progress_callback(SampleProgressCallback cb);
+
+    /**
+     * @brief Set verify timeout duration (default: 10 seconds)
      */
     void set_verify_timeout_seconds(int seconds);
+
+    /**
+     * @brief Report a touch event during verify state for broken-matrix detection
+     * @param on_screen Whether the transformed point is within screen bounds
+     */
+    void report_verify_touch(bool on_screen);
 
     /**
      * @brief Set the screen dimensions for target position calculations
@@ -129,6 +165,17 @@ class TouchCalibrationPanel {
      * Advances to next state after capture.
      */
     void capture_point(Point raw);
+
+    /**
+     * @brief Add a raw touch sample to the current capture buffer
+     *
+     * Collects multiple samples per calibration point. When SAMPLES_REQUIRED
+     * samples have been collected, filters out ADC-saturated values, computes
+     * the median, and advances the state machine via capture_point().
+     *
+     * @param raw Raw touch coordinates from touch controller
+     */
+    void add_sample(Point raw);
 
     /**
      * @brief Accept the computed calibration
@@ -167,17 +214,30 @@ class TouchCalibrationPanel {
      * Returns (0, 0) for out-of-range step values.
      *
      * Default target positions (for 800x480 screen):
-     *   Step 0: (120, 86)  - 15% from left, 18% from top
-     *   Step 1: (400, 408) - center X, 85% from top
-     *   Step 2: (680, 86)  - 85% from left, 18% from top
+     *   Step 0: (120, 96)  - 15% from left, 20% from top
+     *   Step 1: (400, 374) - center X, 78% from top
+     *   Step 2: (680, 96)  - 85% from left, 20% from top
      */
     Point get_target_position(int step) const;
+
+    /**
+     * @brief Get current calibration progress for UI display
+     * @return Progress snapshot with state, point number, and sample counts
+     */
+    Progress get_progress() const;
 
     /**
      * @brief Get computed calibration data
      * @return Pointer to calibration if in VERIFY/COMPLETE state, nullptr otherwise
      */
     const TouchCalibration* get_calibration() const;
+
+    /**
+     * @brief Whether auto-detected axis swap was applied during calibration
+     */
+    bool axes_swapped() const {
+        return axes_swapped_;
+    }
 
   private:
     State state_ = State::IDLE;
@@ -187,13 +247,36 @@ class TouchCalibrationPanel {
     FailureCallback failure_callback_;
     CountdownCallback countdown_callback_;
     TimeoutCallback timeout_callback_;
-    int verify_timeout_seconds_ = 15;
+    FastRevertCallback fast_revert_callback_;
+    SampleProgressCallback sample_progress_callback_;
+    int verify_timeout_seconds_ = 10;
     int countdown_remaining_ = 0;
     lv_timer_t* countdown_timer_ = nullptr;
 
     Point screen_points_[3]; ///< Target screen positions
     Point touch_points_[3];  ///< Captured raw touch positions
     TouchCalibration calibration_;
+    bool axes_swapped_ = false;
+
+    // Multi-sample filtering
+    static constexpr int SAMPLES_REQUIRED = 7;
+    static constexpr int MIN_VALID_SAMPLES = 3;
+
+    struct RawSample {
+        int x = 0;
+        int y = 0;
+    };
+    RawSample sample_buffer_[SAMPLES_REQUIRED]{};
+    int sample_count_ = 0;
+
+    /// Check if a sample has ADC-saturated values
+    static bool is_saturated_sample(const Point& sample);
+
+    /// Compute median from valid samples in the buffer
+    bool compute_median_point(Point& out);
+
+    /// Reset sample buffer for new point capture
+    void reset_samples();
 
     /// Calculate target position for a given step using screen dimensions
     Point compute_target_position(int step) const;
@@ -207,16 +290,25 @@ class TouchCalibrationPanel {
     /// Timer callback - static member
     static void countdown_timer_cb(lv_timer_t* timer);
 
+    // Fast-revert: detect broken matrices during verify by tracking touch events
+    int verify_raw_touch_count_ = 0;
+    int verify_onscreen_touch_count_ = 0;
+    lv_timer_t* fast_revert_timer_ = nullptr;
+    static constexpr int FAST_REVERT_CHECK_MS = 3000;
+
+    void start_fast_revert_timer();
+    void stop_fast_revert_timer();
+    static void fast_revert_timer_cb(lv_timer_t* timer);
+
     // Calibration target positions as screen ratios
     // These form a well-distributed triangle for accurate affine transform
-    // Y ratios pushed to 18%-85% for maximum spread within wizard content area
-    // (Content area is ~16%-87% of screen height, between header and footer)
+    // Y ratios at 20%-78% to keep crosshairs clear of header/footer chrome
     static constexpr float TARGET_0_X_RATIO = 0.15f; ///< 15% from left edge
-    static constexpr float TARGET_0_Y_RATIO = 0.18f; ///< 18% from top (near content top)
+    static constexpr float TARGET_0_Y_RATIO = 0.20f; ///< 20% from top
     static constexpr float TARGET_1_X_RATIO = 0.50f; ///< Center X
-    static constexpr float TARGET_1_Y_RATIO = 0.85f; ///< 85% from top (near content bottom)
+    static constexpr float TARGET_1_Y_RATIO = 0.78f; ///< 78% from top (clear of buttons)
     static constexpr float TARGET_2_X_RATIO = 0.85f; ///< 85% from left
-    static constexpr float TARGET_2_Y_RATIO = 0.18f; ///< 18% from top (near content top)
+    static constexpr float TARGET_2_Y_RATIO = 0.20f; ///< 20% from top
 };
 
 } // namespace helix

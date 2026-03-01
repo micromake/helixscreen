@@ -327,7 +327,15 @@ Modal::~Modal() {
         lv_anim_delete(backdrop_, nullptr);
         if (dialog_) {
             lv_anim_delete(dialog_, nullptr);
+            // Clear user_data on all wired buttons to prevent stale dispatch
+            // after destruction — matches what hide() does for animated exits
+            clear_user_data_recursive(dialog_);
         }
+
+        // Remove event callbacks that hold `this` as user_data to prevent
+        // stale Modal* dispatch if events fire after destruction
+        lv_obj_remove_event_cb(backdrop_, backdrop_click_cb);
+        lv_obj_remove_event_cb(backdrop_, esc_key_cb);
 
         // Hide immediately without calling virtual on_hide() - derived class already destroyed
         // Note: lv_obj_safe_delete handles focus group cleanup (helix::ui::defocus_tree)

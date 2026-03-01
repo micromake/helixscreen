@@ -9,7 +9,7 @@
         flex_flow="column" style_flex_main_place="start" style_flex_cross_place="center"
         style_pad_gap="#space_sm" scrollable="false">
     <!-- Title -->
-    <text_heading name="modal_title" text="Run Macro" style_text_align="center" width="100%"/>
+    <text_heading name="modal_title" text="Run Macro" translation_tag="Run Macro" style_text_align="center" width="100%"/>
     <!-- Macro name subtitle -->
     <text_body name="modal_subtitle" text="" style_text_align="center" width="100%"
                style_text_opa="180"/>

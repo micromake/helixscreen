@@ -34,11 +34,10 @@ void update_indicators(CarouselState* state) {
             continue;
         }
 
+        lv_obj_set_style_bg_color(dot, theme_manager_get_color("text"), LV_PART_MAIN);
         if (static_cast<int>(i) == state->current_page) {
-            lv_obj_set_style_bg_color(dot, theme_manager_get_color("accent"), LV_PART_MAIN);
             lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, LV_PART_MAIN);
         } else {
-            lv_obj_set_style_bg_color(dot, theme_manager_get_color("text_secondary"), LV_PART_MAIN);
             lv_obj_set_style_bg_opa(dot, LV_OPA_40, LV_PART_MAIN);
         }
     }
@@ -206,7 +205,7 @@ void* ui_carousel_create(lv_xml_parser_state_t* state, const char** /*attrs*/) {
 
     // Outer container: column layout holding scroll area + indicators
     lv_obj_t* container = lv_obj_create(parent);
-    lv_obj_set_size(container, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_size(container, LV_PCT(100), LV_PCT(100));
     lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
@@ -216,9 +215,10 @@ void* ui_carousel_create(lv_xml_parser_state_t* state, const char** /*attrs*/) {
     lv_obj_set_style_border_width(container, 0, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(container, LV_OPA_TRANSP, LV_PART_MAIN);
 
-    // Scroll container: horizontal, full width, snaps to pages
+    // Scroll container: horizontal, full width, grows to fill available space
     lv_obj_t* scroll = lv_obj_create(container);
-    lv_obj_set_size(scroll, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_width(scroll, LV_PCT(100));
+    lv_obj_set_flex_grow(scroll, 1);
     lv_obj_set_flex_flow(scroll, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(scroll, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(scroll, 0, LV_PART_MAIN);
@@ -228,6 +228,7 @@ void* ui_carousel_create(lv_xml_parser_state_t* state, const char** /*attrs*/) {
     lv_obj_set_scroll_dir(scroll, LV_DIR_HOR);
     lv_obj_set_style_border_width(scroll, 0, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(scroll, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_scrollbar_mode(scroll, LV_SCROLLBAR_MODE_OFF);
 
     // Indicator row: centered dots at bottom
     lv_obj_t* indicator_row = lv_obj_create(container);
@@ -408,7 +409,7 @@ void ui_carousel_add_item(lv_obj_t* carousel, lv_obj_t* item) {
 
     // Create a tile container inside the scroll area
     lv_obj_t* tile = lv_obj_create(state->scroll_container);
-    lv_obj_set_size(tile, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_size(tile, LV_PCT(100), LV_PCT(100));
     lv_obj_set_style_pad_all(tile, 0, LV_PART_MAIN);
     lv_obj_set_style_border_width(tile, 0, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(tile, LV_OPA_TRANSP, LV_PART_MAIN);
@@ -440,6 +441,8 @@ void ui_carousel_rebuild_indicators(lv_obj_t* carousel) {
     int count = static_cast<int>(state->real_tiles.size());
     for (int i = 0; i < count; i++) {
         lv_obj_t* dot = lv_obj_create(state->indicator_row);
+        // Strip LVGL's default theme styles so only our explicit styles apply
+        lv_obj_remove_style(dot, nullptr, LV_PART_MAIN);
         lv_obj_set_size(dot, 8, 8);
         lv_obj_set_style_radius(dot, 4, LV_PART_MAIN);
         lv_obj_set_style_border_width(dot, 0, LV_PART_MAIN);

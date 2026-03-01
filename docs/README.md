@@ -80,6 +80,7 @@ Welcome to the HelixScreen documentation. Choose your path:
 | [**QIDI Support**](devel/printers/QIDI_SUPPORT.md) | QIDI Q1 Pro / Plus platform guide |
 | [**Snapmaker U1 Support**](devel/printers/SNAPMAKER_U1_SUPPORT.md) | Snapmaker U1 toolchanger platform guide |
 | [**Creality K2 Support**](devel/printers/CREALITY_K2_SUPPORT.md) | Creality K2 series platform guide |
+| [**FlashForge AD5X Support**](devel/printers/FLASHFORGE_AD5X_SUPPORT.md) | FlashForge Adventurer 5X (MIPS, ZMOD) |
 
 ---
 

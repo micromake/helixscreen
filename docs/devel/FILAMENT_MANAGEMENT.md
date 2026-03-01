@@ -801,15 +801,15 @@ Mock mode is activated when `RuntimeConfig::should_mock_ams()` returns true (typ
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
 | `HELIX_AMS_GATES` | 1-16 | 4 | Number of simulated slots |
-| `HELIX_MOCK_AMS_TYPE` | `afc`, `box_turtle`, `boxturtle`, `toolchanger`, `tool_changer`, `tc`, `mixed` | Happy Hare | AMS type to simulate |
-| `HELIX_MOCK_AMS_REALISTIC` | `1`, `true` | Disabled | Multi-phase operations (HEATING -> LOADING -> CHECKING) |
+| `HELIX_MOCK_AMS` | `afc`, `box_turtle`, `boxturtle`, `toolchanger`, `tool_changer`, `tc`, `mixed`, `multi` | Happy Hare | AMS type to simulate |
+| `HELIX_MOCK_AMS_STATE` | `idle`, `loading`, `error`, `bypass` | `idle` | Visual scenario to simulate |
 | `HELIX_MOCK_DRYER` | `1`, `true` | Disabled | Simulate integrated dryer |
 | `HELIX_MOCK_DRYER_SPEED` | Integer | 60 | Dryer speed multiplier (60 = 1 real sec = 1 sim min) |
 
 ### Mock AFC Mode
 
 ```bash
-HELIX_MOCK_AMS_TYPE=afc ./build/bin/helix-screen --test
+HELIX_MOCK_AMS=afc ./build/bin/helix-screen --test
 ```
 
 When AFC mock mode is enabled:
@@ -826,7 +826,7 @@ When AFC mock mode is enabled:
 ### Mock Mixed Topology Mode
 
 ```bash
-HELIX_MOCK_AMS_TYPE=mixed ./build/bin/helix-screen --test
+HELIX_MOCK_AMS=mixed ./build/bin/helix-screen --test
 ```
 
 Simulates a real-world 6-toolhead toolchanger with mixed AFC hardware (based on production data):
@@ -841,7 +841,7 @@ Simulates a real-world 6-toolhead toolchanger with mixed AFC hardware (based on 
 ### Mock Tool Changer Mode
 
 ```bash
-HELIX_MOCK_AMS_TYPE=toolchanger ./build/bin/helix-screen --test
+HELIX_MOCK_AMS=toolchanger ./build/bin/helix-screen --test
 ```
 
 - Reports `AmsType::TOOL_CHANGER`
@@ -852,7 +852,7 @@ HELIX_MOCK_AMS_TYPE=toolchanger ./build/bin/helix-screen --test
 ### Mock Realistic Mode
 
 ```bash
-HELIX_MOCK_AMS_REALISTIC=1 ./build/bin/helix-screen --test
+HELIX_MOCK_AMS_STATE=loading ./build/bin/helix-screen --test
 ```
 
 Enables multi-phase operation simulation with realistic timing:
@@ -944,7 +944,7 @@ case AmsType::MY_SYSTEM:
 
 ### 5. Add Mock Support
 
-In `src/printer/ams_backend.cpp`, extend the `HELIX_MOCK_AMS_TYPE` environment variable handling:
+In `src/printer/ams_backend.cpp`, extend the `HELIX_MOCK_AMS` environment variable handling:
 
 ```cpp
 if (type_str == "mysystem") {

@@ -42,11 +42,12 @@ All developer documentation lives here. When working on features, look up the re
 | `INPUT_SHAPER.md` | Calibration panels, frequency response charts, CSV parser, PID |
 | `PREPRINT_PREDICTION.md` | ETA prediction engine, phase timing, weighted history |
 | `EXCLUDE_OBJECTS.md` | Object exclusion, per-object thumbnails, slicer setup |
+| `PRINT_STATE_MACHINE.md` | Print lifecycle state machine: states, transitions, guards, resource lifecycle |
 | `PRINT_START_PROFILES.md` | Print start phase detection, JSON profiles |
 | `PRINT_START_INTEGRATION.md` | User-facing macro setup for print start tracking |
 | `UPDATE_SYSTEM.md` | Update channels (stable/beta/dev), R2 CDN, Moonraker updater |
 | `SOUND_SYSTEM.md` | Audio architecture, JSON themes, backends (SDL, PWM, M300). User guide: `../user/guide/settings.md#sound-settings` |
-| `LED_CONTROL.md` | LED control system: 4 backends, auto-state lighting, control/settings overlays |
+| `LED_CONTROL.md` | LED control system: 5 backends, auto-state lighting, control/settings overlays, home panel widget |
 | `PRINTER_MANAGER.md` | Printer overlay, custom images, inline name editing |
 | `TIMELAPSE.md` | Moonraker timelapse plugin integration |
 | `CRASH_REPORTER.md` | Crash reporter: detection, delivery pipeline, CF Worker, modal UI |
@@ -62,6 +63,7 @@ All developer documentation lives here. When working on features, look up the re
 | `printers/QIDI_SUPPORT.md` | QIDI Q1 Pro/Plus platform |
 | `printers/SNAPMAKER_U1_SUPPORT.md` | Snapmaker U1 toolchanger platform |
 | `printers/CREALITY_K2_SUPPORT.md` | Creality K2 series platform |
+| `printers/FLASHFORGE_AD5X_SUPPORT.md` | FlashForge Adventurer 5X (MIPS, ZMOD) |
 | `ENVIRONMENT_VARIABLES.md` | All runtime and build env vars |
 
 ## Integration

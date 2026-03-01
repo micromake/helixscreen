@@ -114,6 +114,16 @@ class PrinterCompositeVisibilityState {
         return &can_show_purge_line_;
     }
 
+    /**
+     * @brief Get aggregate subject: 1 if ANY preprint option row is visible
+     *
+     * OR of all can_show_* subjects plus printer_has_timelapse.
+     * Used to hide the entire options card when no rows would be shown.
+     */
+    lv_subject_t* get_has_any_preprint_options_subject() {
+        return &has_any_preprint_options_;
+    }
+
   private:
     friend class PrinterCompositeVisibilityStateTestAccess;
 
@@ -121,11 +131,12 @@ class PrinterCompositeVisibilityState {
     bool subjects_initialized_ = false;
 
     // Composite visibility subjects (all integer: 0=hidden, 1=visible)
-    lv_subject_t can_show_bed_mesh_{};     // helix_plugin_installed && printer_has_bed_mesh
-    lv_subject_t can_show_qgl_{};          // helix_plugin_installed && printer_has_qgl
-    lv_subject_t can_show_z_tilt_{};       // helix_plugin_installed && printer_has_z_tilt
-    lv_subject_t can_show_nozzle_clean_{}; // helix_plugin_installed && printer_has_nozzle_clean
-    lv_subject_t can_show_purge_line_{};   // helix_plugin_installed && printer_has_purge_line
+    lv_subject_t can_show_bed_mesh_{};        // helix_plugin_installed && printer_has_bed_mesh
+    lv_subject_t can_show_qgl_{};             // helix_plugin_installed && printer_has_qgl
+    lv_subject_t can_show_z_tilt_{};          // helix_plugin_installed && printer_has_z_tilt
+    lv_subject_t can_show_nozzle_clean_{};    // helix_plugin_installed && printer_has_nozzle_clean
+    lv_subject_t can_show_purge_line_{};      // helix_plugin_installed && printer_has_purge_line
+    lv_subject_t has_any_preprint_options_{}; // OR of all can_show_* + printer_has_timelapse
 };
 
 } // namespace helix

@@ -5,18 +5,29 @@
 #
 # Usage:
 #   make                       # Native build (SDL)
-#   make PLATFORM_TARGET=pi    # Cross-compile for Raspberry Pi (aarch64)
-#   make PLATFORM_TARGET=pi32  # Cross-compile for Raspberry Pi (armhf/armv7l)
+#   make PLATFORM_TARGET=pi    # Cross-compile for Raspberry Pi (aarch64, DRM+GLES)
+#   make PLATFORM_TARGET=pi-fbdev  # Cross-compile for Pi (aarch64, fbdev fallback)
+#   make PLATFORM_TARGET=pi32  # Cross-compile for Raspberry Pi (armhf, DRM+GLES)
+#   make PLATFORM_TARGET=pi32-fbdev  # Cross-compile for Pi (armhf, fbdev fallback)
+#   make PLATFORM_TARGET=pi-both  # Pi 64-bit: compile once, link DRM + fbdev
+#   make PLATFORM_TARGET=pi32-both  # Pi 32-bit: compile once, link DRM + fbdev
 #   make PLATFORM_TARGET=ad5m  # Cross-compile for Adventurer 5M (armv7-a)
 #   make PLATFORM_TARGET=cc1   # Cross-compile for Centauri Carbon 1 (armv7-a)
-#   make PLATFORM_TARGET=k1    # Cross-compile for Creality K1 series (MIPS32)
+#   make PLATFORM_TARGET=mips  # Cross-compile for MIPS32 devices (K1)
+#   make PLATFORM_TARGET=k1    # Alias for mips (Creality K1 series)
+#   make PLATFORM_TARGET=ad5x  # Cross-compile for FlashForge AD5X (mips)
 #   make PLATFORM_TARGET=k2    # Cross-compile for Creality K2 series (ARM)
 #   make PLATFORM_TARGET=snapmaker-u1 # Cross-compile for Snapmaker U1 (aarch64)
-#   make pi-docker             # Docker-based Pi build (64-bit)
-#   make pi32-docker           # Docker-based Pi build (32-bit)
+#   make pi-docker             # Docker-based Pi build (64-bit, DRM+GLES)
+#   make pi-fbdev-docker       # Docker-based Pi build (64-bit, fbdev fallback)
+#   make pi-all-docker         # Docker-based Pi build (both variants)
+#   make pi32-docker           # Docker-based Pi build (32-bit, DRM+GLES)
+#   make pi32-fbdev-docker     # Docker-based Pi build (32-bit, fbdev fallback)
+#   make pi32-all-docker       # Docker-based Pi build (both 32-bit variants)
 #   make ad5m-docker           # Docker-based AD5M build
 #   make cc1-docker            # Docker-based CC1 build
-#   make k1-docker             # Docker-based K1 build
+#   make k1-docker             # Docker-based K1/MIPS build
+#   make ad5x-docker           # Docker-based AD5X/MIPS build
 #   make k2-docker             # Docker-based K2 build
 #   make snapmaker-u1-docker   # Docker-based Snapmaker U1 build
 
@@ -41,10 +52,12 @@ ifeq ($(PLATFORM_TARGET),pi)
     # -DHELIX_RELEASE_BUILD: Disables debug features like LV_USE_ASSERT_STYLE
     # -funwind-tables: Emit ARM unwind info (.ARM.exidx) so backtrace() can walk
     # the full call stack in crash reports. ~5-10% code size increase, zero runtime cost.
-    TARGET_CFLAGS := -march=armv8-a -funwind-tables -I/usr/aarch64-linux-gnu/include -I/usr/include/libdrm -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD
+    TARGET_CFLAGS := -march=armv8-a -funwind-tables -I/usr/aarch64-linux-gnu/include -I/usr/include/libdrm -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_BINARY_VARIANT=\"drm\"
     DISPLAY_BACKEND := drm
+    ENABLE_OPENGLES := yes
     ENABLE_SDL := no
-    ENABLE_TINYGL_3D := yes
+    ENABLE_GLES_3D := yes
+    ENABLE_SCREENSAVER := yes
     ENABLE_EVDEV := yes
     # SSL enabled for HTTPS/WSS support
     ENABLE_SSL := yes
@@ -52,6 +65,51 @@ ifeq ($(PLATFORM_TARGET),pi)
     BUILD_SUBDIR := pi
     # Strip binary for size - embedded targets don't need debug symbols
     STRIP_BINARY := yes
+
+else ifeq ($(PLATFORM_TARGET),pi-fbdev)
+    # -------------------------------------------------------------------------
+    # Raspberry Pi (aarch64) - fbdev only, no GL dependencies
+    # Fallback for systems without EGL/GLES2/GBM libraries.
+    # -------------------------------------------------------------------------
+    CROSS_COMPILE ?= aarch64-linux-gnu-
+    TARGET_ARCH := aarch64
+    TARGET_TRIPLE := aarch64-linux-gnu
+    TARGET_CFLAGS := -march=armv8-a -funwind-tables \
+        -I/usr/aarch64-linux-gnu/include \
+        -Wno-error=conversion -Wno-error=sign-conversion \
+        -DHELIX_RELEASE_BUILD -DHELIX_BINARY_VARIANT=\"fbdev\"
+    DISPLAY_BACKEND := fbdev
+    ENABLE_OPENGLES := no
+    ENABLE_SDL := no
+    ENABLE_GLES_3D := no
+    ENABLE_SCREENSAVER := yes
+    ENABLE_EVDEV := yes
+    ENABLE_SSL := yes
+    HELIX_HAS_SYSTEMD := yes
+    BUILD_SUBDIR := pi-fbdev
+    STRIP_BINARY := yes
+
+else ifeq ($(PLATFORM_TARGET),pi-both)
+    # -------------------------------------------------------------------------
+    # Raspberry Pi (aarch64) - Dual-link mode: compile once, link DRM + fbdev
+    # Produces both build/pi/bin/helix-screen (DRM) and build/pi-fbdev/bin/helix-screen (fbdev)
+    # in a single compilation pass. Used by CI to cut build time in half.
+    # -------------------------------------------------------------------------
+    CROSS_COMPILE ?= aarch64-linux-gnu-
+    TARGET_ARCH := aarch64
+    TARGET_TRIPLE := aarch64-linux-gnu
+    TARGET_CFLAGS := -march=armv8-a -funwind-tables -I/usr/aarch64-linux-gnu/include -I/usr/include/libdrm -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_BINARY_VARIANT=\"drm\"
+    DISPLAY_BACKEND := drm
+    ENABLE_OPENGLES := yes
+    ENABLE_SDL := no
+    ENABLE_GLES_3D := yes
+    ENABLE_SCREENSAVER := yes
+    ENABLE_EVDEV := yes
+    ENABLE_SSL := yes
+    HELIX_HAS_SYSTEMD := yes
+    BUILD_SUBDIR := pi
+    STRIP_BINARY := yes
+    PI_DUAL_LINK := yes
 
 else ifeq ($(PLATFORM_TARGET),pi32)
     # -------------------------------------------------------------------------
@@ -67,15 +125,64 @@ else ifeq ($(PLATFORM_TARGET),pi32)
     # the full call stack in crash reports. ~5-10% code size increase, zero runtime cost.
     TARGET_CFLAGS := -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -funwind-tables \
         -I/usr/arm-linux-gnueabihf/include -I/usr/include/libdrm \
-        -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_PLATFORM_PI32
+        -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_PLATFORM_PI32 -DHELIX_BINARY_VARIANT=\"drm\"
     DISPLAY_BACKEND := drm
+    ENABLE_OPENGLES := yes
     ENABLE_SDL := no
-    ENABLE_TINYGL_3D := yes
+    ENABLE_GLES_3D := yes
+    ENABLE_SCREENSAVER := yes
     ENABLE_EVDEV := yes
     ENABLE_SSL := yes
     HELIX_HAS_SYSTEMD := yes
     BUILD_SUBDIR := pi32
     STRIP_BINARY := yes
+
+else ifeq ($(PLATFORM_TARGET),pi32-fbdev)
+    # -------------------------------------------------------------------------
+    # Raspberry Pi 32-bit (armhf) - fbdev only, no GL dependencies
+    # Fallback for systems without EGL/GLES2/GBM libraries.
+    # -------------------------------------------------------------------------
+    CROSS_COMPILE ?= arm-linux-gnueabihf-
+    TARGET_ARCH := armv7-a
+    TARGET_TRIPLE := arm-linux-gnueabihf
+    TARGET_CFLAGS := -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -funwind-tables \
+        -I/usr/arm-linux-gnueabihf/include \
+        -Wno-error=conversion -Wno-error=sign-conversion \
+        -DHELIX_RELEASE_BUILD -DHELIX_PLATFORM_PI32 -DHELIX_BINARY_VARIANT=\"fbdev\"
+    DISPLAY_BACKEND := fbdev
+    ENABLE_OPENGLES := no
+    ENABLE_SDL := no
+    ENABLE_GLES_3D := no
+    ENABLE_SCREENSAVER := yes
+    ENABLE_EVDEV := yes
+    ENABLE_SSL := yes
+    HELIX_HAS_SYSTEMD := yes
+    BUILD_SUBDIR := pi32-fbdev
+    STRIP_BINARY := yes
+
+else ifeq ($(PLATFORM_TARGET),pi32-both)
+    # -------------------------------------------------------------------------
+    # Raspberry Pi 32-bit (armhf) - Dual-link mode: compile once, link DRM + fbdev
+    # Produces both build/pi32/bin/helix-screen (DRM) and build/pi32-fbdev/bin/helix-screen (fbdev)
+    # in a single compilation pass. Used by CI to cut build time in half.
+    # -------------------------------------------------------------------------
+    CROSS_COMPILE ?= arm-linux-gnueabihf-
+    TARGET_ARCH := armv7-a
+    TARGET_TRIPLE := arm-linux-gnueabihf
+    TARGET_CFLAGS := -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -funwind-tables \
+        -I/usr/arm-linux-gnueabihf/include -I/usr/include/libdrm \
+        -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_PLATFORM_PI32 -DHELIX_BINARY_VARIANT=\"drm\"
+    DISPLAY_BACKEND := drm
+    ENABLE_OPENGLES := yes
+    ENABLE_SDL := no
+    ENABLE_GLES_3D := yes
+    ENABLE_SCREENSAVER := yes
+    ENABLE_EVDEV := yes
+    ENABLE_SSL := yes
+    HELIX_HAS_SYSTEMD := yes
+    BUILD_SUBDIR := pi32
+    STRIP_BINARY := yes
+    PI_DUAL_LINK := yes
 
 else ifeq ($(PLATFORM_TARGET),ad5m)
     # -------------------------------------------------------------------------
@@ -109,11 +216,48 @@ else ifeq ($(PLATFORM_TARGET),ad5m)
     ENABLE_SSL := yes
     DISPLAY_BACKEND := fbdev
     ENABLE_SDL := no
-    # Disable TinyGL for AD5M - CPU too weak for software 3D (3-4 FPS)
+    ENABLE_GLES_3D := no
+    ENABLE_SCREENSAVER := no
+    ENABLE_EVDEV := yes
+    BUILD_SUBDIR := ad5m
+    # Strip binary for size on memory-constrained device
+    STRIP_BINARY := yes
+
+else ifeq ($(PLATFORM_TARGET),ad5x)
+    # -------------------------------------------------------------------------
+    # AD5X: Ingenic X2600, 800x480, multi-color IFS
+    # Specs: 800x480 display
+    # -------------------------------------------------------------------------
+    # FULLY STATIC BUILD
+    CROSS_COMPILE ?= mipsel-buildroot-linux-gnu-
+    TARGET_ARCH := mips32r5
+    TARGET_TRIPLE := mipsel-buildroot-linux-gnu
+    # Memory-optimized build flags:
+    # -Os: Optimize for size (vs -O2 for speed)
+    # -flto: Link-Time Optimization for dead code elimination
+    # -ffunction-sections/-fdata-sections: Allow linker to remove unused sections
+    # -Wno-error=conversion: LVGL headers have int32_t->float conversions that GCC flags
+    # -DHELIX_RELEASE_BUILD: Disables debug features like LV_USE_ASSERT_STYLE
+    # NOTE: ad5x framebuffer is 32bpp (ARGB8888), as is lv_conf.h (LV_COLOR_DEPTH=32)
+    TARGET_CFLAGS := -march=mips32r5 -mtune=mips32r5 -mabi=32 -mnan=2008 -mfp64 \
+        -Os -flto -ffunction-sections -fdata-sections \
+        -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_PLATFORM_AD5X
+    # -Wl,--gc-sections: Remove unused sections during linking (works with -ffunction-sections)
+    # -flto: Must match compiler flag for LTO to work
+    # -static: Fully static binary - no runtime dependencies on system libs
+    # Toolchain glibc 2.40 vs device glibc — static avoids any version mismatch
+    TARGET_LDFLAGS := -Wl,--gc-sections -flto -static
+    # SSL enabled for HTTPS/WSS support with Moonraker
+    ENABLE_SSL := yes
+    DISPLAY_BACKEND := fbdev
+    ENABLE_SDL := no
+    ENABLE_GLES_3D := no
+    ENABLE_SCREENSAVER := no
+    # Disable TinyGL for ad5x - CPU too weak for software 3D (3-4 FPS)
     # Uses 2D layer preview fallback instead
     ENABLE_TINYGL_3D := no
     ENABLE_EVDEV := yes
-    BUILD_SUBDIR := ad5m
+    BUILD_SUBDIR := ad5x
     # Strip binary for size on memory-constrained device
     STRIP_BINARY := yes
 
@@ -149,18 +293,18 @@ else ifeq ($(PLATFORM_TARGET),cc1)
     ENABLE_SSL := yes
     DISPLAY_BACKEND := fbdev
     ENABLE_SDL := no
-    # Disable TinyGL for CC1 - CPU too weak for software 3D (Cortex-A7 dual-core)
-    # Uses 2D layer preview fallback instead
-    ENABLE_TINYGL_3D := no
+    ENABLE_GLES_3D := no
+    ENABLE_SCREENSAVER := no
     ENABLE_EVDEV := yes
     BUILD_SUBDIR := cc1
     # Strip binary for size on memory-constrained device
     STRIP_BINARY := yes
 
-else ifeq ($(PLATFORM_TARGET),k1)
+else ifneq ($(filter mips k1,$(PLATFORM_TARGET)),)
     # -------------------------------------------------------------------------
-    # Creality K1 Series - Ingenic X2000E (MIPS32r2)
-    # Specs: 480x400 display (K1/K1C/K1Max), 480x800 (K2), 256MB RAM, musl libc
+    # MIPS32 Devices (Creality K1) - Ingenic XBurst2
+    # K1: Ingenic X2000E, 480x400, 256MB RAM
+    # MIPS32r2, musl libc, fbdev display, evdev touch
     # -------------------------------------------------------------------------
     # FULLY STATIC BUILD with musl: Cleaner than glibc static linking.
     # No getaddrinfo warnings, smaller binaries, guaranteed portability.
@@ -168,10 +312,10 @@ else ifeq ($(PLATFORM_TARGET),k1)
     CROSS_COMPILE ?= mipsel-buildroot-linux-musl-
     TARGET_ARCH := mips32r2
     TARGET_TRIPLE := mipsel-buildroot-linux-musl
-    # Optimized build flags for Ingenic X2000E (MIPS32r2):
+    # Optimized build flags for Ingenic MIPS32r2 (XBurst2):
     #
     # Architecture flags:
-    # -march=mips32r2: Target instruction set (X2000E is MIPS32 R5 compatible)
+    # -march=mips32r2: Target instruction set (X2000E/X2600 are MIPS32 R5 compatible)
     # -mtune=mips32r2: Tune for MIPS32r2 pipeline
     #
     # Size optimization:
@@ -192,7 +336,7 @@ else ifeq ($(PLATFORM_TARGET),k1)
         -Os -flto=auto -ffunction-sections -fdata-sections \
         -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables \
         -fmerge-all-constants -fno-ident \
-        -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_PLATFORM_K1
+        -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_PLATFORM_MIPS
     # Linker flags:
     # -Wl,--gc-sections: Remove unused sections (works with -ffunction-sections)
     # -flto=auto: Match compiler LTO flag, uses all CPUs
@@ -204,11 +348,10 @@ else ifeq ($(PLATFORM_TARGET),k1)
     ENABLE_SSL := no
     DISPLAY_BACKEND := fbdev
     ENABLE_SDL := no
-    # Disable TinyGL for K1 - CPU may be too weak for software 3D
-    # Uses 2D layer preview fallback instead
-    ENABLE_TINYGL_3D := no
+    ENABLE_GLES_3D := no
+    ENABLE_SCREENSAVER := no
     ENABLE_EVDEV := yes
-    BUILD_SUBDIR := k1
+    BUILD_SUBDIR := mips
     # Strip binary for size on memory-constrained device
     STRIP_BINARY := yes
 
@@ -240,7 +383,8 @@ else ifeq ($(PLATFORM_TARGET),k1-dynamic)
     ENABLE_SSL := no
     DISPLAY_BACKEND := fbdev
     ENABLE_SDL := no
-    ENABLE_TINYGL_3D := no
+    ENABLE_GLES_3D := no
+    ENABLE_SCREENSAVER := no
     ENABLE_EVDEV := yes
     BUILD_SUBDIR := k1-dynamic
     STRIP_BINARY := yes
@@ -271,8 +415,8 @@ else ifeq ($(PLATFORM_TARGET),k2)
     ENABLE_SSL := no
     DISPLAY_BACKEND := fbdev
     ENABLE_SDL := no
-    # Disable TinyGL for now - untested, enable after hardware validation
-    ENABLE_TINYGL_3D := no
+    ENABLE_GLES_3D := no
+    ENABLE_SCREENSAVER := no
     ENABLE_EVDEV := yes
     BUILD_SUBDIR := k2
     STRIP_BINARY := yes
@@ -293,7 +437,8 @@ else ifeq ($(PLATFORM_TARGET),snapmaker-u1)
     ENABLE_SSL := yes
     DISPLAY_BACKEND := fbdev
     ENABLE_SDL := no
-    ENABLE_TINYGL_3D := no
+    ENABLE_GLES_3D := no
+    ENABLE_SCREENSAVER := no
     ENABLE_EVDEV := yes
     BUILD_SUBDIR := snapmaker-u1
     STRIP_BINARY := yes
@@ -307,13 +452,13 @@ else ifeq ($(PLATFORM_TARGET),native)
     TARGET_TRIPLE :=
     TARGET_CFLAGS :=
     DISPLAY_BACKEND := sdl
+    ENABLE_SSL := yes
     ENABLE_SDL := yes
-    # TinyGL controlled by main Makefile default
     ENABLE_EVDEV := no
     BUILD_SUBDIR :=
 
 else
-    $(error Unknown PLATFORM_TARGET: $(PLATFORM_TARGET). Valid options: native, pi, pi32, ad5m, cc1, k1, k1-dynamic, k2, snapmaker-u1)
+    $(error Unknown PLATFORM_TARGET: $(PLATFORM_TARGET). Valid options: native, pi, pi32, ad5m, cc1, mips, k1, ad5x, k1-dynamic, k2, snapmaker-u1)
 endif
 
 # =============================================================================
@@ -414,6 +559,13 @@ ifeq ($(DISPLAY_BACKEND),drm)
     CXXFLAGS += -DHELIX_DISPLAY_DRM -DHELIX_DISPLAY_FBDEV
     SUBMODULE_CFLAGS += -DHELIX_DISPLAY_DRM -DHELIX_DISPLAY_FBDEV
     SUBMODULE_CXXFLAGS += -DHELIX_DISPLAY_DRM -DHELIX_DISPLAY_FBDEV
+    # GPU-accelerated rendering via EGL/OpenGL ES (Pi targets)
+    ifeq ($(ENABLE_OPENGLES),yes)
+        CFLAGS += -DHELIX_ENABLE_OPENGLES
+        CXXFLAGS += -DHELIX_ENABLE_OPENGLES
+        SUBMODULE_CFLAGS += -DHELIX_ENABLE_OPENGLES
+        SUBMODULE_CXXFLAGS += -DHELIX_ENABLE_OPENGLES
+    endif
     # DRM backend linker flags are added in Makefile's cross-compile section
 else ifeq ($(DISPLAY_BACKEND),fbdev)
     CFLAGS += -DHELIX_DISPLAY_FBDEV
@@ -435,14 +587,15 @@ ifeq ($(ENABLE_EVDEV),yes)
     SUBMODULE_CXXFLAGS += -DHELIX_INPUT_EVDEV
 endif
 
-# NOTE: LV_COLOR_DEPTH is now hardcoded to 32 in lv_conf.h for all platforms.
-# This simplifies thumbnail/image handling (always ARGB8888) at negligible memory cost.
+# NOTE: LV_COLOR_DEPTH is platform-conditional in lv_conf.h.
+# Constrained FBDEV devices (AD5M, CC1, K1/MIPS, AD5X, K2, U1) use 16 (RGB565).
+# Pi (DRM) and desktop (SDL) use 32 (ARGB8888).
 
 # =============================================================================
 # Cross-Compilation Build Targets
 # =============================================================================
 
-.PHONY: pi pi32 ad5m cc1 k1 k1-dynamic k2 snapmaker-u1 pi-docker pi32-docker ad5m-docker cc1-docker k1-docker k1-dynamic-docker k2-docker snapmaker-u1-docker docker-toolchains docker-toolchain-snapmaker-u1 cross-info ensure-docker ensure-buildx maybe-stop-colima
+.PHONY: pi pi-both pi32 pi32-both ad5m cc1 mips k1 ad5x k1-dynamic k2 snapmaker-u1 pi-docker pi32-docker ad5m-docker cc1-docker mips-docker k1-docker ad5x-docker k1-dynamic-docker k2-docker snapmaker-u1-docker docker-toolchains docker-toolchain-snapmaker-u1 cross-info ensure-docker ensure-buildx maybe-stop-colima
 
 # Persistent ccache for Docker builds — bind-mounts a host directory so the
 # cache survives across container runs (the container is --rm).  Per-platform
@@ -465,14 +618,19 @@ ad5m:
 	@echo "$(CYAN)$(BOLD)Cross-compiling for Adventurer 5M (armv7-a)...$(RESET)"
 	$(Q)$(MAKE) PLATFORM_TARGET=ad5m -j$(NPROC) all
 
+ad5x:
+	@echo "$(CYAN)$(BOLD)Cross-compiling for Adventurer 5X (mips)...$(RESET)"
+	$(Q)$(MAKE) PLATFORM_TARGET=ad5x -j$(NPROC) all
+
 cc1:
 	@echo "$(CYAN)$(BOLD)Cross-compiling for Centauri Carbon 1 (armv7-a)...$(RESET)"
 	$(Q)$(MAKE) PLATFORM_TARGET=cc1 -j$(NPROC) all
 
-k1:
-	@echo "$(CYAN)$(BOLD)Cross-compiling for Creality K1 series (MIPS32)...$(RESET)"
-	$(Q)$(MAKE) PLATFORM_TARGET=k1 -j$(NPROC) all
+mips:
+	@echo "$(CYAN)$(BOLD)Cross-compiling for MIPS32 devices K1...$(RESET)"
+	$(Q)$(MAKE) PLATFORM_TARGET=mips -j$(NPROC) all
 
+k1: mips
 k1-dynamic:
 	@echo "$(CYAN)$(BOLD)Cross-compiling for Creality K1 series (MIPS32, dynamic linking)...$(RESET)"
 	$(Q)$(MAKE) PLATFORM_TARGET=k1-dynamic -j$(NPROC) all
@@ -574,6 +732,28 @@ pi-docker: ensure-docker
 		make PLATFORM_TARGET=pi SKIP_OPTIONAL_DEPS=1 -j$$(nproc)
 	@$(MAKE) --no-print-directory maybe-stop-colima
 
+pi-fbdev-docker: ensure-docker
+	@echo "$(CYAN)$(BOLD)Cross-compiling Pi fbdev fallback via Docker...$(RESET)"
+	@if ! docker image inspect helixscreen/toolchain-pi >/dev/null 2>&1; then \
+		echo "$(YELLOW)Docker image not found. Building toolchain first...$(RESET)"; \
+		$(MAKE) docker-toolchain-pi; \
+	fi
+	$(call ensure-ccache-dir,pi-fbdev)
+	$(Q)docker run --platform linux/amd64 --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi-fbdev) helixscreen/toolchain-pi \
+		make PLATFORM_TARGET=pi-fbdev SKIP_OPTIONAL_DEPS=1 -j$$(nproc)
+	@$(MAKE) --no-print-directory maybe-stop-colima
+
+pi-all-docker: ensure-docker
+	@echo "$(CYAN)$(BOLD)Cross-compiling Pi (DRM + fbdev) via Docker...$(RESET)"
+	@if ! docker image inspect helixscreen/toolchain-pi >/dev/null 2>&1; then \
+		echo "$(YELLOW)Docker image not found. Building toolchain first...$(RESET)"; \
+		$(MAKE) docker-toolchain-pi; \
+	fi
+	$(call ensure-ccache-dir,pi)
+	$(Q)docker run --platform linux/amd64 --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi) helixscreen/toolchain-pi \
+		make PLATFORM_TARGET=pi-both SKIP_OPTIONAL_DEPS=1 -j$$(nproc)
+	@$(MAKE) --no-print-directory maybe-stop-colima
+
 pi32-docker: ensure-docker
 	@echo "$(CYAN)$(BOLD)Cross-compiling for Raspberry Pi 32-bit via Docker...$(RESET)"
 	@if ! docker image inspect helixscreen/toolchain-pi32 >/dev/null 2>&1; then \
@@ -583,6 +763,28 @@ pi32-docker: ensure-docker
 	$(call ensure-ccache-dir,pi32)
 	$(Q)docker run --platform linux/amd64 --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi32) helixscreen/toolchain-pi32 \
 		make PLATFORM_TARGET=pi32 SKIP_OPTIONAL_DEPS=1 -j$$(nproc)
+	@$(MAKE) --no-print-directory maybe-stop-colima
+
+pi32-fbdev-docker: ensure-docker
+	@echo "$(CYAN)$(BOLD)Cross-compiling Pi 32-bit fbdev fallback via Docker...$(RESET)"
+	@if ! docker image inspect helixscreen/toolchain-pi32 >/dev/null 2>&1; then \
+		echo "$(YELLOW)Docker image not found. Building toolchain first...$(RESET)"; \
+		$(MAKE) docker-toolchain-pi32; \
+	fi
+	$(call ensure-ccache-dir,pi32-fbdev)
+	$(Q)docker run --platform linux/amd64 --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi32-fbdev) helixscreen/toolchain-pi32 \
+		make PLATFORM_TARGET=pi32-fbdev SKIP_OPTIONAL_DEPS=1 -j$$(nproc)
+	@$(MAKE) --no-print-directory maybe-stop-colima
+
+pi32-all-docker: ensure-docker
+	@echo "$(CYAN)$(BOLD)Cross-compiling Pi 32-bit (DRM + fbdev) via Docker...$(RESET)"
+	@if ! docker image inspect helixscreen/toolchain-pi32 >/dev/null 2>&1; then \
+		echo "$(YELLOW)Docker image not found. Building toolchain first...$(RESET)"; \
+		$(MAKE) docker-toolchain-pi32; \
+	fi
+	$(call ensure-ccache-dir,pi32)
+	$(Q)docker run --platform linux/amd64 --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi32) helixscreen/toolchain-pi32 \
+		make PLATFORM_TARGET=pi32-both SKIP_OPTIONAL_DEPS=1 -j$$(nproc)
 	@$(MAKE) --no-print-directory maybe-stop-colima
 
 ad5m-docker: ensure-docker
@@ -597,6 +799,22 @@ ad5m-docker: ensure-docker
 	@# Extract CA certificates from Docker image for HTTPS verification on device
 	@mkdir -p build/ad5m/certs
 	@docker run --rm helixscreen/toolchain-ad5m cat /etc/ssl/certs/ca-certificates.crt > build/ad5m/certs/ca-certificates.crt 2>/dev/null \
+		&& echo "$(GREEN)✓ CA certificates extracted$(RESET)" \
+		|| echo "$(YELLOW)⚠ Could not extract CA certificates (HTTPS may rely on device certs)$(RESET)"
+	@$(MAKE) --no-print-directory maybe-stop-colima
+
+ad5x-docker: ensure-docker
+	@echo "$(CYAN)$(BOLD)Cross-compiling for Adventurer 5X via Docker...$(RESET)"
+	@if ! docker image inspect helixscreen/toolchain-ad5x >/dev/null 2>&1; then \
+		echo "$(YELLOW)Docker image not found. Building toolchain first...$(RESET)"; \
+		$(MAKE) docker-toolchain-ad5x; \
+	fi
+	$(call ensure-ccache-dir,ad5x)
+	$(Q)docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,ad5x) helixscreen/toolchain-ad5x \
+		make PLATFORM_TARGET=ad5x SKIP_OPTIONAL_DEPS=1 -j$$(nproc)
+	@# Extract CA certificates from Docker image for HTTPS verification on device
+	@mkdir -p build/ad5x/certs
+	@docker run --rm helixscreen/toolchain-ad5x cat /etc/ssl/certs/ca-certificates.crt > build/ad5x/certs/ca-certificates.crt 2>/dev/null \
 		&& echo "$(GREEN)✓ CA certificates extracted$(RESET)" \
 		|| echo "$(YELLOW)⚠ Could not extract CA certificates (HTTPS may rely on device certs)$(RESET)"
 	@$(MAKE) --no-print-directory maybe-stop-colima
@@ -617,16 +835,19 @@ cc1-docker: ensure-docker
 		|| echo "$(YELLOW)⚠ Could not extract CA certificates (HTTPS may rely on device certs)$(RESET)"
 	@$(MAKE) --no-print-directory maybe-stop-colima
 
-k1-docker: ensure-docker
-	@echo "$(CYAN)$(BOLD)Cross-compiling for Creality K1 series via Docker...$(RESET)"
+mips-docker: ensure-docker
+	@echo "$(CYAN)$(BOLD)Cross-compiling for MIPS32 devices via Docker...$(RESET)"
 	@if ! docker image inspect helixscreen/toolchain-k1 >/dev/null 2>&1; then \
 		echo "$(YELLOW)Docker image not found. Building toolchain first...$(RESET)"; \
 		$(MAKE) docker-toolchain-k1; \
 	fi
 	$(call ensure-ccache-dir,k1)
 	$(Q)docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,k1) helixscreen/toolchain-k1 \
-		make PLATFORM_TARGET=k1 SKIP_OPTIONAL_DEPS=1 -j$$(nproc)
+		make PLATFORM_TARGET=mips SKIP_OPTIONAL_DEPS=1 -j$$(nproc)
 	@$(MAKE) --no-print-directory maybe-stop-colima
+
+k1-docker: mips-docker
+
 
 k1-dynamic-docker: ensure-docker
 	@echo "$(CYAN)$(BOLD)Cross-compiling for Creality K1 series (dynamic) via Docker...$(RESET)"
@@ -678,7 +899,7 @@ maybe-stop-colima:
 	fi
 
 # Build Docker toolchain images
-docker-toolchains: docker-toolchain-pi docker-toolchain-pi32 docker-toolchain-ad5m docker-toolchain-cc1 docker-toolchain-k1 docker-toolchain-k1-dynamic docker-toolchain-k2 docker-toolchain-snapmaker-u1
+docker-toolchains: docker-toolchain-pi docker-toolchain-pi32 docker-toolchain-ad5m docker-toolchain-ad5x docker-toolchain-cc1 docker-toolchain-k1 docker-toolchain-k1-dynamic docker-toolchain-k2 docker-toolchain-snapmaker-u1
 	@echo "$(GREEN)$(BOLD)All Docker toolchains built successfully$(RESET)"
 
 docker-toolchain-pi: ensure-buildx
@@ -693,12 +914,16 @@ docker-toolchain-ad5m: ensure-buildx
 	@echo "$(CYAN)Building Adventurer 5M toolchain Docker image...$(RESET)"
 	$(Q)docker buildx build -t helixscreen/toolchain-ad5m -f docker/Dockerfile.ad5m docker/
 
+docker-toolchain-ad5x: ensure-buildx
+	@echo "$(CYAN)Building Adventurer 5X toolchain Docker image...$(RESET)"
+	$(Q)docker buildx build -t helixscreen/toolchain-ad5x -f docker/Dockerfile.ad5x docker/
+
 docker-toolchain-cc1: ensure-buildx
 	@echo "$(CYAN)Building Centauri Carbon 1 toolchain Docker image...$(RESET)"
 	$(Q)docker buildx build -t helixscreen/toolchain-cc1 -f docker/Dockerfile.cc1 docker/
 
 docker-toolchain-k1: ensure-buildx
-	@echo "$(CYAN)Building Creality K1 series toolchain Docker image...$(RESET)"
+	@echo "$(CYAN)Building MIPS32 K1 toolchain Docker image...$(RESET)"
 	$(Q)docker buildx build -t helixscreen/toolchain-k1 -f docker/Dockerfile.k1 docker/
 
 docker-toolchain-k1-dynamic: ensure-buildx
@@ -849,10 +1074,10 @@ DEPLOY_ASSET_DIRS := ui_xml assets config moonraker-plugin
 # Usage: $(call deploy-common,$(PI_SSH_TARGET),$(PI_DEPLOY_DIR),build/pi/bin)
 define deploy-common
 	@echo "$(CYAN)Deploying HelixScreen to $(1):$(2)...$(RESET)"
-	@# Generate pre-rendered images if missing
+	@# Generate pre-rendered splash images if missing (all small-display platforms use the same files)
 	@if [ ! -f build/assets/images/prerendered/splash-logo-small.bin ]; then \
 		echo "$(DIM)Generating pre-rendered splash images...$(RESET)"; \
-		$(MAKE) gen-images-ad5m; \
+		$(MAKE) gen-images; \
 	fi
 	@if [ ! -d build/assets/images/printers/prerendered ] || [ -z "$$(ls -A build/assets/images/printers/prerendered/*.bin 2>/dev/null)" ]; then \
 		echo "$(DIM)Generating pre-rendered printer images...$(RESET)"; \
@@ -899,7 +1124,7 @@ endef
 # Example: make deploy-pi PI_HOST=192.168.1.50 PI_USER=pi
 # PI_USER defaults to empty (uses SSH config or current user)
 # PI_DEPLOY_DIR defaults to ~/helixscreen (full app directory)
-PI_HOST ?= helixpi.local
+PI_HOST ?= 192.168.1.113
 PI_USER ?=
 PI_DEPLOY_DIR ?= ~/helixscreen
 
@@ -1371,8 +1596,8 @@ K1_SSH_TARGET := $(K1_USER)@$(K1_HOST)
 
 # Deploy full application to K1 using tar/ssh (K1 BusyBox has no rsync)
 deploy-k1:
-	@test -f build/k1/bin/helix-screen || { echo "$(RED)Error: build/k1/bin/helix-screen not found. Run 'make k1-docker' first.$(RESET)"; exit 1; }
-	@test -f build/k1/bin/helix-splash || { echo "$(RED)Error: build/k1/bin/helix-splash not found. Run 'make k1-docker' first.$(RESET)"; exit 1; }
+	@test -f build/mips/bin/helix-screen || { echo "$(RED)Error: build/mips/bin/helix-screen not found. Run 'make mips-docker' first.$(RESET)"; exit 1; }
+	@test -f build/mips/bin/helix-splash || { echo "$(RED)Error: build/mips/bin/helix-splash not found. Run 'make mips-docker' first.$(RESET)"; exit 1; }
 	@echo "$(CYAN)Deploying HelixScreen to $(K1_SSH_TARGET):$(K1_DEPLOY_DIR)...$(RESET)"
 	@echo "$(YELLOW)NOTE: K1 deployment is UNTESTED - please report issues$(RESET)"
 	@# Generate pre-rendered images if missing
@@ -1392,10 +1617,10 @@ deploy-k1:
 	ssh $(K1_SSH_TARGET) "killall helix-watchdog helix-screen helix-splash 2>/dev/null || true; mkdir -p $(K1_DEPLOY_DIR)/bin"
 	@# Transfer binaries via cat/ssh
 	@echo "$(DIM)Transferring binaries...$(RESET)"
-	cat build/k1/bin/helix-screen | ssh $(K1_SSH_TARGET) "cat > $(K1_DEPLOY_DIR)/bin/helix-screen && chmod +x $(K1_DEPLOY_DIR)/bin/helix-screen"
-	cat build/k1/bin/helix-splash | ssh $(K1_SSH_TARGET) "cat > $(K1_DEPLOY_DIR)/bin/helix-splash && chmod +x $(K1_DEPLOY_DIR)/bin/helix-splash"
-	@if [ -f build/k1/bin/helix-watchdog ]; then \
-		cat build/k1/bin/helix-watchdog | ssh $(K1_SSH_TARGET) "cat > $(K1_DEPLOY_DIR)/bin/helix-watchdog && chmod +x $(K1_DEPLOY_DIR)/bin/helix-watchdog"; \
+	cat build/mips/bin/helix-screen | ssh $(K1_SSH_TARGET) "cat > $(K1_DEPLOY_DIR)/bin/helix-screen && chmod +x $(K1_DEPLOY_DIR)/bin/helix-screen"
+	cat build/mips/bin/helix-splash | ssh $(K1_SSH_TARGET) "cat > $(K1_DEPLOY_DIR)/bin/helix-splash && chmod +x $(K1_DEPLOY_DIR)/bin/helix-splash"
+	@if [ -f build/mips/bin/helix-watchdog ]; then \
+		cat build/mips/bin/helix-watchdog | ssh $(K1_SSH_TARGET) "cat > $(K1_DEPLOY_DIR)/bin/helix-watchdog && chmod +x $(K1_DEPLOY_DIR)/bin/helix-watchdog"; \
 	fi
 	cat scripts/helix-launcher.sh | ssh $(K1_SSH_TARGET) "cat > $(K1_DEPLOY_DIR)/bin/helix-launcher.sh && chmod +x $(K1_DEPLOY_DIR)/bin/helix-launcher.sh"
 	@# Transfer assets via tar
@@ -1418,22 +1643,22 @@ deploy-k1:
 
 # Deploy and run in foreground with verbose logging (for interactive debugging)
 deploy-k1-fg:
-	@test -f build/k1/bin/helix-screen || { echo "$(RED)Error: build/k1/bin/helix-screen not found. Run 'make k1-docker' first.$(RESET)"; exit 1; }
-	@test -f build/k1/bin/helix-splash || { echo "$(RED)Error: build/k1/bin/helix-splash not found. Run 'make k1-docker' first.$(RESET)"; exit 1; }
+	@test -f build/mips/bin/helix-screen || { echo "$(RED)Error: build/mips/bin/helix-screen not found. Run 'make mips-docker' first.$(RESET)"; exit 1; }
+	@test -f build/mips/bin/helix-splash || { echo "$(RED)Error: build/mips/bin/helix-splash not found. Run 'make mips-docker' first.$(RESET)"; exit 1; }
 	@echo "$(YELLOW)NOTE: K1 deployment is UNTESTED - please report issues$(RESET)"
-	$(call deploy-common,$(K1_SSH_TARGET),$(K1_DEPLOY_DIR),build/k1/bin)
+	$(call deploy-common,$(K1_SSH_TARGET),$(K1_DEPLOY_DIR),build/mips/bin)
 	@echo "$(CYAN)Starting helix-screen on $(K1_HOST) (foreground, verbose)...$(RESET)"
 	ssh -t $(K1_SSH_TARGET) "cd $(K1_DEPLOY_DIR) && ./bin/helix-launcher.sh --debug"
 
 # Deploy binaries only (fast, for quick iteration)
 deploy-k1-bin:
-	@test -f build/k1/bin/helix-screen || { echo "$(RED)Error: build/k1/bin/helix-screen not found. Run 'make k1-docker' first.$(RESET)"; exit 1; }
+	@test -f build/mips/bin/helix-screen || { echo "$(RED)Error: build/mips/bin/helix-screen not found. Run 'make mips-docker' first.$(RESET)"; exit 1; }
 	@echo "$(CYAN)Deploying binaries only to $(K1_SSH_TARGET):$(K1_DEPLOY_DIR)/bin...$(RESET)"
 	ssh $(K1_SSH_TARGET) "killall helix-watchdog helix-screen helix-splash 2>/dev/null || true; mkdir -p $(K1_DEPLOY_DIR)/bin"
-	cat build/k1/bin/helix-screen | ssh $(K1_SSH_TARGET) "cat > $(K1_DEPLOY_DIR)/bin/helix-screen && chmod +x $(K1_DEPLOY_DIR)/bin/helix-screen"
-	cat build/k1/bin/helix-splash | ssh $(K1_SSH_TARGET) "cat > $(K1_DEPLOY_DIR)/bin/helix-splash && chmod +x $(K1_DEPLOY_DIR)/bin/helix-splash"
-	@if [ -f build/k1/bin/helix-watchdog ]; then \
-		cat build/k1/bin/helix-watchdog | ssh $(K1_SSH_TARGET) "cat > $(K1_DEPLOY_DIR)/bin/helix-watchdog && chmod +x $(K1_DEPLOY_DIR)/bin/helix-watchdog"; \
+	cat build/mips/bin/helix-screen | ssh $(K1_SSH_TARGET) "cat > $(K1_DEPLOY_DIR)/bin/helix-screen && chmod +x $(K1_DEPLOY_DIR)/bin/helix-screen"
+	cat build/mips/bin/helix-splash | ssh $(K1_SSH_TARGET) "cat > $(K1_DEPLOY_DIR)/bin/helix-splash && chmod +x $(K1_DEPLOY_DIR)/bin/helix-splash"
+	@if [ -f build/mips/bin/helix-watchdog ]; then \
+		cat build/mips/bin/helix-watchdog | ssh $(K1_SSH_TARGET) "cat > $(K1_DEPLOY_DIR)/bin/helix-watchdog && chmod +x $(K1_DEPLOY_DIR)/bin/helix-watchdog"; \
 	fi
 	@echo "$(GREEN)✓ Binaries deployed$(RESET)"
 	@echo "$(CYAN)Restarting helix-screen on $(K1_HOST)...$(RESET)"
@@ -1653,14 +1878,15 @@ define release-clean-assets
 	@find $(1)/assets -name 'mdi-icon-metadata.json.gz' -delete 2>/dev/null || true
 endef
 
-.PHONY: release-pi release-pi32 release-ad5m release-k1 release-k1-dynamic release-k2 release-snapmaker-u1 release-all release-clean
+.PHONY: release-pi release-pi32 release-ad5m release-k1 release-ad5x release-k1-dynamic release-k2 release-snapmaker-u1 release-all release-clean pi-fbdev-docker pi32-fbdev-docker pi-all-docker pi32-all-docker
 
 # Package Pi release
-release-pi: | build/pi/bin/helix-screen build/pi/bin/helix-splash
+release-pi: | build/pi/bin/helix-screen build/pi/bin/helix-splash build/pi-fbdev/bin/helix-screen
 	@echo "$(CYAN)$(BOLD)Packaging Pi release v$(VERSION)...$(RESET)"
 	@mkdir -p $(RELEASE_DIR)/helixscreen/bin
 	@cp build/pi/bin/helix-screen build/pi/bin/helix-splash $(RELEASE_DIR)/helixscreen/bin/
 	@if [ -f build/pi/bin/helix-watchdog ]; then cp build/pi/bin/helix-watchdog $(RELEASE_DIR)/helixscreen/bin/; fi
+	@if [ -f build/pi-fbdev/bin/helix-screen ]; then cp build/pi-fbdev/bin/helix-screen $(RELEASE_DIR)/helixscreen/bin/helix-screen-fbdev; fi
 	@cp scripts/helix-launcher.sh $(RELEASE_DIR)/helixscreen/bin/
 	@cp -r ui_xml config $(RELEASE_DIR)/helixscreen/
 	@# Remove any personal config — release ships template only (installer copies it on first run)
@@ -1693,11 +1919,12 @@ release-pi: | build/pi/bin/helix-screen build/pi/bin/helix-splash
 	@ls -lh $(RELEASE_DIR)/helixscreen-pi-$(RELEASE_VERSION).tar.gz $(RELEASE_DIR)/helixscreen-pi.zip
 
 # Package Pi 32-bit release (same structure as 64-bit Pi)
-release-pi32: | build/pi32/bin/helix-screen build/pi32/bin/helix-splash
+release-pi32: | build/pi32/bin/helix-screen build/pi32/bin/helix-splash build/pi32-fbdev/bin/helix-screen
 	@echo "$(CYAN)$(BOLD)Packaging Pi 32-bit release v$(VERSION)...$(RESET)"
 	@mkdir -p $(RELEASE_DIR)/helixscreen/bin
 	@cp build/pi32/bin/helix-screen build/pi32/bin/helix-splash $(RELEASE_DIR)/helixscreen/bin/
 	@if [ -f build/pi32/bin/helix-watchdog ]; then cp build/pi32/bin/helix-watchdog $(RELEASE_DIR)/helixscreen/bin/; fi
+	@if [ -f build/pi32-fbdev/bin/helix-screen ]; then cp build/pi32-fbdev/bin/helix-screen $(RELEASE_DIR)/helixscreen/bin/helix-screen-fbdev; fi
 	@cp scripts/helix-launcher.sh $(RELEASE_DIR)/helixscreen/bin/
 	@cp -r ui_xml config $(RELEASE_DIR)/helixscreen/
 	@# Remove any personal config — release ships template only (installer copies it on first run)
@@ -1775,6 +2002,49 @@ release-ad5m: | build/ad5m/bin/helix-screen build/ad5m/bin/helix-splash
 	@echo "$(GREEN)✓ Created $(RELEASE_DIR)/helixscreen-ad5m-$(RELEASE_VERSION).tar.gz + helixscreen-ad5m.zip$(RESET)"
 	@ls -lh $(RELEASE_DIR)/helixscreen-ad5m-$(RELEASE_VERSION).tar.gz $(RELEASE_DIR)/helixscreen-ad5m.zip
 
+# Package AD5X release
+release-ad5x: | build/ad5x/bin/helix-screen build/ad5x/bin/helix-splash
+	@echo "$(CYAN)$(BOLD)Packaging AD5X release v$(VERSION)...$(RESET)"
+	@mkdir -p $(RELEASE_DIR)/helixscreen/bin
+	@cp build/ad5x/bin/helix-screen build/ad5x/bin/helix-splash $(RELEASE_DIR)/helixscreen/bin/
+	@if [ -f build/ad5x/bin/helix-watchdog ]; then cp build/ad5x/bin/helix-watchdog $(RELEASE_DIR)/helixscreen/bin/; fi
+	@cp scripts/helix-launcher.sh $(RELEASE_DIR)/helixscreen/bin/
+	@cp -r ui_xml config $(RELEASE_DIR)/helixscreen/
+	@# Remove any personal config — release ships template only (installer copies it on first run)
+	@rm -f $(RELEASE_DIR)/helixscreen/config/helixconfig.json $(RELEASE_DIR)/helixscreen/config/helixconfig-test.json
+	@cp scripts/$(INSTALLER_FILENAME) $(RELEASE_DIR)/helixscreen/
+	@chmod +x $(RELEASE_DIR)/helixscreen/$(INSTALLER_FILENAME)
+	@mkdir -p $(RELEASE_DIR)/helixscreen/scripts
+	@cp scripts/uninstall.sh $(RELEASE_DIR)/helixscreen/scripts/
+	@mkdir -p $(RELEASE_DIR)/helixscreen/assets
+	@for asset in $(RELEASE_ASSETS); do \
+		if [ -d "$$asset" ]; then cp -r "$$asset" $(RELEASE_DIR)/helixscreen/assets/; fi; \
+	done
+	@# Copy pre-rendered images from build directory (splash + printer images)
+	@if [ -d "build/assets/images/prerendered" ]; then \
+		mkdir -p $(RELEASE_DIR)/helixscreen/assets/images/prerendered; \
+		cp -r build/assets/images/prerendered/* $(RELEASE_DIR)/helixscreen/assets/images/prerendered/; \
+	fi
+	@if [ -d "build/assets/images/printers/prerendered" ]; then \
+		mkdir -p $(RELEASE_DIR)/helixscreen/assets/images/printers/prerendered; \
+		cp -r build/assets/images/printers/prerendered/* $(RELEASE_DIR)/helixscreen/assets/images/printers/prerendered/; \
+	fi
+	@# Bundle CA certificates for HTTPS verification (fallback if device lacks system certs)
+	@if [ -f "build/ad5x/certs/ca-certificates.crt" ]; then \
+		mkdir -p $(RELEASE_DIR)/helixscreen/certs; \
+		cp build/ad5x/certs/ca-certificates.crt $(RELEASE_DIR)/helixscreen/certs/; \
+		echo "  $(DIM)Included CA certificates for HTTPS$(RESET)"; \
+	fi
+	@find $(RELEASE_DIR)/helixscreen -name '.DS_Store' -delete 2>/dev/null || true
+	$(call release-clean-assets,$(RELEASE_DIR)/helixscreen)
+	@xattr -cr $(RELEASE_DIR)/helixscreen 2>/dev/null || true
+	@echo '{"project_name":"helixscreen","project_owner":"prestonbrown","version":"$(RELEASE_VERSION)","asset_name":"helixscreen-ad5x.zip"}' > $(RELEASE_DIR)/helixscreen/release_info.json
+	@cd $(RELEASE_DIR)/helixscreen && zip -qr ../helixscreen-ad5x.zip .
+	@cd $(RELEASE_DIR) && COPYFILE_DISABLE=1 tar -czvf helixscreen-ad5x-$(RELEASE_VERSION).tar.gz helixscreen
+	@rm -rf $(RELEASE_DIR)/helixscreen
+	@echo "$(GREEN)✓ Created $(RELEASE_DIR)/helixscreen-ad5x-$(RELEASE_VERSION).tar.gz + helixscreen-ad5x.zip$(RESET)"
+	@ls -lh $(RELEASE_DIR)/helixscreen-ad5x-$(RELEASE_VERSION).tar.gz $(RELEASE_DIR)/helixscreen-ad5x.zip
+
 # Package CC1 release
 release-cc1: | build/cc1/bin/helix-screen build/cc1/bin/helix-splash
 	@echo "$(CYAN)$(BOLD)Packaging CC1 release v$(VERSION)...$(RESET)"
@@ -1819,11 +2089,11 @@ release-cc1: | build/cc1/bin/helix-screen build/cc1/bin/helix-splash
 	@ls -lh $(RELEASE_DIR)/helixscreen-cc1-$(RELEASE_VERSION).tar.gz $(RELEASE_DIR)/helixscreen-cc1.zip
 
 # Package K1 release
-release-k1: | build/k1/bin/helix-screen build/k1/bin/helix-splash
+release-k1: | build/mips/bin/helix-screen build/mips/bin/helix-splash
 	@echo "$(CYAN)$(BOLD)Packaging K1 release v$(VERSION)...$(RESET)"
 	@mkdir -p $(RELEASE_DIR)/helixscreen/bin
-	@cp build/k1/bin/helix-screen build/k1/bin/helix-splash $(RELEASE_DIR)/helixscreen/bin/
-	@if [ -f build/k1/bin/helix-watchdog ]; then cp build/k1/bin/helix-watchdog $(RELEASE_DIR)/helixscreen/bin/; fi
+	@cp build/mips/bin/helix-screen build/mips/bin/helix-splash $(RELEASE_DIR)/helixscreen/bin/
+	@if [ -f build/mips/bin/helix-watchdog ]; then cp build/mips/bin/helix-watchdog $(RELEASE_DIR)/helixscreen/bin/; fi
 	@cp scripts/helix-launcher.sh $(RELEASE_DIR)/helixscreen/bin/
 	@cp -r ui_xml config $(RELEASE_DIR)/helixscreen/
 	@# Remove any personal config — release ships template only (installer copies it on first run)
@@ -1836,6 +2106,7 @@ release-k1: | build/k1/bin/helix-screen build/k1/bin/helix-splash
 	@for asset in $(RELEASE_ASSETS); do \
 		if [ -d "$$asset" ]; then cp -r "$$asset" $(RELEASE_DIR)/helixscreen/assets/; fi; \
 	done
+	@# Copy pre-rendered images from build directory (splash + printer images)
 	@if [ -d "build/assets/images/prerendered" ]; then \
 		mkdir -p $(RELEASE_DIR)/helixscreen/assets/images/prerendered; \
 		cp -r build/assets/images/prerendered/* $(RELEASE_DIR)/helixscreen/assets/images/prerendered/; \
@@ -1959,7 +2230,7 @@ release-snapmaker-u1: | build/snapmaker-u1/bin/helix-screen
 	@ls -lh $(RELEASE_DIR)/helixscreen-snapmaker-u1-$(RELEASE_VERSION).tar.gz $(RELEASE_DIR)/helixscreen-snapmaker-u1.zip
 
 # Package all releases
-release-all: release-pi release-pi32 release-ad5m release-cc1 release-k1 release-k1-dynamic release-k2
+release-all: release-pi release-pi32 release-ad5m release-cc1 release-k1 release-ad5x release-k1-dynamic release-k2
 	@echo "$(GREEN)$(BOLD)✓ All releases packaged in $(RELEASE_DIR)/$(RESET)"
 	@ls -lh $(RELEASE_DIR)/*.tar.gz $(RELEASE_DIR)/*.zip
 
@@ -1970,15 +2241,17 @@ release-clean:
 
 # Aliases for package-* (matches scripts/package.sh naming)
 # These trigger the full build + package workflow
-.PHONY: package-ad5m package-cc1 package-pi package-pi32 package-k1-dynamic package-k2 package-snapmaker-u1 package-all package-clean
+.PHONY: package-ad5m package-cc1 package-pi package-pi32 package-k1 package-ad5x package-k1-dynamic package-k2 package-snapmaker-u1 package-all package-clean
 package-ad5m: ad5m-docker gen-images-ad5m gen-splash-3d-ad5m gen-printer-images release-ad5m
 package-cc1: cc1-docker gen-images gen-printer-images release-cc1
-package-pi: pi-docker gen-images gen-splash-3d gen-printer-images release-pi
-package-pi32: pi32-docker gen-images gen-splash-3d gen-printer-images release-pi32
+package-pi: pi-all-docker gen-images gen-splash-3d gen-printer-images release-pi
+package-pi32: pi32-all-docker gen-images gen-splash-3d gen-printer-images release-pi32
+package-k1: mips-docker gen-images gen-splash-3d-k1 gen-printer-images release-k1
+package-ad5x: mips-docker gen-images gen-splash-3d-k1 gen-printer-images release-ad5x
 package-k1-dynamic: k1-dynamic-docker gen-images gen-splash-3d-k1 gen-printer-images release-k1-dynamic
 package-k2: k2-docker gen-images gen-printer-images release-k2
 package-snapmaker-u1: snapmaker-u1-docker gen-images gen-printer-images release-snapmaker-u1
-package-all: package-ad5m package-cc1 package-pi package-pi32 package-k1-dynamic package-k2
+package-all: package-ad5m package-cc1 package-pi package-pi32 package-k1 package-ad5x package-k1-dynamic package-k2
 package-clean: release-clean
 
 # Convenience aliases (verb-target → target-verb)

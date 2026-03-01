@@ -250,6 +250,12 @@ class WifiBackendWpaSupplicant : public WifiBackend, private hv::EventLoopThread
      */
     std::string map_event_to_callback(const std::string& event);
 
+    // 5GHz support — computed once during init, never changes
+    std::atomic<bool> supports_5ghz_cached_{false};
+    std::atomic<bool> supports_5ghz_resolved_{false};
+
+    void resolve_5ghz_support();
+
     struct wpa_ctrl* conn;     ///< Control connection for sending commands
     struct wpa_ctrl* mon_conn; ///< Monitor connection for receiving events (FIXED LEAK)
     hio_t* mon_io_{nullptr};   ///< libhv I/O handle for monitor socket (must cleanup on re-init)

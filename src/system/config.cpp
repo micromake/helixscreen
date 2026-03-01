@@ -65,13 +65,8 @@ json get_default_printer_config(const std::string& moonraker_host) {
 /// Default display configuration section
 /// Used for both new configs and ensuring display section exists with defaults
 json get_default_display_config() {
-    return {{"rotate", 0},
-            {"sleep_sec", 600},
-            {"dim_sec", 300},
-            {"dim_brightness", 30},
-            {"drm_device", ""},
-            {"gcode_render_mode", 0},
-            {"gcode_3d_enabled", true},
+    return {{"sleep_sec", 600},         {"dim_sec", 300},         {"dim_brightness", 30},
+            {"drm_device", ""},         {"gcode_render_mode", 0}, {"gcode_3d_enabled", true},
             {"bed_mesh_render_mode", 0}};
 }
 
@@ -266,58 +261,15 @@ static void migrate_v1_to_v2(json& config) {
     }
 }
 
-/// Migration v2→v3: Multi-printer support — restructure single printer to printers map
+/// Migration v2→v3: Reset jitter_threshold from 15 to 0 (disabled by default).
+/// The jitter filter competed with LVGL's scroll_limit, adding perceptible drag delay.
+/// Users with genuinely noisy panels can re-enable via config or HELIX_TOUCH_JITTER env.
 static void migrate_v2_to_v3(json& config) {
-    // Already migrated if /printers exists
-    if (config.contains("printers")) {
-        return;
+    json::json_pointer ptr("/input/jitter_threshold");
+    if (config.contains(ptr) && config[ptr].is_number_integer() && config[ptr].get<int>() == 15) {
+        config[ptr] = 5;
+        spdlog::info("[Config] Migration v3: reset jitter_threshold 15 -> 5");
     }
-
-    // Nothing to migrate if no /printer section
-    if (!config.contains("printer")) {
-        return;
-    }
-
-    spdlog::info("[Config] Migration v3: restructuring single printer to multi-printer format");
-
-    // Generate printer ID from name, or use "default"
-    std::string printer_name;
-    if (config["printer"].contains("name") && config["printer"]["name"].is_string()) {
-        printer_name = config["printer"]["name"].get<std::string>();
-    }
-    std::string printer_id = printer_name.empty() ? "default" : Config::slugify(printer_name);
-
-    // Move /printer → /printers/{id}
-    json printer_data = config["printer"];
-
-    // Move /filament into printer entry (if exists at root)
-    if (config.contains("filament")) {
-        printer_data["filament"] = config["filament"];
-        config.erase("filament");
-        spdlog::info("[Config] Migration v3: moved /filament into printer entry");
-    }
-
-    // Move /panel_widgets into printer entry (if exists at root)
-    if (config.contains("panel_widgets")) {
-        printer_data["panel_widgets"] = config["panel_widgets"];
-        config.erase("panel_widgets");
-        spdlog::info("[Config] Migration v3: moved /panel_widgets into printer entry");
-    }
-
-    // Copy wizard_completed into printer entry (keep root copy for backward compat)
-    if (config.contains("wizard_completed") && config["wizard_completed"].is_boolean()) {
-        printer_data["wizard_completed"] = config["wizard_completed"];
-    }
-
-    // Create printers map and set active printer
-    config["printers"] = json::object();
-    config["printers"][printer_id] = printer_data;
-    config["active_printer_id"] = printer_id;
-
-    // Remove old /printer key
-    config.erase("printer");
-
-    spdlog::info("[Config] Migration v3: created printer '{}' in /printers/ map", printer_id);
 }
 
 /// Run all versioned migrations in sequence from current version to CURRENT_CONFIG_VERSION
@@ -355,6 +307,7 @@ json get_default_config(const std::string& moonraker_host, bool include_user_pre
                    {"input",
                     {{"scroll_throw", 25},
                      {"scroll_limit", 10},
+                     {"jitter_threshold", 5},
                      {"touch_device", ""},
                      {"calibration",
                       {{"valid", false},
@@ -462,7 +415,7 @@ void Config::init(const std::string& config_path) {
         {
             std::string env_path =
                 (fs::path(config_path).parent_path() / "helixscreen.env").string();
-            struct stat env_st{};
+            struct stat env_st {};
             if (stat(env_path.c_str(), &env_st) != 0 && stat(PREUPDATE_ENV_BACKUP, &env_st) == 0) {
                 spdlog::warn("[Config] helixscreen.env missing after upgrade — restoring from "
                              "pre-update backup");
@@ -649,6 +602,7 @@ void Config::init(const std::string& config_path) {
     if (!data.contains("input")) {
         data["input"] = {{"scroll_throw", 25},
                          {"scroll_limit", 10},
+                         {"jitter_threshold", 5},
                          {"touch_device", ""},
                          {"calibration",
                           {{"valid", false},
@@ -674,6 +628,10 @@ void Config::init(const std::string& config_path) {
         }
         if (!input.contains("touch_device")) {
             input["touch_device"] = "";
+            config_modified = true;
+        }
+        if (!input.contains("jitter_threshold")) {
+            input["jitter_threshold"] = 5;
             config_modified = true;
         }
 

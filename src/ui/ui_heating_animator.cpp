@@ -83,12 +83,15 @@ void HeatingIconAnimator::detach() {
     }
     stop_pulse();
 
-    // Remove our delete callback to prevent re-entrant detach
+    // Remove our delete callback to prevent re-entrant detach (needs icon_ valid)
     lv_obj_remove_event_cb_with_user_data(icon_, icon_delete_cb, this);
+
+    // Nullify widget pointer BEFORE resetting observers — any cascading callback
+    // that slips through will see nullptr and bail out safely.
+    icon_ = nullptr;
 
     // ObserverGuard::reset() removes the observer from the subject
     theme_observer_.reset();
-    icon_ = nullptr;
     spdlog::debug("[HeatingIconAnimator] Detached");
 }
 
@@ -122,7 +125,7 @@ void HeatingIconAnimator::update(int current_temp, int target_temp) {
             current_color_ = get_secondary_color();
             current_opacity_ = LV_OPA_COVER;
             apply_color();
-            spdlog::debug("[HeatingIconAnimator] State: OFF");
+            spdlog::trace("[HeatingIconAnimator] State: OFF");
             break;
 
         case State::HEATING:
@@ -137,7 +140,7 @@ void HeatingIconAnimator::update(int current_temp, int target_temp) {
             if (!pulse_active_) {
                 start_pulse();
             }
-            spdlog::debug("[HeatingIconAnimator] State: HEATING");
+            spdlog::trace("[HeatingIconAnimator] State: HEATING");
             break;
 
         case State::AT_TARGET:
@@ -145,7 +148,7 @@ void HeatingIconAnimator::update(int current_temp, int target_temp) {
             stop_pulse();
             current_color_ = theme_manager_get_color("temp_gradient_hot");
             current_opacity_ = LV_OPA_COVER;
-            spdlog::debug("[HeatingIconAnimator] State: AT_TARGET");
+            spdlog::trace("[HeatingIconAnimator] State: AT_TARGET");
             break;
         }
     }
@@ -205,7 +208,7 @@ void HeatingIconAnimator::start_pulse() {
     lv_anim_set_exec_cb(&anim, pulse_anim_cb);
     lv_anim_start(&anim);
 
-    spdlog::debug("[HeatingIconAnimator] Pulse animation started");
+    spdlog::trace("[HeatingIconAnimator] Pulse animation started");
 }
 
 void HeatingIconAnimator::stop_pulse() {
@@ -217,7 +220,7 @@ void HeatingIconAnimator::stop_pulse() {
     lv_anim_delete(this, pulse_anim_cb);
     current_opacity_ = LV_OPA_COVER;
 
-    spdlog::debug("[HeatingIconAnimator] Pulse animation stopped");
+    spdlog::trace("[HeatingIconAnimator] Pulse animation stopped");
 }
 
 void HeatingIconAnimator::apply_color() {
@@ -299,8 +302,10 @@ void HeatingIconAnimator::icon_delete_cb(lv_event_t* e) {
     // Stop pulse animation (references icon_)
     animator->stop_pulse();
 
-    // Remove theme observer
-    animator->theme_observer_.reset();
+    // Release theme observer without touching the subject — during lv_deinit()
+    // the subject may already be freed, and reset() would crash trying to
+    // remove the observer from a freed linked list.
+    animator->theme_observer_.release();
 
     // Null out icon_ — the widget is already being destroyed, don't touch it further
     animator->icon_ = nullptr;

@@ -54,13 +54,16 @@ class DisplayBackendDRM : public DisplayBackend {
      */
     explicit DisplayBackendDRM(const std::string& drm_device);
 
-    ~DisplayBackendDRM() override = default;
+    ~DisplayBackendDRM() override;
 
     // Display creation
     lv_display_t* create_display(int width, int height) override;
 
     // Input device creation
     lv_indev_t* create_input_pointer() override;
+
+    // Display rotation via DRM plane property
+    void set_display_rotation(lv_display_rotation_t rot, int phys_w, int phys_h) override;
 
     // Backend info
     DisplayBackendType type() const override {
@@ -80,10 +83,17 @@ class DisplayBackendDRM : public DisplayBackend {
         drm_device_ = path;
     }
 
+    /// Whether GPU-accelerated rendering (EGL/OpenGL ES) is active
+    bool is_gpu_accelerated() const {
+        return using_egl_;
+    }
+
   private:
-    std::string drm_device_ = "/dev/dri/card0";
+    std::string drm_device_;
     lv_display_t* display_ = nullptr;
     lv_indev_t* pointer_ = nullptr;
+    bool using_egl_ = false; ///< Track if GPU-accelerated path is active
+
 };
 
 #endif // HELIX_DISPLAY_DRM

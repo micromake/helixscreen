@@ -12,7 +12,9 @@
     "led_match": "Match against LED/neopixel object names",
     "mcu_match": "Match against MCU chip type or serial pattern",
     "build_volume_range": "Match against bed_mesh dimensions",
-    "macro_match": "Match against G-code macro names (gcode_macro objects)"
+    "macro_match": "Match against G-code macro names (gcode_macro objects)",
+    "tool_count": "Count of extruder tools (tool_count_1, tool_count_2, tool_count_4)",
+    "cpu_arch_match": "Match against host CPU architecture string"
   },
   "printers": [
     {
@@ -207,6 +209,64 @@
       }
     },
     {
+      "id": "flashforge_ad5x",
+      "name": "FlashForge Adventurer 5X",
+      "manufacturer": "FlashForge",
+      "image": "flashforge-adventurer-5x.png",
+      "z_offset_calibration_strategy": "gcode_offset",
+      "heuristics": [
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "ad5x",
+          "confidence": 96,
+          "reason": "Hostname contains 'ad5x' (Adventurer 5X)"
+        },
+        {
+          "type": "sensor_match",
+          "field": "sensors",
+          "pattern": "weightValue",
+          "confidence": 80,
+          "reason": "Spool weight sensor (FlashForge signature)"
+        },
+        {
+          "type": "sensor_match",
+          "field": "sensors",
+          "pattern": "weight",
+          "confidence": 70,
+          "reason": "Weight sensor detected (FlashForge-like)"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "flashforge",
+          "confidence": 80,
+          "reason": "Hostname contains 'flashforge'"
+        },
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 30,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "tool_count",
+          "field": "heaters",
+          "pattern": "tool_count_4",
+          "confidence": 85,
+          "reason": "4-extruder IFS tool changer"
+        },
+        {
+          "type": "cpu_arch_match",
+          "field": "cpu_arch",
+          "pattern": "mips",
+          "confidence": 70,
+          "reason": "MIPS host architecture (Ingenic X2600)"
+        }
+      ]
+    },
+    {
       "id": "voron_2_4",
       "name": "Voron 2.4",
       "manufacturer": "Voron",
@@ -336,10 +396,10 @@
       ]
     },
     {
-      "id": "voron_micron",
-      "name": "Voron Micron",
-      "manufacturer": "Voron",
-      "image": "voron-micron.png",
+      "id": "pfa_micron",
+      "name": "PFA Micron",
+      "manufacturer": "PrintersForAnts",
+      "image": "pfa-micron.png",
       "heuristics": [
         {
           "type": "kinematics_match",
@@ -361,14 +421,7 @@
           "field": "printer_objects",
           "pattern": "neopixel",
           "confidence": 40,
-          "reason": "Neopixel LEDs (common on Vorons)"
-        },
-        {
-          "type": "hostname_match",
-          "field": "hostname",
-          "pattern": "voron",
-          "confidence": 75,
-          "reason": "Hostname contains 'voron'"
+          "reason": "Neopixel LEDs commonly present"
         },
         {
           "type": "hostname_match",
@@ -2454,6 +2507,119 @@
       ]
     },
     {
+      "id": "sovol_sv08_max",
+      "name": "Sovol SV08 Max",
+      "manufacturer": "Sovol",
+      "image": "sovol-sv08-max.png",
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 40,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "quad_gantry_level",
+          "confidence": 85,
+          "reason": "Quad Gantry Level (Voron 2.4 derived design)"
+        },
+        {
+          "type": "stepper_count",
+          "field": "steppers",
+          "pattern": "z_count_4",
+          "confidence": 80,
+          "reason": "4 independent Z steppers (Voron 2.4 style)"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 480,
+          "max_x": 520,
+          "min_y": 480,
+          "max_y": 520,
+          "confidence": 85,
+          "reason": "Build volume ~500x500mm (SV08 Max size)"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "sovol",
+          "confidence": 85,
+          "reason": "Hostname contains 'sovol'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "sv08-max",
+          "confidence": 98,
+          "reason": "Hostname contains 'sv08-max'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "sv08max",
+          "confidence": 98,
+          "reason": "Hostname contains 'sv08max'"
+        }
+      ]
+    },
+    {
+      "id": "sovol_zero",
+      "name": "Sovol Zero",
+      "manufacturer": "Sovol",
+      "image": "sovol-zero.png",
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 40,
+          "reason": "CoreXY kinematics (Voron 0.2 based)"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 140,
+          "max_x": 165,
+          "min_y": 140,
+          "max_y": 165,
+          "confidence": 65,
+          "reason": "Build volume ~152x152mm (Sovol Zero size)"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "sovol",
+          "confidence": 85,
+          "reason": "Hostname contains 'sovol'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "sovol-zero",
+          "confidence": 98,
+          "reason": "Hostname contains 'sovol-zero'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "zero",
+          "confidence": 70,
+          "reason": "Hostname contains 'zero'"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "probe_eddy_current",
+          "confidence": 70,
+          "reason": "Eddy current probe (Sovol Zero auto-leveling)"
+        }
+      ]
+    },
+    {
       "id": "sovol_sv06",
       "name": "Sovol SV06",
       "manufacturer": "Sovol",
@@ -3467,6 +3633,52 @@
           "pattern": "u1",
           "confidence": 90,
           "reason": "Hostname contains 'u1' (Snapmaker U1)"
+        }
+      ]
+    },
+    {
+      "id": "lemontron",
+      "name": "Lemontron",
+      "manufacturer": "Lemontron",
+      "image": "lemontron.png",
+      "heuristics": [
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "lemontron",
+          "confidence": 95,
+          "reason": "Hostname contains 'lemontron'"
+        },
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 30,
+          "reason": "CoreXY kinematics (Positron-style inverted CoreXY)"
+        },
+        {
+          "type": "mcu_match",
+          "field": "mcu",
+          "pattern": "rp2040",
+          "confidence": 40,
+          "reason": "RP2040 MCU (SKR Pico board)"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 170,
+          "max_x": 190,
+          "min_y": 170,
+          "max_y": 190,
+          "confidence": 55,
+          "reason": "Build volume ~180x180mm (Lemontron size)"
+        },
+        {
+          "type": "macro_match",
+          "field": "macros",
+          "pattern": "LEMONTRON",
+          "confidence": 99,
+          "reason": "LEMONTRON macro present (definitive Lemontron signature)"
         }
       ]
     }

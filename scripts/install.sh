@@ -250,7 +250,7 @@ KLIPPER_USER=""
 KLIPPER_HOME=""
 
 # Detect platform
-# Returns: "ad5m", "k1", "pi", "pi32", or "unsupported"
+# Returns: "ad5m", "ad5x", "k1", "pi", "pi32", or "unsupported"
 detect_platform() {
     local arch kernel
     arch=$(uname -m)
@@ -261,6 +261,15 @@ detect_platform() {
         # AD5M has a specific kernel identifier
         if echo "$kernel" | grep -q "ad5m\|5.4.61"; then
             echo "ad5m"
+            return
+        fi
+    fi
+
+    # Check for FlashForge AD5X (MIPS with /usr/data and FlashForge indicators)
+    # AD5X uses Ingenic X2600 (MIPS); identified by /usr/prog/ dir or /ZMOD file alongside /usr/data/
+    if [ "$arch" = "mips" ]; then
+        if [ -d "/usr/data" ] && { [ -d "/usr/prog" ] || [ -f "/ZMOD" ]; }; then
+            echo "ad5x"
             return
         fi
     fi
@@ -588,6 +597,13 @@ set_install_paths() {
                 log_info "Install directory: ${INSTALL_DIR}"
                 ;;
         esac
+    elif [ "$platform" = "ad5x" ]; then
+        # FlashForge AD5X - uses ZMOD, /usr/data structure
+        INSTALL_DIR="/srv/helixscreen"
+        INIT_SCRIPT_DEST="/etc/init.d/S80helixscreen"
+        PREVIOUS_UI_SCRIPT=""
+        log_info "Platform: FlashForge AD5X (ZMOD)"
+        log_info "Install directory: ${INSTALL_DIR}"
     elif [ "$platform" = "k1" ]; then
         # Creality K1 series - uses /usr/data structure
         case "$firmware" in
@@ -680,7 +696,7 @@ SUDO=""
 check_permissions() {
     local platform=$1
 
-    if [ "$platform" = "ad5m" ] || [ "$platform" = "k1" ]; then
+    if [ "$platform" = "ad5m" ] || [ "$platform" = "ad5x" ] || [ "$platform" = "k1" ]; then
         if [ "$(id -u)" != "0" ]; then
             log_error "Installation on $platform requires root privileges."
             log_error "Please run: sudo $0 $*"
@@ -711,8 +727,8 @@ install_permission_rules() {
     local platform=$1
     local helix_user="${KLIPPER_USER:-root}"
 
-    # Skip for platforms that run as root (AD5M, K1) or if user is root
-    if [ "$platform" = "ad5m" ] || [ "$platform" = "k1" ] || [ "$helix_user" = "root" ]; then
+    # Skip for platforms that run as root (AD5M, AD5X, K1) or if user is root
+    if [ "$platform" = "ad5m" ] || [ "$platform" = "ad5x" ] || [ "$platform" = "k1" ] || [ "$helix_user" = "root" ]; then
         log_info "Skipping permission rules (running as root)"
         return 0
     fi
@@ -832,10 +848,10 @@ install_runtime_deps() {
 
     log_info "Checking runtime dependencies for display/input..."
 
-    # Required libraries for DRM display and libinput
-    # Note: GPU libs (libgles2, libegl1, libgbm1) not needed - using software rendering
+    # Required libraries for DRM display, libinput, and GPU rendering (EGL/OpenGL ES)
+    # GPU libs are needed for DRM+EGL hardware-accelerated rendering on Pi
     # Note: OpenSSL is statically linked for Pi builds, no runtime libssl needed
-    local deps="libdrm2 libinput10"
+    local deps="libdrm2 libinput10 libgbm1 libegl1 libgles2"
     local missing=""
 
     for dep in $deps; do
@@ -880,7 +896,7 @@ check_disk_space() {
 
     # Get available space in MB
     local available_mb
-    if [ "$platform" = "ad5m" ] || [ "$platform" = "k1" ]; then
+    if [ "$platform" = "ad5m" ] || [ "$platform" = "ad5x" ] || [ "$platform" = "k1" ]; then
         # BusyBox df output format: blocks are in KB by default
         available_mb=$(df "$check_dir" 2>/dev/null | tail -1 | awk '{print int($4/1024)}')
     else
@@ -927,7 +943,7 @@ check_klipper_ecosystem() {
 
     # Only relevant for embedded platforms with local Klipper
     case "$platform" in
-        ad5m|k1) ;;
+        ad5m|ad5x|k1) ;;
         *) return 0 ;;
     esac
 
@@ -1064,6 +1080,18 @@ verify_binary_deps() {
             # Re-check after attempted fixes
             missing_libs=$(ldd "$binary" 2>/dev/null | grep "not found" || true)
             if [ -n "$missing_libs" ]; then
+                # Check if fbdev fallback binary exists and is loadable
+                local fallback="${INSTALL_DIR}/bin/helix-screen-fbdev"
+                if [ -x "$fallback" ]; then
+                    local fb_missing
+                    fb_missing=$(ldd "$fallback" 2>/dev/null | grep "not found" || true)
+                    if [ -z "$fb_missing" ]; then
+                        log_warn "DRM binary has missing GL libraries -- fbdev fallback will be used"
+                        log_warn "Install GPU libraries for hardware acceleration: sudo apt install libgbm1 libegl1 libgles2"
+                        return 0
+                    fi
+                fi
+                # No usable fallback — original error behavior
                 log_error "Could not resolve all missing libraries:"
                 echo "$missing_libs" | while IFS= read -r line; do
                     log_error "  $line"
@@ -1911,7 +1939,7 @@ download_release() {
             log_success "Downloaded ${filename} (${size}) from CDN"
             return 0
         fi
-        log_warn "CDN download corrupt, trying GitHub..."
+        log_warn "CDN download incomplete or timed out, trying GitHub..."
         rm -f "$dest"
     else
         log_warn "CDN download failed, trying GitHub..."
@@ -2047,7 +2075,7 @@ validate_binary_architecture() {
             expected_machine_lo="28"
             expected_desc="ARM 32-bit (armv7l)"
             ;;
-        k1)
+        ad5x|k1)
             expected_class="01"
             expected_machine_lo="08"
             expected_desc="MIPS 32-bit (mipsel)"
@@ -2120,7 +2148,7 @@ extract_release() {
     mkdir -p "$extract_dir"
     cd "$extract_dir" || exit 1
 
-    if [ "$platform" = "ad5m" ] || [ "$platform" = "k1" ]; then
+    if [ "$platform" = "ad5m" ] || [ "$platform" = "ad5x" ] || [ "$platform" = "k1" ]; then
         # BusyBox tar doesn't support -z
         if ! gunzip -c "$tarball" | tar xf -; then
             # Check if it was a space issue vs actual corruption
@@ -2232,49 +2260,80 @@ extract_release() {
     fi
 
     # Phase 6: Restore config and settings
-    # Try TMP_DIR backup first; fall back to the .old directory's copy.
-    # Under systemd's PrivateTmp=true, TMP_DIR lives in a volatile mount that
-    # can disappear if the service restarts.  The .old directory is on the real
-    # filesystem and survives any restart.
+    # User's config always takes priority over bundled defaults so customizations
+    # survive updates.  Try TMP_DIR backup first; fall back to the .old copy.
+    # (Under systemd PrivateTmp=true the TMP_DIR mount can vanish on restart,
+    # so the .old directory on the real filesystem acts as a safety net.)
     $(file_sudo "${INSTALL_DIR}") mkdir -p "${INSTALL_DIR}/config" 2>/dev/null || true
-    if [ ! -f "${INSTALL_DIR}/config/helixconfig.json" ]; then
-        if [ -n "${BACKUP_CONFIG:-}" ] && [ -f "$BACKUP_CONFIG" ]; then
-            $(file_sudo "${INSTALL_DIR}/config") cp "$BACKUP_CONFIG" "${INSTALL_DIR}/config/helixconfig.json" 2>/dev/null && \
-                log_info "Restored configuration from backup" || \
-                log_warn "Failed to restore configuration from TMP_DIR backup"
+
+    # _restore_config_file SRC DEST LABEL — copy a single config file with
+    # appropriate sudo, logging success or warning on failure.
+    _restore_config_file() {
+        local _src=$1 _dest=$2 _label=$3
+        if $(file_sudo "$(dirname "$_dest")") cp "$_src" "$_dest" 2>/dev/null; then
+            log_info "Restored $_label"
+        else
+            log_warn "Failed to restore $_label"
         fi
-    fi
-    # Fallback: restore from .old directory if TMP_DIR backup was lost or failed
-    if [ ! -f "${INSTALL_DIR}/config/helixconfig.json" ] && [ -n "${INSTALL_BACKUP:-}" ]; then
+    }
+
+    # Restore helixconfig.json — try candidates in priority order
+    _config_dest="${INSTALL_DIR}/config/helixconfig.json"
+    if [ -n "${BACKUP_CONFIG:-}" ] && [ -s "$BACKUP_CONFIG" ]; then
+        _restore_config_file "$BACKUP_CONFIG" "$_config_dest" "helixconfig.json from TMP_DIR backup"
+    elif [ -n "${INSTALL_BACKUP:-}" ]; then
         if [ -f "${INSTALL_BACKUP}/config/helixconfig.json" ]; then
-            $(file_sudo "${INSTALL_DIR}/config") cp "${INSTALL_BACKUP}/config/helixconfig.json" "${INSTALL_DIR}/config/helixconfig.json" 2>/dev/null && \
-                log_info "Restored configuration from previous install backup" || \
-                log_warn "Failed to restore configuration from .old backup"
+            _restore_config_file "${INSTALL_BACKUP}/config/helixconfig.json" "$_config_dest" "helixconfig.json from .old backup"
         elif [ -f "${INSTALL_BACKUP}/helixconfig.json" ]; then
-            $(file_sudo "${INSTALL_DIR}/config") cp "${INSTALL_BACKUP}/helixconfig.json" "${INSTALL_DIR}/config/helixconfig.json" 2>/dev/null && \
-                log_info "Restored configuration from previous install backup (legacy location)" || \
-                log_warn "Failed to restore configuration from .old backup"
+            _restore_config_file "${INSTALL_BACKUP}/helixconfig.json" "$_config_dest" "helixconfig.json from .old backup (legacy location)"
         fi
     fi
-    if [ ! -f "${INSTALL_DIR}/config/helixconfig.json" ] && [ "$ORIGINAL_INSTALL_EXISTS" = true ]; then
+    if [ ! -f "$_config_dest" ] && [ "$ORIGINAL_INSTALL_EXISTS" = true ]; then
         log_warn "Could not restore helixconfig.json from any backup source!"
         log_warn "User configuration may have been lost."
     fi
 
-    # Restore helixscreen.env
-    if [ ! -f "${INSTALL_DIR}/config/helixscreen.env" ]; then
-        if [ -n "${BACKUP_ENV:-}" ] && [ -f "$BACKUP_ENV" ]; then
-            $(file_sudo "${INSTALL_DIR}/config") cp "$BACKUP_ENV" "${INSTALL_DIR}/config/helixscreen.env" 2>/dev/null && \
-                log_info "Restored helixscreen.env from backup" || \
-                log_warn "Failed to restore helixscreen.env from TMP_DIR backup"
-        fi
+    # Restore helixscreen.env — user may have customized HELIX_LOG_LEVEL,
+    # MOONRAKER_HOST, etc.  Overwrite the bundled default with their backup.
+    _env_dest="${INSTALL_DIR}/config/helixscreen.env"
+    if [ -n "${BACKUP_ENV:-}" ] && [ -s "$BACKUP_ENV" ]; then
+        _restore_config_file "$BACKUP_ENV" "$_env_dest" "helixscreen.env from TMP_DIR backup"
+    elif [ -n "${INSTALL_BACKUP:-}" ] && [ -f "${INSTALL_BACKUP}/config/helixscreen.env" ]; then
+        _restore_config_file "${INSTALL_BACKUP}/config/helixscreen.env" "$_env_dest" "helixscreen.env from .old backup"
     fi
-    if [ ! -f "${INSTALL_DIR}/config/helixscreen.env" ] && [ -n "${INSTALL_BACKUP:-}" ]; then
-        if [ -f "${INSTALL_BACKUP}/config/helixscreen.env" ]; then
-            $(file_sudo "${INSTALL_DIR}/config") cp "${INSTALL_BACKUP}/config/helixscreen.env" "${INSTALL_DIR}/config/helixscreen.env" 2>/dev/null && \
-                log_info "Restored helixscreen.env from previous install backup" || \
-                log_warn "Failed to restore helixscreen.env from .old backup"
-        fi
+
+    # Restore any remaining user data from previous config/ (custom_images/,
+    # printer_database.d/, etc.).  Only copies items that don't already exist in
+    # the new install so bundled files are never overwritten.
+    # Uses [ ! -e ] instead of cp -n for BusyBox compatibility.
+    # For directories that exist in both old and new installs (e.g. printer_database.d/),
+    # merge at the file level so user additions are preserved alongside new bundled files.
+    if [ -n "${INSTALL_BACKUP:-}" ] && [ -d "${INSTALL_BACKUP}/config" ]; then
+        for _item in "${INSTALL_BACKUP}/config"/*; do
+            [ -e "$_item" ] || continue
+            _base=$(basename "$_item")
+            if [ ! -e "${INSTALL_DIR}/config/${_base}" ]; then
+                # Item doesn't exist in new install — restore the whole thing
+                if $(file_sudo "${INSTALL_DIR}/config") cp -r "$_item" "${INSTALL_DIR}/config/${_base}" 2>/dev/null; then
+                    log_info "Restored user data: config/${_base}"
+                else
+                    log_warn "Failed to restore user data: config/${_base}"
+                fi
+            elif [ -d "$_item" ] && [ -d "${INSTALL_DIR}/config/${_base}" ]; then
+                # Both old and new have this directory — merge individual files
+                for _subitem in "$_item"/*; do
+                    [ -e "$_subitem" ] || continue
+                    _subbase=$(basename "$_subitem")
+                    if [ ! -e "${INSTALL_DIR}/config/${_base}/${_subbase}" ]; then
+                        if $(file_sudo "${INSTALL_DIR}/config/${_base}") cp -r "$_subitem" "${INSTALL_DIR}/config/${_base}/${_subbase}" 2>/dev/null; then
+                            log_info "Restored user data: config/${_base}/${_subbase}"
+                        else
+                            log_warn "Failed to restore user data: config/${_base}/${_subbase}"
+                        fi
+                    fi
+                done
+            fi
+        done
     fi
 
     # Cleanup
@@ -2307,6 +2366,14 @@ cleanup_old_install() {
 # the process via exit(0), which the watchdog treats as "restart silently".
 _has_no_new_privs() {
     [ -r /proc/self/status ] && grep -q '^NoNewPrivs:[[:space:]]*1' /proc/self/status 2>/dev/null
+}
+
+# Returns true when install.sh was spawned by helix-screen's in-app update.
+# On SysV systems (AD5M, K1), stop_service/start_service are skipped because
+# the watchdog handles the restart via _exit(0) — same as the NoNewPrivileges
+# path on systemd.  Set by update_checker.cpp before execv().
+_is_self_update() {
+    [ "${HELIX_SELF_UPDATE:-}" = "1" ]
 }
 
 # Install service (dispatcher)
@@ -2478,6 +2545,13 @@ start_service_systemd() {
 
 # Start service (SysV init)
 start_service_sysv() {
+    # During in-app self-update, the watchdog handles the restart via _exit(0).
+    # Starting a second instance here would race with the still-running process.
+    if _is_self_update; then
+        log_info "Skipping service start (self-update; restart via watchdog)"
+        return 0
+    fi
+
     log_info "Starting HelixScreen (SysV init)..."
 
     if [ ! -x "$INIT_SCRIPT_DEST" ]; then
@@ -2556,21 +2630,28 @@ stop_service() {
             $SUDO systemctl stop "$SERVICE_NAME" || true
         fi
     else
-        # Try the configured init script location first
-        if [ -n "$INIT_SCRIPT_DEST" ] && [ -x "$INIT_SCRIPT_DEST" ]; then
-            log_info "Stopping existing HelixScreen service (SysV)..."
-            $SUDO "$INIT_SCRIPT_DEST" stop 2>/dev/null || true
-        fi
-        # Also check all possible locations (for updates/uninstalls)
-        for init_script in $HELIX_INIT_SCRIPTS; do
-            if [ -x "$init_script" ]; then
-                log_info "Stopping HelixScreen at $init_script..."
-                $SUDO "$init_script" stop 2>/dev/null || true
+        # During in-app self-update, the app must stay running so the user sees
+        # the update progress screen.  The watchdog restarts via _exit(0) after
+        # install.sh exits — killing the process here would black-screen the display.
+        if _is_self_update; then
+            log_info "Skipping service stop (self-update; restart via watchdog)"
+        else
+            # Try the configured init script location first
+            if [ -n "$INIT_SCRIPT_DEST" ] && [ -x "$INIT_SCRIPT_DEST" ]; then
+                log_info "Stopping existing HelixScreen service (SysV)..."
+                $SUDO "$INIT_SCRIPT_DEST" stop 2>/dev/null || true
             fi
-        done
-        # Also try to kill by name (watchdog first to prevent crash dialog flash)
-        # shellcheck disable=SC2086
-        kill_process_by_name $HELIX_PROCESSES
+            # Also check all possible locations (for updates/uninstalls)
+            for init_script in $HELIX_INIT_SCRIPTS; do
+                if [ -x "$init_script" ]; then
+                    log_info "Stopping HelixScreen at $init_script..."
+                    $SUDO "$init_script" stop 2>/dev/null || true
+                fi
+            done
+            # Also try to kill by name (watchdog first to prevent crash dialog flash)
+            # shellcheck disable=SC2086
+            kill_process_by_name $HELIX_PROCESSES
+        fi
     fi
 }
 
@@ -2731,6 +2812,7 @@ write_release_info() {
     case "${PLATFORM:-}" in
         pi32)       asset_name="helixscreen-pi32.zip" ;;
         ad5m)       asset_name="helixscreen-ad5m.zip" ;;
+        ad5x)       asset_name="helixscreen-k1.zip" ;;
         k1)         asset_name="helixscreen-k1.zip" ;;
         k1-dynamic) asset_name="helixscreen-k1-dynamic.zip" ;;
         k2)         asset_name="helixscreen-k2.zip" ;;

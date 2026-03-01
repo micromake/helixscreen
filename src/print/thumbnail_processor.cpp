@@ -20,7 +20,6 @@
 #include <functional>
 
 // stb headers - single-file libraries for image processing
-// Located in lib/tinygl/include-demo/
 #include "stb_image.h"
 #include "stb_image_resize.h"
 

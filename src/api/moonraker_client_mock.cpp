@@ -46,6 +46,7 @@ MoonrakerClientMock::MoonrakerClientMock(PrinterType type, double speedup_factor
     mock_internal::register_object_handlers(method_handlers_);
     mock_internal::register_history_handlers(method_handlers_);
     mock_internal::register_server_handlers(method_handlers_);
+    mock_internal::register_queue_handlers(method_handlers_);
     spdlog::debug("[MoonrakerClientMock] Registered {} RPC method handlers",
                   method_handlers_.size());
 
@@ -281,11 +282,21 @@ void MoonrakerClientMock::populate_capabilities() {
     mock_objects.push_back("gcode_macro LED_PARTY");
     mock_objects.push_back("gcode_macro LED_NIGHTLIGHT");
 
+    // Humidity sensors (BME280/HTU21D for enclosure monitoring)
+    mock_objects.push_back("bme280 chamber");
+    mock_objects.push_back("htu21d dryer");
+    spdlog::debug("[MoonrakerClientMock] Mock humidity sensors: bme280 chamber, htu21d dryer");
+
+    // Width sensor (filament diameter measurement via Hall effect sensor)
+    mock_objects.push_back("hall_filament_width_sensor");
+
     // Moonraker plugins
     mock_objects.push_back("timelapse"); // Moonraker-Timelapse plugin
 
     // MMU/AMS system - Happy Hare uses "mmu" object name
-    mock_objects.push_back("mmu");
+    if (mmu_enabled_) {
+        mock_objects.push_back("mmu");
+    }
 
     // Probe sensor (HELIX_MOCK_PROBE_TYPE: cartographer, tap, bltouch, beacon, klicky, standard,
     // none)
@@ -1495,6 +1506,73 @@ int MoonrakerClientMock::gcode_script(const std::string& gcode) {
             },
             500, sim);                       // 500ms between cycles for quick mock
         lv_timer_set_repeat_count(timer, 6); // 5 progress + 1 result
+
+        return 0; // Success - results come asynchronously via gcode_response
+    }
+
+    // MPC Calibration simulation
+    if (gcode.find("MPC_CALIBRATE") != std::string::npos) {
+        std::string heater = "extruder";
+        auto heater_pos = gcode.find("HEATER=");
+        if (heater_pos != std::string::npos) {
+            size_t start = heater_pos + 7;
+            size_t end = gcode.find(' ', start);
+            heater =
+                gcode.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        }
+
+        int fan_breakpoints = 3;
+        auto fb_pos = gcode.find("FAN_BREAKPOINTS=");
+        if (fb_pos != std::string::npos) {
+            fan_breakpoints = std::stoi(gcode.substr(fb_pos + 16));
+        }
+
+        spdlog::info("[MoonrakerClientMock] MPC_CALIBRATE: heater={} fan_breakpoints={}", heater,
+                     fan_breakpoints);
+
+        struct MPCSimState {
+            MoonrakerClientMock* mock;
+            std::string heater;
+            int fan_breakpoints;
+            int phase;
+            int total_phases;
+        };
+
+        int total_phases = 3 + fan_breakpoints; // settle + heatup + fan phases
+        auto* sim = new MPCSimState{this, heater, fan_breakpoints, 0, total_phases};
+
+        lv_timer_t* timer = lv_timer_create(
+            [](lv_timer_t* t) {
+                auto* s = static_cast<MPCSimState*>(lv_timer_get_user_data(t));
+                s->phase++;
+
+                if (s->phase == 1) {
+                    s->mock->dispatch_gcode_response("Waiting for heater to settle near ambient");
+                } else if (s->phase == 2) {
+                    s->mock->dispatch_gcode_response("Performing heatup test");
+                } else if (s->phase <= 2 + s->fan_breakpoints) {
+                    int fan_pct = ((s->phase - 2) * 100) / s->fan_breakpoints;
+                    char buf[128];
+                    snprintf(buf, sizeof(buf), "measuring power usage with %d%% fan", fan_pct);
+                    s->mock->dispatch_gcode_response(buf);
+                } else {
+                    // Final result
+                    s->mock->dispatch_gcode_response("Finished MPC calibration");
+                    s->mock->dispatch_gcode_response("block_heat_capacity=18.4321 [J/K]");
+                    s->mock->dispatch_gcode_response("sensor_responsiveness=0.123456 [K/s/K]");
+                    s->mock->dispatch_gcode_response("ambient_transfer=0.045678 [W/K]");
+                    if (s->fan_breakpoints > 0) {
+                        s->mock->dispatch_gcode_response(
+                            "fan_ambient_transfer=0.12, 0.18, 0.25 [W/K]");
+                    }
+
+                    delete s;
+                    lv_timer_delete(t);
+                    return;
+                }
+            },
+            500, sim);
+        lv_timer_set_repeat_count(timer, total_phases + 1);
 
         return 0; // Success - results come asynchronously via gcode_response
     }
@@ -2788,6 +2866,10 @@ void MoonrakerClientMock::dispatch_initial_state() {
         initial_status[sensor] = {{"filament_detected", detected}, {"enabled", true}};
     }
 
+    // Add width sensor data (Hall-effect filament diameter measurement)
+    initial_status["hall_filament_width_sensor"] = {
+        {"Diameter", 1.75}, {"Raw", 500.0}, {"is_active", true}};
+
     spdlog::debug("[MoonrakerClientMock] Dispatching initial state: extruder={}/{}°C, bed={}/{}°C, "
                   "homed_axes='{}', leds={}, filament_sensors={}",
                   ext_temp, ext_target, bed_temp_val, bed_target_val, homed, led_json.size(),
@@ -3466,6 +3548,26 @@ void MoonrakerClientMock::temperature_simulation_loop() {
                 double temp = 35.0 + 3.0 * std::sin(2.0 * M_PI * sim_time / 80.0);
                 status_obj[s] = {{"temperature", temp}, {"target", 40.0}, {"speed", 0.5}};
             }
+        }
+
+        // Humidity sensor data (BME280 has humidity, temperature, pressure; HTU21D has
+        // humidity, temperature)
+        {
+            // BME280 chamber sensor: humidity varies 40-50%, slow sinusoidal drift
+            constexpr double HUMIDITY_WAVE_PERIOD = 180.0; // 3 minute period
+            double humidity_wave = std::sin(2.0 * M_PI * sim_time / HUMIDITY_WAVE_PERIOD);
+            double chamber_humidity = 45.0 + 5.0 * humidity_wave; // 40-50%
+            double chamber_h_temp = chamber_temp_.load();         // Use chamber temperature
+            double chamber_pressure = 1013.25 + 2.0 * std::sin(2.0 * M_PI * sim_time / 300.0);
+            status_obj["bme280 chamber"] = {{"humidity", chamber_humidity},
+                                            {"temperature", chamber_h_temp},
+                                            {"pressure", chamber_pressure}};
+
+            // HTU21D dryer sensor: lower humidity (dryer enclosure), 10-20%
+            double dryer_humidity = 15.0 + 5.0 * std::sin(2.0 * M_PI * sim_time / 150.0);
+            double dryer_temp = 55.0 + 3.0 * std::sin(2.0 * M_PI * sim_time / 200.0);
+            status_obj["htu21d dryer"] = {{"humidity", dryer_humidity},
+                                          {"temperature", dryer_temp}};
         }
 
         json notification = {{"method", "notify_status_update"},

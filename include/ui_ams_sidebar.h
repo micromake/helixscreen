@@ -58,8 +58,9 @@ class AmsOperationSidebar {
     /**
      * @brief Clear observers and widget refs
      *
-     * Does NOT reset extruder_temp_observer_ if preheat is pending
-     * (pending_load_slot_ >= 0), matching current AmsPanel behavior.
+     * Unconditionally resets ALL observers and nullifies widget pointers.
+     * Widget pointers are cleared before observers to prevent cascading
+     * observer callbacks from accessing freed LVGL objects.
      */
     void cleanup();
 
@@ -116,6 +117,7 @@ class AmsOperationSidebar {
     ObserverGuard action_observer_;
     ObserverGuard current_slot_observer_;
     ObserverGuard extruder_temp_observer_;
+    ObserverGuard color_observer_;
 
     // Bypass-after-unload state
     bool pending_bypass_enable_ = false;
@@ -125,6 +127,10 @@ class AmsOperationSidebar {
     int pending_load_target_temp_ = 0;
     bool ui_initiated_heat_ = false;
     AmsAction prev_ams_action_ = AmsAction::IDLE;
+
+    // Lifecycle flag — set in setup(), cleared in cleanup().
+    // Guards widget operations against use-after-free on dangling lv_obj_t* pointers.
+    bool active_ = false;
 
     // Step progress state
     StepOperationType current_operation_type_ = StepOperationType::LOAD_FRESH;

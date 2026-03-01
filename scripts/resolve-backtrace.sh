@@ -20,6 +20,25 @@ set -euo pipefail
 
 readonly CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/helixscreen/symbols"
 readonly R2_BASE_URL="${HELIX_R2_URL:-https://releases.helixscreen.org}/symbols"
+readonly CACHE_RETAIN_COUNT=10
+
+# Prune old cached symbol versions, keeping the most recent N by modification time
+prune_cache() {
+    [[ -d "$CACHE_DIR" ]] || return 0
+    local count
+    count=$(find "$CACHE_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+    if [[ "$count" -gt "$CACHE_RETAIN_COUNT" ]]; then
+        local to_delete
+        to_delete=$(ls -1dt "$CACHE_DIR"/v*/ 2>/dev/null | tail -n +"$((CACHE_RETAIN_COUNT + 1))")
+        if [[ -n "$to_delete" ]]; then
+            echo "Pruning local cache (keeping $CACHE_RETAIN_COUNT most recent)..." >&2
+            echo "$to_delete" | while read -r dir; do
+                echo "  Removing $(basename "$dir")" >&2
+                rm -rf "$dir"
+            done
+        fi
+    fi
+}
 
 LOAD_BASE=0
 AUTO_DETECT_BASE=false
@@ -126,7 +145,7 @@ if [[ -n "$ISSUE_NUMBER" ]]; then
 
     # Auto-detect repo from git remote if not specified
     if [[ -z "$ISSUE_REPO" ]]; then
-        ISSUE_REPO=$(git remote get-url origin 2>/dev/null | sed 's/.*github\.com[:/]\(.*\)\.git$/\1/' | sed 's/.*github\.com[:/]\(.*\)$/\1/')
+        ISSUE_REPO=$(git remote get-url origin 2>/dev/null | sed 's/.*github\.com[:/]\(.*\)\.git$/\1/' | sed 's/.*github\.com[:/]\(.*\)$/\1/' || true)
         if [[ -z "$ISSUE_REPO" ]]; then
             echo "Error: Cannot detect repo from git remote. Use --repo owner/repo" >&2
             exit 1
@@ -205,14 +224,14 @@ elif [[ -n "$CRASH_FILE" ]]; then
     fi
 
     # Extract version
-    VERSION=$(grep "^version:" "$CRASH_FILE" | cut -d: -f2 | tr -d '[:space:]')
+    VERSION=$(grep "^version:" "$CRASH_FILE" | cut -d: -f2 | tr -d '[:space:]' || true)
     if [[ -z "$VERSION" ]]; then
         echo "Error: No version found in crash file" >&2
         exit 1
     fi
 
     # Extract platform from file, or use command-line override
-    FILE_PLATFORM=$(grep "^platform:" "$CRASH_FILE" | cut -d: -f2 | tr -d '[:space:]')
+    FILE_PLATFORM=$(grep "^platform:" "$CRASH_FILE" | cut -d: -f2 | tr -d '[:space:]' || true)
     if [[ $# -ge 1 ]]; then
         PLATFORM="$1"
         shift
@@ -225,7 +244,7 @@ elif [[ -n "$CRASH_FILE" ]]; then
 
     # Extract load_base if present and not overridden by --base
     if (( LOAD_BASE == 0 )); then
-        file_base=$(grep "^load_base:" "$CRASH_FILE" | cut -d: -f2 | tr -d '[:space:]')
+        file_base=$(grep "^load_base:" "$CRASH_FILE" | cut -d: -f2 | tr -d '[:space:]' || true)
         if [[ -n "$file_base" ]]; then
             base_hex="${file_base#0x}"
             base_hex="${base_hex#0X}"
@@ -241,14 +260,14 @@ elif [[ -n "$CRASH_FILE" ]]; then
         if [[ -n "$addr" ]]; then
             ADDRS+=("$addr")
         fi
-    done < <(grep "^bt:" "$CRASH_FILE")
+    done < <(grep "^bt:" "$CRASH_FILE" || true)
 
     if [[ ${#ADDRS[@]} -eq 0 ]]; then
         echo "Error: No backtrace addresses found in crash file" >&2
 
         # Fall back to registers
-        reg_pc=$(grep "^reg_pc:" "$CRASH_FILE" | cut -d: -f2 | tr -d '[:space:]')
-        reg_lr=$(grep "^reg_lr:" "$CRASH_FILE" | cut -d: -f2 | tr -d '[:space:]')
+        reg_pc=$(grep "^reg_pc:" "$CRASH_FILE" | cut -d: -f2 | tr -d '[:space:]' || true)
+        reg_lr=$(grep "^reg_lr:" "$CRASH_FILE" | cut -d: -f2 | tr -d '[:space:]' || true)
         if [[ -n "$reg_pc" ]]; then
             echo "Using PC/LR registers as fallback" >&2
             ADDRS+=("$reg_pc")
@@ -315,6 +334,7 @@ else
             exit 1
         fi
         echo "Cached: $SYM_FILE" >&2
+        prune_cache
     fi
 fi
 

@@ -554,8 +554,10 @@ void PrinterState::set_webcam_available(bool available) {
 }
 
 void PrinterState::set_timelapse_available(bool available) {
-    // Delegate to capabilities_state_ component (handles thread-safety)
+    // Delegate to capabilities_state_ component (handles thread-safety internally)
     capabilities_state_.set_timelapse_available(available);
+    // Recompute aggregate visibility (timelapse affects has_any_preprint_options)
+    helix::ui::queue_update([this]() { update_gcode_modification_visibility(); });
 }
 
 void PrinterState::set_helix_plugin_installed(bool installed) {

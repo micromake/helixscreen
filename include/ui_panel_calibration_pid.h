@@ -5,6 +5,8 @@
 
 #include "ui_temp_graph.h"
 
+#include "klipper_config_editor.h"
+#include "moonraker_advanced_api.h"
 #include "overlay_base.h"
 #include "subject_managed_panel.h"
 
@@ -12,6 +14,7 @@
 #include <string>
 
 class MoonrakerAPI;
+class MoonrakerAdvancedAPI;
 class TempControlPanel;
 
 /**
@@ -41,16 +44,22 @@ class PIDCalibrationPanel : public OverlayBase {
      */
     enum class State {
         IDLE,        ///< Ready to start, heater selection shown
-        CALIBRATING, ///< PID_CALIBRATE running, showing progress
+        CALIBRATING, ///< PID/MPC calibration running, showing progress
         SAVING,      ///< SAVE_CONFIG running, Klipper restarting
         COMPLETE,    ///< Calibration successful, showing results
-        ERROR        ///< Something went wrong
+        ERROR,       ///< Something went wrong
+        MIGRATING    ///< Updating config for PID->MPC migration
     };
 
     /**
      * @brief Which heater is being calibrated
      */
     enum class Heater { EXTRUDER, BED };
+
+    /**
+     * @brief Calibration method
+     */
+    enum class CalibMethod { PID, MPC };
 
     PIDCalibrationPanel();
     ~PIDCalibrationPanel() override;
@@ -197,6 +206,18 @@ class PIDCalibrationPanel : public OverlayBase {
     static constexpr int BED_MAX_TEMP = 110;
     static constexpr int BED_DEFAULT_TEMP = 60;
 
+    // Wattage limits
+    static constexpr int WATTAGE_MIN = 20;
+    static constexpr int WATTAGE_MAX = 1000;
+    static constexpr int WATTAGE_STEP = 5;
+    static constexpr int WATTAGE_DEFAULT_EXTRUDER = 50;
+    static constexpr int WATTAGE_DEFAULT_BED = 400;
+
+    // Fan breakpoint presets
+    static constexpr int FAN_BP_QUICK = 3;
+    static constexpr int FAN_BP_DETAILED = 5;
+    static constexpr int FAN_BP_THOROUGH = 7;
+
     // Demo mode: inject results after on_activate() resets state
     bool demo_inject_pending_ = false;
 
@@ -210,6 +231,19 @@ class PIDCalibrationPanel : public OverlayBase {
     float old_ki_ = 0;
     float old_kd_ = 0;
     bool has_old_values_ = false;
+
+    // MPC/Kalico state
+    CalibMethod selected_method_ = CalibMethod::PID;
+    int heater_wattage_ = WATTAGE_DEFAULT_EXTRUDER;
+    int fan_breakpoints_ = FAN_BP_QUICK;
+    bool needs_migration_ = false;
+    bool is_kalico_ = false;
+
+    // MPC results
+    MoonrakerAdvancedAPI::MPCResult mpc_result_;
+
+    // KlipperConfigEditor for migration
+    helix::system::KlipperConfigEditor config_editor_;
 
     // Subject manager for automatic cleanup
     SubjectManager subjects_;
@@ -242,6 +276,35 @@ class PIDCalibrationPanel : public OverlayBase {
     // Int subject for showing/hiding extruder-only sections
     lv_subject_t subj_heater_is_extruder_;
 
+    // MPC result string subjects and buffers
+    lv_subject_t subj_mpc_heat_capacity_;
+    char buf_mpc_heat_capacity_[32];
+    lv_subject_t subj_mpc_sensor_resp_;
+    char buf_mpc_sensor_resp_[32];
+    lv_subject_t subj_mpc_ambient_transfer_;
+    char buf_mpc_ambient_transfer_[32];
+    lv_subject_t subj_mpc_fan_transfer_;
+    char buf_mpc_fan_transfer_[64];
+
+    // Fan speed display subject and buffer
+    lv_subject_t subj_fan_speed_text_;
+    char buf_fan_speed_text_[8];
+
+    // Wattage display subject and buffer
+    lv_subject_t subj_wattage_display_;
+    char buf_wattage_display_[16];
+
+    // MPC-related int subjects
+    lv_subject_t subj_is_kalico_;       // int 0/1
+    lv_subject_t subj_method_is_mpc_;   // int 0/1
+    lv_subject_t subj_show_wattage_;    // int 0/1
+    lv_subject_t subj_needs_migration_; // int 0/1
+    lv_subject_t subj_show_fan_config_; // int 0/1
+    lv_subject_t subj_fan_is_quick_;    // int 0/1
+    lv_subject_t subj_fan_is_detailed_; // int 0/1
+    lv_subject_t subj_fan_is_thorough_; // int 0/1
+    lv_subject_t subj_show_pid_fan_;    // 1 when extruder + PID method
+
     // Int subject: 1 when not idle (disables Start button in header)
     lv_subject_t subj_cal_not_idle_;
 
@@ -264,7 +327,6 @@ class PIDCalibrationPanel : public OverlayBase {
 
     // Widget references
     lv_obj_t* fan_slider_ = nullptr;
-    lv_obj_t* fan_speed_label_ = nullptr;
 
     // Temperature graph for calibrating state
     TempControlPanel* temp_control_panel_ = nullptr;
@@ -291,8 +353,24 @@ class PIDCalibrationPanel : public OverlayBase {
 
     // G-code commands
     void send_pid_calibrate();
+    void send_mpc_calibrate();
     void send_save_config();
     void fetch_old_pid_values();
+
+    // MPC-specific methods
+    void detect_heater_control_type();
+    void start_migration();
+    void on_mpc_result(const MoonrakerAdvancedAPI::MPCResult& result);
+    void on_mpc_progress(int phase, int total_phases, const std::string& desc);
+
+    // Format a PID value with optional delta percentage against old value
+    void format_pid_value(char* buf, size_t buf_size, float new_val, float old_val);
+
+    // Update the wattage display subject from heater_wattage_
+    void update_wattage_display();
+
+    // Fan section visibility — single source of truth for both subjects
+    void update_fan_section_visibility();
 
     // Event handlers
     void handle_heater_extruder_clicked();
@@ -304,6 +382,13 @@ class PIDCalibrationPanel : public OverlayBase {
     void handle_done_clicked();
     void handle_retry_clicked();
     void handle_preset_clicked(int temp, const char* material_name);
+    void handle_method_pid_clicked();
+    void handle_method_mpc_clicked();
+    void handle_wattage_up();
+    void handle_wattage_down();
+    void handle_fan_quick_clicked();
+    void handle_fan_detailed_clicked();
+    void handle_fan_thorough_clicked();
 
     // Static trampolines
     static void on_heater_extruder_clicked(lv_event_t* e);
@@ -315,6 +400,14 @@ class PIDCalibrationPanel : public OverlayBase {
     static void on_done_clicked(lv_event_t* e);
     static void on_retry_clicked(lv_event_t* e);
     static void on_fan_slider_changed(lv_event_t* e);
+    // MPC method/config trampolines
+    static void on_method_pid_clicked(lv_event_t* e);
+    static void on_method_mpc_clicked(lv_event_t* e);
+    static void on_wattage_up(lv_event_t* e);
+    static void on_wattage_down(lv_event_t* e);
+    static void on_fan_quick_clicked(lv_event_t* e);
+    static void on_fan_detailed_clicked(lv_event_t* e);
+    static void on_fan_thorough_clicked(lv_event_t* e);
     // Material preset trampolines (extruder)
     static void on_pid_preset_pla(lv_event_t* e);
     static void on_pid_preset_petg(lv_event_t* e);

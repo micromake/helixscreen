@@ -7,14 +7,14 @@ This document provides a comprehensive reference for all environment variables u
 | Category | Count | Prefix |
 |----------|-------|--------|
 | [Display & Backend](#display--backend-configuration) | 10 | `HELIX_` |
-| [Touch Calibration](#touch-calibration) | 5 | `HELIX_TOUCH_*` |
+| [Touch Calibration](#touch-calibration) | 7 | `HELIX_TOUCH_*` |
 | [G-Code Viewer](#g-code-viewer) | 3 | `HELIX_` |
 | [Bed Mesh](#bed-mesh) | 1 | `HELIX_` |
 | [Mock & Testing](#mock--testing) | 14 | `HELIX_MOCK_*` |
 | [UI Automation](#ui-automation) | 3 | `HELIX_AUTO_*` |
 | [Calibration](#calibration-auto-start) | 2 | `*_AUTO_START` |
 | [Development](#development) | 1 | `HELIX_` |
-| [Debugging](#debugging) | 1 | `HELIX_DEBUG_*` |
+| [Debugging](#debugging) | 2 | `HELIX_DEBUG_*` |
 | [Deployment](#deployment) | 1 | `HELIX_` |
 | [Logging & Startup](#logging--startup) | 2 | `HELIX_` |
 | [Data Paths](#data-paths) | 3 | `HELIX_` / Standard Unix |
@@ -52,31 +52,65 @@ Override the automatic display backend detection.
 | Property | Value |
 |----------|-------|
 | **Values** | `sdl`, `drm`, `fbdev` |
-| **Default** | Auto-detect based on platform |
+| **Default** | `fbdev` (CPU rendering, maximum compatibility) |
 | **File** | `src/display_backend.cpp` |
+
+**Backend comparison:**
+
+| Backend | Rendering | Best for |
+|---------|-----------|----------|
+| `fbdev` | CPU (software) | Maximum compatibility, all hardware, SPI displays |
+| `drm` | GPU-accelerated via DRM+EGL (OpenGL ES) | Pi 3B+, Pi 4, Pi 5, BTT CB1 with HDMI/DSI displays |
+| `sdl` | SDL2 (desktop development) | Development on Linux/macOS desktops |
+
+The `drm` backend uses DRM (Direct Rendering Manager) with EGL/OpenGL ES to offload rendering to the GPU. This reduces CPU usage and can improve frame rates, especially on Pi 4 and Pi 5. The `fbdev` backend is the safe default that works everywhere, including SPI displays that lack DRM support.
 
 ```bash
 # Force SDL backend (useful for debugging on embedded systems)
 HELIX_DISPLAY_BACKEND=sdl ./build/bin/helix-screen
 
-# Force DRM backend
+# Force DRM backend with GPU acceleration
 HELIX_DISPLAY_BACKEND=drm ./build/bin/helix-screen
 ```
 
+**Enabling in production (systemd service):**
+```ini
+# /etc/systemd/system/helixscreen.service (or override)
+[Service]
+Environment="HELIX_DISPLAY_BACKEND=drm"
+```
+
+Then reload and restart:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart helixscreen
+```
+
+**Supported hardware for `drm`:** Raspberry Pi 3B+, Pi 4, Pi 5, BTT CB1 (and other Allwinner H616 boards). Requires a display connected via HDMI or DSI — SPI displays are not supported with `drm`. If the `drm` backend fails to initialize, HelixScreen falls back to `fbdev` automatically.
+
 ### `HELIX_DRM_DEVICE`
 
-Specify which DRM device to use when multiple GPUs are present.
+Specify which DRM device to use when the DRM backend is active. Needed when multiple GPU/display controllers are present (common on Pi 5).
 
 | Property | Value |
 |----------|-------|
 | **Values** | Device path (e.g., `/dev/dri/card0`, `/dev/dri/card1`) |
-| **Default** | Auto-detect (first available) |
+| **Default** | `/dev/dri/card0` (auto-detect scans for first device with a connected display) |
 | **File** | `src/display_backend_drm.cpp` |
 
 ```bash
-# Use secondary GPU
+# Use secondary GPU / display controller
 HELIX_DRM_DEVICE=/dev/dri/card1 ./build/bin/helix-screen
 ```
+
+**Pi 5 DRM device mapping:**
+| Device | Controller | Use |
+|--------|-----------|-----|
+| `/dev/dri/card0` | v3d | 3D rendering only (no display output) |
+| `/dev/dri/card1` | DSI | Official Pi touchscreen |
+| `/dev/dri/card2` | vc4 (HDMI) | HDMI displays |
+
+On Pi 4 and earlier, `/dev/dri/card0` is typically the only device with display output. Auto-detection finds the first device with dumb buffer support and a connected display, so most users do not need to set this variable.
 
 ### `HELIX_TOUCH_DEVICE`
 
@@ -135,7 +169,36 @@ HELIX_DISPLAY_ROTATION=180 ./build/bin/helix-screen
 3. `/display/rotate` in `helixconfig.json`
 4. Default: `0` (no rotation)
 
-**Note:** Software rotation is only supported on embedded backends (fbdev/DRM). On SDL (desktop dev), rotation is logged as a warning and skipped due to LVGL's DIRECT render mode limitation. Touch input may need recalibration after rotation — use `HELIX_TOUCH_SWAP_AXES=1` or the touch calibration wizard.
+**Note:** Software rotation is only supported on embedded backends (fbdev/DRM). On SDL (desktop dev), rotation is logged as a warning and skipped due to LVGL's DIRECT render mode limitation.
+
+**Touch auto-rotation:** On fbdev, touch coordinates are automatically rotated to match the display rotation for non-USB-HID devices (e.g., Goodix, sun4i_ts). USB HID touchscreens (e.g., BTT HDMI) report logical coordinates natively and are not transformed. `HELIX_TOUCH_SWAP_AXES` is still available as a manual override for edge cases.
+
+### `HELIX_FORCE_ROTATION_PROBE`
+
+Force the rotation probe to run on next startup, even if it has already run or a rotation is configured. Useful for testing the probe UI on SDL or re-running on a device.
+
+| Property | Value |
+|----------|-------|
+| **Values** | `1` (force probe) |
+| **Default** | Unset (probe only on first boot, fbdev only, no existing rotation) |
+| **Files** | `src/application/application.cpp`, `src/application/display_manager.cpp` |
+
+```bash
+# Test the rotation probe on SDL (desktop)
+HELIX_FORCE_ROTATION_PROBE=1 ./build/bin/helix-screen --test -vv
+
+# Re-run probe on a device that already has rotation configured
+HELIX_FORCE_ROTATION_PROBE=1 ./build/bin/helix-screen
+```
+
+**Rotation probe behavior:**
+- On first boot with no configured rotation (fbdev only), HelixScreen cycles through 0°, 90°, 180°, 270° showing "Tap anywhere if this text is right-side up" for 5 seconds each
+- Two-tap confirmation: after initial tap, shows "Tap again to confirm" (10s timeout) to prevent accidental selection
+- Loops continuously until user confirms — does not exit after one cycle
+- Saves the confirmed rotation to `/display/rotate` in `helixconfig.json`
+- Sets `/display/rotation_probed` flag so it doesn't re-run on subsequent boots
+- Skips entirely if: rotation is already configured (config, env var, or CLI), or the probe has already run
+- Runs after translations are loaded (Phase 8c) so probe strings are translatable via `lv_tr()`
 
 ### `HELIX_DPI`
 
@@ -201,12 +264,13 @@ Simple axis range mapping via LVGL's built-in calibration. Use for devices with 
 | `HELIX_TOUCH_MAX_X` | Maximum raw X value (maps to screen right) | Auto-detect |
 | `HELIX_TOUCH_MIN_Y` | Minimum raw Y value (maps to screen top) | Auto-detect |
 | `HELIX_TOUCH_MAX_Y` | Maximum raw Y value (maps to screen bottom) | Auto-detect |
-| `HELIX_TOUCH_SWAP_AXES` | Swap X/Y axes (set to "1" to enable) | Disabled |
+| `HELIX_TOUCH_SWAP_AXES` | Swap X/Y axes (set to "1" to enable). Overrides auto-detection. | Disabled (auto-detected) |
 
 **Usage Notes:**
 - All four min/max variables must be set together for calibration to apply
 - To invert an axis, swap the min/max values (e.g., `MIN_Y=3200 MAX_Y=900` inverts Y)
 - These values override the kernel-reported axis ranges from `EVIOCGABS`
+- `HELIX_TOUCH_SWAP_AXES` is now primarily a manual override — the calibration wizard auto-detects swapped axes and saves the flag to config (`/input/calibration/swap_axes`). The env var takes priority over auto-detection if both are set
 
 **Example:**
 ```bash
@@ -228,9 +292,49 @@ screen_x = a * touch_x + b * touch_y + c
 screen_y = d * touch_x + e * touch_y + f
 ```
 
-The calibration wizard is automatically presented during first-run setup on framebuffer devices. It can also be triggered manually from Settings.
+The calibration wizard is automatically presented during first-run setup on framebuffer devices. It can also be triggered manually from Settings or via the `HELIX_TOUCH_CALIBRATE` environment variable.
 
-**Note:** There are no environment variable overrides for affine calibration. Edit the config file directly or use the calibration wizard.
+### `HELIX_TOUCH_CALIBRATE`
+
+Force the touch calibration wizard to appear on startup. Set to any value to enable.
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `HELIX_TOUCH_CALIBRATE` | Force touch calibration wizard on startup | Disabled |
+
+**Equivalent to:** `--calibrate-touch` CLI flag or `/input/force_calibration` config option.
+
+**Example:**
+```bash
+# One-shot: force calibration on next launch
+HELIX_TOUCH_CALIBRATE=1 ./build/bin/helix-screen
+
+# Or add to helixscreen.env for persistent use
+echo "HELIX_TOUCH_CALIBRATE=1" >> ~/helixscreen/config/helixscreen.env
+```
+
+**Note:** There are no environment variable overrides for affine calibration coefficients. Edit the config file directly or use the calibration wizard.
+
+### Touch Jitter Filter
+
+Suppresses small coordinate jitter from noisy touch controllers (e.g., Goodix GT9xx) that would otherwise cause stationary taps to be misinterpreted as scroll/swipe gestures.
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `HELIX_TOUCH_JITTER` | Dead-zone threshold in pixels. Coordinate changes within this distance are suppressed. | `15` |
+
+**How it works:** When a finger is pressed, the filter records the initial position. Subsequent coordinate reports within the dead zone are snapped back to the last stable position. Once movement exceeds the threshold, the new position becomes the anchor. On release, the last stable position is reported.
+
+**Config file equivalent:** `/input/jitter_threshold` (integer, default `15`, set to `0` to disable)
+
+**Example:**
+```bash
+# Increase threshold for a very noisy touchscreen
+HELIX_TOUCH_JITTER=25 ./build/bin/helix-screen
+
+# Disable the jitter filter entirely
+HELIX_TOUCH_JITTER=0 ./build/bin/helix-screen
+```
 
 ---
 
@@ -357,7 +461,7 @@ HELIX_AMS_GATES=16 ./build/bin/helix-screen --test
 
 ### `HELIX_MOCK_AMS`
 
-Select the mock AMS topology/type. Replaces the old `HELIX_MOCK_AMS_TYPE` and `HELIX_MOCK_MULTI_UNIT` variables.
+Select the mock AMS topology/type.
 
 | Property | Value |
 |----------|-------|
@@ -391,7 +495,7 @@ HELIX_MOCK_AMS=multi ./build/bin/helix-screen --test
 
 ### `HELIX_MOCK_AMS_STATE`
 
-Select the mock AMS visual scenario. Replaces the old `HELIX_MOCK_AMS_ERRORS` and `HELIX_MOCK_AMS_REALISTIC` variables.
+Select the mock AMS visual scenario.
 
 | Property | Value |
 |----------|-------|
@@ -421,21 +525,6 @@ HELIX_MOCK_AMS=afc HELIX_MOCK_AMS_STATE=error ./build/bin/helix-screen --test
 HELIX_MOCK_AMS=mixed HELIX_MOCK_AMS_STATE=loading ./build/bin/helix-screen --test
 ```
 
-### `HELIX_MOCK_AMS_TYPE` *(deprecated)*
-
-**Deprecated** — use `HELIX_MOCK_AMS` instead. Still works for one release cycle with a deprecation warning.
-
-### `HELIX_MOCK_MULTI_UNIT` *(deprecated)*
-
-**Deprecated** — use `HELIX_MOCK_AMS=multi` instead. Still works for one release cycle with a deprecation warning.
-
-### `HELIX_MOCK_AMS_ERRORS` *(deprecated)*
-
-**Deprecated** — use `HELIX_MOCK_AMS_STATE=error` instead. Still works for one release cycle with a deprecation warning.
-
-### `HELIX_MOCK_AMS_REALISTIC` *(deprecated)*
-
-**Deprecated** — use `HELIX_MOCK_AMS_STATE=loading` instead. Still works for one release cycle with a deprecation warning.
 
 ### `HELIX_MOCK_DRYER`
 
@@ -723,6 +812,34 @@ HELIX_DEBUG_SUBJECTS=1 ./build/bin/helix-screen -vv
 - Debugging XML binding issues (e.g., `bind_text` on an INT subject)
 - Finding subject initialization order problems
 - Tracing observer callbacks that fire before subjects are ready
+
+### `HELIX_DEBUG_TOUCHES`
+
+Enable touch point visualization. When enabled, a ripple effect is drawn at each touch point, showing exactly where the system registers touches. Useful for diagnosing touch accuracy issues, verifying calibration, and identifying UI elements that absorb click events.
+
+| Property | Value |
+|----------|-------|
+| **Values** | `1` (enable), unset (disable) |
+| **Default** | Disabled |
+| **CLI equivalent** | `--debug-touches` |
+| **File** | `src/system/runtime_config.cpp` |
+
+```bash
+# Enable via environment variable
+HELIX_DEBUG_TOUCHES=1 ./build/bin/helix-screen -vv
+
+# Or via command-line flag (equivalent)
+./build/bin/helix-screen --debug-touches -vv
+
+# Combine with test mode for desktop debugging
+./build/bin/helix-screen --test --debug-touches -vv
+```
+
+**Use cases:**
+- Verifying touch calibration accuracy
+- Diagnosing buttons or UI elements that don't respond to taps
+- Identifying overlapping UI elements that absorb click events
+- Confirming extended click areas are working correctly
 
 ---
 

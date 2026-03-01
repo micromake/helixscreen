@@ -278,6 +278,28 @@ class DisplayManager {
      */
     bool needs_touch_calibration() const;
 
+    /**
+     * @brief Run rotation probe on first boot (fbdev only)
+     *
+     * Cycles through 0°, 90°, 180°, 270° rotations showing "Tap anywhere
+     * if you can read this" for 5 seconds each. Two-tap confirmation prevents
+     * accidental selection. Saves result to config and returns.
+     *
+     * Only called when no rotation is configured and the probe hasn't run before.
+     * No-op on SDL/DRM backends.
+     */
+    void run_rotation_probe();
+
+    /**
+     * @brief Apply display rotation at runtime
+     *
+     * Used when auto-detection discovers panel orientation after init() has
+     * already run. Sets LVGL rotation + backend rotation (matrix or hardware).
+     *
+     * @param degrees Rotation in degrees (0, 90, 180, 270)
+     */
+    void apply_rotation(int degrees);
+
     // ========================================================================
     // Static Timing Functions (portable across platforms)
     // ========================================================================
@@ -331,6 +353,7 @@ class DisplayManager {
 
   private:
     bool m_initialized = false;
+    bool m_shutting_down = false;
     int m_width = 0;
     int m_height = 0;
 
@@ -346,6 +369,9 @@ class DisplayManager {
     // Display sleep state
     bool m_display_sleeping = false;
     bool m_display_dimmed = false;
+#ifdef HELIX_ENABLE_SCREENSAVER
+    bool m_screensaver_active = false;
+#endif
     bool m_wake_requested = false; // Set by input wrapper when touch detected while sleeping
     int m_dim_timeout_sec = 300;
     int m_dim_brightness_percent = 30;

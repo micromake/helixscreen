@@ -10,6 +10,7 @@
 
 #include "ui_event_safety.h"
 #include "ui_nav_manager.h"
+#include "ui_update_queue.h"
 
 #include "ams_state.h"
 #include "moonraker_api.h"
@@ -147,6 +148,12 @@ void AmsSpoolmanOverlay::show(lv_obj_t* parent_screen) {
 
     // Register with NavigationManager for lifecycle callbacks
     NavigationManager::instance().register_overlay_instance(overlay_, this);
+
+    // Register close callback to destroy widget tree when overlay closes
+    NavigationManager::instance().register_overlay_close_callback(overlay_, [this]() {
+        // overlay_ is an alias for overlay_root_, so pass it directly
+        destroy_overlay_ui(overlay_);
+    });
 
     // Push onto navigation stack
     NavigationManager::instance().push_overlay(overlay_);
@@ -294,6 +301,11 @@ void AmsSpoolmanOverlay::update_ui_from_subjects() {
     }
 
     // Toggle state is handled by subject binding in XML
+}
+
+void AmsSpoolmanOverlay::on_ui_destroyed() {
+    sync_toggle_ = nullptr;
+    interval_dropdown_ = nullptr;
 }
 
 // ============================================================================

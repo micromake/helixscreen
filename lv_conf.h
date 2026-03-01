@@ -27,10 +27,17 @@
  *====================*/
 
 /*Color depth: 1 (I1), 8 (L8), 16 (RGB565), 24 (RGB888), 32 (XRGB8888)
- * Using 32-bit everywhere for consistent thumbnail/image handling.
- * Memory impact is ~750KB extra for 800x480 display - negligible on
- * embedded Linux targets with 256MB+ RAM. */
-#define LV_COLOR_DEPTH 32
+ * Constrained FBDEV devices (AD5M, CC1, K1/MIPS, AD5X, K2, Snapmaker U1)
+ * use RGB565 to halve framebuffer and draw buffer memory.
+ * Pi (DRM) and desktop (SDL) stay at 32-bit ARGB8888. */
+#if defined(HELIX_PLATFORM_AD5M) || defined(HELIX_PLATFORM_CC1) || \
+    defined(HELIX_PLATFORM_MIPS) || defined(HELIX_PLATFORM_K1) || \
+    defined(HELIX_PLATFORM_AD5X) || defined(HELIX_PLATFORM_K2) || \
+    defined(HELIX_PLATFORM_SNAPMAKER_U1)
+    #define LV_COLOR_DEPTH 16
+#else
+    #define LV_COLOR_DEPTH 32
+#endif
 
 /*=========================
    STDLIB WRAPPER SETTINGS
@@ -111,17 +118,19 @@
  * RENDERING CONFIGURATION
  *========================*/
 
-/*Align the stride of all layers and images to this bytes*/
-#define LV_DRAW_BUF_STRIDE_ALIGN                1
+/*Align the stride of all layers and images to this bytes.
+ *16-byte alignment required for ARM NEON vld1q/vst1q SIMD operations.
+ *RGB888 (3 bytes/pixel) with stride_align=1 causes unaligned access crashes.*/
+#define LV_DRAW_BUF_STRIDE_ALIGN                16
 
 /*Align the start address of draw_buf addresses to this bytes*/
-#define LV_DRAW_BUF_ALIGN                       4
+#define LV_DRAW_BUF_ALIGN                       16
 
 /*Using matrix for transformations.
  *Requirements:
     `LV_USE_MATRIX = 1`.
     The rendering engine needs to support 3x3 matrix transformations.*/
-#define LV_DRAW_TRANSFORM_USE_MATRIX            0
+#define LV_DRAW_TRANSFORM_USE_MATRIX            1
 
 /* If a widget has `style_opa < 255` (not `bg_opa`, `text_opa` etc) or not NORMAL blend mode
  * it is buffered into a "simple" layer before rendering. The widget can be buffered in smaller chunks.
@@ -248,15 +257,10 @@
  * TODO: Investigate SDL draw backend compatibility with LVGL 9.4 */
 #define LV_USE_DRAW_SDL 0
 
-/* Draw using OpenGL ES textures - GPU-accelerated on Pi via DRM+EGL.
- * Uses LVGL's bundled GLAD loader for OpenGL ES function loading.
- * Currently disabled: LVGL's implementation uses C++11 raw strings in .c files. */
-#ifdef HELIX_ENABLE_OPENGLES
-    #define LV_USE_DRAW_OPENGLES 1
-    #define LV_DRAW_OPENGLES_TEXTURE_CACHE_COUNT 64
-#else
-    #define LV_USE_DRAW_OPENGLES 0
-#endif
+/* Draw using OpenGL ES textures (GLAD-based desktop OpenGL ES draw engine).
+ * NOT for DRM+EGL — the DRM EGL driver uses its own rendering path.
+ * This is for the lv_opengles desktop display driver only. */
+#define LV_USE_DRAW_OPENGLES 0
 
 /* Use VG-Lite GPU. */
 #define LV_USE_DRAW_VG_LITE 0
@@ -1112,13 +1116,15 @@
 #ifdef HELIX_DISPLAY_DRM
     #define LV_USE_LINUX_DRM        1
 
-    /* Enable EGL/GBM for GPU-accelerated rendering on Pi */
+    /* GBM buffers for the dumb-buffer DRM driver (requires Mesa 21.1+).
+     * Disabled: Bullseye sysroot has Mesa 20.3, missing gbm_bo_get_fd_for_plane. */
+    #define LV_USE_LINUX_DRM_GBM_BUFFERS 0
+
+    /* EGL rendering via lv_linux_drm_egl.c (GPU-accelerated, legacy modesetting) */
     #ifdef HELIX_ENABLE_OPENGLES
-        #define LV_USE_LINUX_DRM_GBM_BUFFERS 1
-        #define LV_LINUX_DRM_USE_EGL         1
+        #define LV_LINUX_DRM_USE_EGL     1
     #else
-        #define LV_USE_LINUX_DRM_GBM_BUFFERS 0
-        #define LV_LINUX_DRM_USE_EGL         0
+        #define LV_LINUX_DRM_USE_EGL     0
     #endif
 #else
     #define LV_USE_LINUX_DRM        0
@@ -1166,9 +1172,9 @@
 /* LVGL Windows backend */
 #define LV_USE_WINDOWS    0
 
-/* Use OpenGL ES display driver (GLAD-based).
- * Disabled: LVGL's implementation uses C++11 raw strings in .c files and
- * has tight coupling between draw backend and display driver. */
+/* Use OpenGL ES display driver (GLAD-based, desktop only).
+ * NOT for DRM+EGL — the DRM EGL path uses lv_linux_drm_egl.c instead.
+ * This is a desktop display driver that creates its own window. */
 #define LV_USE_OPENGLES   0
 
 /* QNX Screen display and input drivers */
@@ -1227,6 +1233,22 @@
 
 /*Vector graphic demo*/
 #define LV_USE_DEMO_VECTOR_GRAPHIC  0
+
+/*====================
+   CONVENIENCE MACROS
+ *====================*/
+
+/* Native color format matching LV_COLOR_DEPTH for draw buffer allocations.
+ * Use these instead of hardcoding LV_COLOR_FORMAT_ARGB8888 in on-screen
+ * rendering buffers. Data-interchange buffers (thumbnails, .bin files,
+ * snapshots needing alpha) should stay ARGB8888 explicitly. */
+#if LV_COLOR_DEPTH == 16
+    #define UI_NATIVE_COLOR_FORMAT LV_COLOR_FORMAT_RGB565
+    #define UI_NATIVE_BPP 2
+#else
+    #define UI_NATIVE_COLOR_FORMAT LV_COLOR_FORMAT_ARGB8888
+    #define UI_NATIVE_BPP 4
+#endif
 
 /*--END OF LV_CONF_H--*/
 

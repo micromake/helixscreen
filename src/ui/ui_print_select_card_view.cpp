@@ -135,6 +135,8 @@ void PrintSelectCardView::cleanup() {
     trailing_spacer_ = nullptr;
     visible_start_row_ = -1;
     visible_end_row_ = -1;
+    last_leading_height_ = -1;
+    last_trailing_height_ = -1;
     spdlog::debug("[PrintSelectCardView] cleanup()");
 }
 
@@ -459,17 +461,24 @@ void PrintSelectCardView::update_visible(const std::vector<PrintFileData>& file_
                   scroll_y, viewport_height, first_visible_row, last_visible_row, first_visible_idx,
                   last_visible_idx);
 
-    // Update leading spacer height
+    // Update spacer heights (only when changed to avoid redundant relayout)
     int leading_height = first_visible_row * row_height;
     if (leading_spacer_) {
-        lv_obj_set_height(leading_spacer_, leading_height);
-        lv_obj_move_to_index(leading_spacer_, 0);
+        if (leading_height != last_leading_height_) {
+            lv_obj_set_height(leading_spacer_, leading_height);
+            last_leading_height_ = leading_height;
+        }
+        if (lv_obj_get_index(leading_spacer_) != 0) {
+            lv_obj_move_to_index(leading_spacer_, 0);
+        }
     }
 
-    // Update trailing spacer
-    int trailing_height = (total_rows - last_visible_row) * row_height;
+    int trailing_height = std::max(0, (total_rows - last_visible_row) * row_height);
     if (trailing_spacer_) {
-        lv_obj_set_height(trailing_spacer_, std::max(0, trailing_height));
+        if (trailing_height != last_trailing_height_) {
+            lv_obj_set_height(trailing_spacer_, trailing_height);
+            last_trailing_height_ = trailing_height;
+        }
     }
 
     // Assign pool cards to visible indices, skipping cards that already show correct file
@@ -483,9 +492,12 @@ void PrintSelectCardView::update_visible(const std::vector<PrintFileData>& file_
             configure_card(card, pool_idx, static_cast<size_t>(file_idx), file_list[file_idx],
                            dims);
             card_pool_indices_[pool_idx] = file_idx;
+        }
 
-            // Move card after spacer in container order
-            lv_obj_move_to_index(card, static_cast<int>(pool_idx) + 1);
+        // Ensure card is in correct position (guard to avoid redundant relayout)
+        int target_index = static_cast<int>(pool_idx) + 1;
+        if (lv_obj_get_index(card) != target_index) {
+            lv_obj_move_to_index(card, target_index);
         }
     }
 

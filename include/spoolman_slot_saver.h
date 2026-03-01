@@ -32,11 +32,10 @@ struct ChangeSet {
 /**
  * @brief Handles saving slot edits back to Spoolman
  *
- * Orchestrates the find-or-create filament flow:
+ * Orchestrates filament and spool updates:
  * 1. Detects what changed between original and edited SlotInfo
- * 2. For filament-level changes: finds matching filament or creates new one
- * 3. Re-links the spool to the correct filament definition
- * 4. Updates spool weight if changed
+ * 2. For filament-level changes: PATCHes the existing filament definition
+ * 3. Updates spool weight if changed
  */
 class SpoolmanSlotSaver {
   public:
@@ -66,8 +65,8 @@ class SpoolmanSlotSaver {
      * Handles the full async orchestration:
      * - No spoolman_id or no changes: immediate success callback
      * - Only weight changed: update spool weight
-     * - Filament changed: find-or-create filament, relink spool
-     * - Both changed: relink first, then update weight
+     * - Filament changed: PATCH existing filament definition
+     * - Both changed: PATCH filament first, then update weight
      *
      * @param original The slot state before editing
      * @param edited The slot state after editing
@@ -79,7 +78,7 @@ class SpoolmanSlotSaver {
     MoonrakerAPI* api_;
 
     /**
-     * @brief Convert uint32_t RGB to hex string like "#FF0000"
+     * @brief Convert uint32_t RGB to hex string like "FF0000" (no # prefix)
      */
     static std::string color_to_hex(uint32_t rgb);
 
@@ -89,15 +88,9 @@ class SpoolmanSlotSaver {
     void update_weight(int spool_id, float weight_g, CompletionCallback on_complete);
 
     /**
-     * @brief Find matching filament or create new one, then relink spool
+     * @brief PATCH existing filament definition with changed fields
      */
-    void find_or_create_filament_and_relink(int spool_id, const SlotInfo& edited,
-                                            CompletionCallback on_complete);
-
-    /**
-     * @brief Relink a spool to a different filament ID
-     */
-    void relink_spool(int spool_id, int filament_id, CompletionCallback on_complete);
+    void update_filament(int filament_id, const SlotInfo& edited, CompletionCallback on_complete);
 };
 
 } // namespace helix

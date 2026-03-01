@@ -47,7 +47,6 @@ Build, asset generation, deployment, and developer tooling for HelixScreen.
 | Script | Purpose |
 |--------|---------|
 | `generate_translations.py` | Main translation generator — YAML → C++ translation tables |
-| `fill_new_translations.py` | Auto-fill missing translations (LLM-assisted) |
 | `translation_sync.py` | Sync translation keys between XML/C++ sources and YAML files |
 | `migrate_xml_translations.py` | Migration tool: inline XML text → translation key references |
 | `xml_to_yaml_translations.py` | Extract inline XML strings to YAML format |

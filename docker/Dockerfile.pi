@@ -51,8 +51,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Add arm64 architecture and install ONLY the target libraries we actually link against.
 # Specifically excluded (not linked, would only bloat the image):
-#   - libgbm-dev:arm64, libgles2-mesa-dev:arm64, libegl1-mesa-dev:arm64
-#     (LVGL uses software rendering, not GPU — DRM/KMS is display-only)
 #   - libfmt-dev:arm64 (spdlog bundles its own fmt — external fmt causes soname
 #     mismatches across Debian versions: Bullseye=libfmt.so.7, Bookworm=libfmt.so.9)
 #
@@ -66,6 +64,9 @@ RUN dpkg --add-architecture arm64 && apt-get update && apt-get install -y --no-i
     libssl-dev:arm64 \
     libsystemd-dev:arm64 \
     zlib1g-dev:arm64 \
+    libgbm-dev:arm64 \
+    libgles2-mesa-dev:arm64 \
+    libegl1-mesa-dev:arm64 \
     && rm -rf /var/lib/apt/lists/*
 
 # ==============================================================================

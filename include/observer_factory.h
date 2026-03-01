@@ -66,7 +66,7 @@ template <typename T> inline T* get_subject_value_ptr(lv_subject_t* subject) {
  */
 template <typename T, typename Panel> struct ValueObserverContext {
     Panel* panel;
-    T Panel::* member;
+    T Panel::*member;
     void (Panel::*on_update)();
 };
 
@@ -76,7 +76,7 @@ template <typename T, typename Panel> struct ValueObserverContext {
 template <typename T, typename Panel, typename Transform> struct TransformObserverContext {
     Panel* panel;
     Transform transform;
-    T Panel::* member;
+    T Panel::*member;
     void (Panel::*on_update)();
 };
 
@@ -85,7 +85,7 @@ template <typename T, typename Panel, typename Transform> struct TransformObserv
  */
 template <typename T, typename Panel> struct RawObserverContext {
     Panel* panel;
-    T Panel::* member;
+    T Panel::*member;
 };
 
 /**
@@ -193,7 +193,7 @@ void raw_observer_cb(lv_observer_t* observer, lv_subject_t* subject) {
  * @endcode
  */
 template <typename T, typename Panel>
-ObserverGuard create_value_observer(lv_subject_t* subject, T Panel::* member,
+ObserverGuard create_value_observer(lv_subject_t* subject, T Panel::*member,
                                     void (Panel::*on_update)(), Panel* panel) {
     if (!subject || !panel) {
         return ObserverGuard();
@@ -202,7 +202,8 @@ ObserverGuard create_value_observer(lv_subject_t* subject, T Panel::* member,
     // Allocate context on heap - lives with observer lifetime
     auto* ctx = new detail::ValueObserverContext<T, Panel>{panel, member, on_update};
 
-    return ObserverGuard(subject, detail::value_observer_cb<T, Panel>, ctx);
+    return ObserverGuard(subject, detail::value_observer_cb<T, Panel>, ctx,
+                         [ctx]() { delete ctx; });
 }
 
 /**
@@ -232,7 +233,7 @@ ObserverGuard create_value_observer(lv_subject_t* subject, T Panel::* member,
  */
 template <typename T, typename Panel, typename Transform>
 ObserverGuard create_transform_observer(lv_subject_t* subject, Transform&& transform,
-                                        T Panel::* member, void (Panel::*on_update)(),
+                                        T Panel::*member, void (Panel::*on_update)(),
                                         Panel* panel) {
     if (!subject || !panel) {
         return ObserverGuard();
@@ -243,7 +244,8 @@ ObserverGuard create_transform_observer(lv_subject_t* subject, Transform&& trans
     auto* ctx = new detail::TransformObserverContext<T, Panel, DecayedTransform>{
         panel, std::forward<Transform>(transform), member, on_update};
 
-    return ObserverGuard(subject, detail::transform_observer_cb<T, Panel, DecayedTransform>, ctx);
+    return ObserverGuard(subject, detail::transform_observer_cb<T, Panel, DecayedTransform>, ctx,
+                         [ctx]() { delete ctx; });
 }
 
 /**
@@ -267,7 +269,7 @@ ObserverGuard create_transform_observer(lv_subject_t* subject, Transform&& trans
  * @endcode
  */
 template <typename T, typename Panel>
-ObserverGuard create_raw_observer(lv_subject_t* subject, T Panel::* member, Panel* panel) {
+ObserverGuard create_raw_observer(lv_subject_t* subject, T Panel::*member, Panel* panel) {
     if (!subject || !panel) {
         return ObserverGuard();
     }
@@ -275,7 +277,7 @@ ObserverGuard create_raw_observer(lv_subject_t* subject, T Panel::* member, Pane
     // Allocate context on heap - lives with observer lifetime
     auto* ctx = new detail::RawObserverContext<T, Panel>{panel, member};
 
-    return ObserverGuard(subject, detail::raw_observer_cb<T, Panel>, ctx);
+    return ObserverGuard(subject, detail::raw_observer_cb<T, Panel>, ctx, [ctx]() { delete ctx; });
 }
 
 // ============================================================================
@@ -359,7 +361,7 @@ ObserverGuard observe_int_sync(lv_subject_t* subject, Panel* panel, Handler&& ha
                 });
             }
         },
-        ctx);
+        ctx, [ctx]() { delete ctx; });
     if (lifetime) {
         guard.set_alive_token(lifetime);
     }
@@ -398,7 +400,7 @@ ObserverGuard observe_int_immediate(lv_subject_t* subject, Panel* panel, Handler
                 c->handler(c->panel, value);
             }
         },
-        ctx);
+        ctx, [ctx]() { delete ctx; });
     if (lifetime) {
         guard.set_alive_token(lifetime);
     }
@@ -451,7 +453,7 @@ ObserverGuard observe_int_async(lv_subject_t* subject, Panel* panel, ValueHandle
                     c);
             }
         },
-        ctx);
+        ctx, [ctx]() { delete ctx; });
     if (lifetime) {
         guard.set_alive_token(lifetime);
     }
@@ -496,7 +498,7 @@ ObserverGuard observe_string(lv_subject_t* subject, Panel* panel, Handler&& hand
                 });
             }
         },
-        ctx);
+        ctx, [ctx]() { delete ctx; });
     if (lifetime) {
         guard.set_alive_token(lifetime);
     }
@@ -535,7 +537,7 @@ ObserverGuard observe_string_immediate(lv_subject_t* subject, Panel* panel, Hand
                 c->handler(c->panel, str);
             }
         },
-        ctx);
+        ctx, [ctx]() { delete ctx; });
     if (lifetime) {
         guard.set_alive_token(lifetime);
     }
@@ -588,7 +590,7 @@ ObserverGuard observe_string_async(lv_subject_t* subject, Panel* panel,
                     c);
             }
         },
-        ctx);
+        ctx, [ctx]() { delete ctx; });
     if (lifetime) {
         guard.set_alive_token(lifetime);
     }

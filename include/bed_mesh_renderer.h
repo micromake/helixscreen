@@ -294,6 +294,31 @@ void bed_mesh_renderer_set_color_range(bed_mesh_renderer_t* renderer, double min
 void bed_mesh_renderer_auto_color_range(bed_mesh_renderer_t* renderer);
 
 /**
+ * @brief Set the layer offset used for screen-space positioning
+ *
+ * In async (buffer) rendering the mesh is rendered at (0,0).  Overlay
+ * elements drawn on the LVGL layer (axis labels, tick marks) need the
+ * widget's actual screen position.  Call this before rendering overlays
+ * in async mode so projected 3D→2D coordinates land at the correct
+ * screen location.
+ *
+ * @param renderer Renderer instance
+ * @param offset_x Widget's absolute screen X position
+ * @param offset_y Widget's absolute screen Y position
+ */
+void bed_mesh_renderer_set_layer_offset(bed_mesh_renderer_t* renderer, int offset_x, int offset_y);
+
+/**
+ * @brief Get the current layer offset
+ *
+ * @param renderer Renderer instance
+ * @param[out] offset_x Current X offset (NULL-safe)
+ * @param[out] offset_y Current Y offset (NULL-safe)
+ */
+void bed_mesh_renderer_get_layer_offset(const bed_mesh_renderer_t* renderer, int* offset_x,
+                                        int* offset_y);
+
+/**
  * @brief Main rendering function
  *
  * Renders the 3D bed mesh to the provided LVGL layer (DRAW_POST pattern).
@@ -464,4 +489,40 @@ void bed_mesh_renderer_set_z_display_offset(bed_mesh_renderer_t* renderer, doubl
 
 #ifdef __cplusplus
 }
+
+// C++ only: buffer-based rendering for background thread
+namespace helix::mesh {
+class PixelBuffer;
+}
+
+/**
+ * @brief Colors needed for off-screen buffer rendering
+ *
+ * Must be populated on the main thread (where theme_manager_get_color is safe)
+ * and passed to render_to_buffer which runs on a background thread.
+ */
+struct bed_mesh_render_colors_t {
+    uint8_t bg_r, bg_g, bg_b;       ///< Background clear color (graph_bg)
+    uint8_t grid_r, grid_g, grid_b; ///< Grid/wireframe line color (elevated_bg)
+};
+
+/**
+ * @brief Render full mesh into an off-screen pixel buffer
+ *
+ * Thread-safe: does NOT call any lv_* functions. Runs the full 3D rendering
+ * pipeline (projection, sorting, rasterization, overlays) into a PixelBuffer.
+ * The buffer should already be allocated at the correct size.
+ *
+ * Does NOT handle 2D heatmap fallback (stays on main thread).
+ * Does NOT call lv_obj_invalidate() or any LVGL function.
+ *
+ * @param renderer Renderer instance with valid mesh data
+ * @param buffer   Target pixel buffer (must be allocated at canvas dimensions)
+ * @param colors   Pre-fetched theme colors (from main thread)
+ * @return true if rendering succeeded, false on error
+ */
+bool bed_mesh_renderer_render_to_buffer(bed_mesh_renderer_t* renderer,
+                                        helix::mesh::PixelBuffer& buffer,
+                                        const bed_mesh_render_colors_t& colors);
+
 #endif

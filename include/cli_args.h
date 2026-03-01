@@ -99,6 +99,9 @@ struct CliArgs {
     bool force_wizard = false;
     int wizard_step = -1; // -1 = not set
 
+    // Touch calibration
+    bool calibrate_touch = false; ///< Force touch calibration on startup
+
     // Automation
     bool screenshot_enabled = false;
     int screenshot_delay_sec = 2;

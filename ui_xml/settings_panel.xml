@@ -43,14 +43,6 @@
     <!-- PRINTER SECTION -->
     <!-- ================================================================== -->
     <setting_section_header title="PRINTER" title_tag="PRINTER" icon="printer_3d"/>
-    <!-- Filament Sensors (hidden if no sensors detected) -->
-    <lv_obj name="container_filament_sensors" width="100%" style_pad_all="0" scrollable="false">
-      <bind_flag_if_eq subject="filament_sensor_count" flag="hidden" ref_value="0"/>
-      <setting_action_row name="row_filament_sensors"
-                          label="Filament Sensors" label_tag="Filament Sensors" icon="filament"
-                          description="Configure filament detection sensors"
-                          description_tag="Configure filament detection sensors" callback="on_filament_sensors_clicked"/>
-    </lv_obj>
     <!-- AMS Management (hidden if no AMS detected) -->
     <lv_obj name="container_ams_settings" width="100%" style_pad_all="0" scrollable="false">
       <bind_flag_if_eq subject="ams_slot_count" flag="hidden" ref_value="0"/>
@@ -59,12 +51,35 @@
                           description="Quick actions, calibration, speed"
                           description_tag="Quick actions, calibration, speed" callback="on_ams_settings_clicked"/>
     </lv_obj>
+    <!-- Filament Sensors (hidden if no sensors detected) -->
+    <lv_obj name="container_filament_sensors" width="100%" style_pad_all="0" scrollable="false">
+      <bind_flag_if_eq subject="filament_sensor_count" flag="hidden" ref_value="0"/>
+      <setting_action_row name="row_filament_sensors"
+                          label="Filament Sensors" label_tag="Filament Sensors" icon="filament"
+                          description="Configure filament detection sensors"
+                          description_tag="Configure filament detection sensors" callback="on_filament_sensors_clicked"/>
+    </lv_obj>
+    <!-- Material Temperature Overrides -->
+    <setting_action_row name="row_material_temps"
+                        label="Material Temperatures" label_tag="Material Temperatures"
+                        icon="thermometer"
+                        description="Customize preset temperatures"
+                        description_tag="Customize preset temperatures"
+                        callback="on_material_temps_clicked"/>
     <!-- Spoolman Settings (hidden if Spoolman not available) -->
     <lv_obj name="container_spoolman_settings" width="100%" style_pad_all="0" scrollable="false">
       <bind_flag_if_eq subject="printer_has_spoolman" flag="hidden" ref_value="0"/>
       <setting_action_row name="row_spoolman_settings"
                           label="Spoolman" label_tag="Spoolman" icon="database" description="Weight sync settings"
                           description_tag="Weight sync settings" callback="on_spoolman_settings_clicked"/>
+    </lv_obj>
+    <!-- Firmware Retraction Settings (hidden if no firmware_retraction capability) -->
+    <lv_obj name="container_firmware_retraction" width="100%" style_pad_all="0" scrollable="false">
+      <bind_flag_if_eq subject="printer_has_firmware_retraction" flag="hidden" ref_value="0"/>
+      <setting_action_row name="row_firmware_retraction"
+                          label="Retraction Settings" label_tag="Retraction Settings" icon="arrow_up_right"
+                          description="Configure G10/G11 firmware retraction"
+                          description_tag="Configure G10/G11 firmware retraction" callback="on_retraction_row_clicked"/>
     </lv_obj>
     <!-- LED Light Settings (hidden if no LED capability) -->
     <lv_obj name="container_led_light"
@@ -74,14 +89,6 @@
                           label="LED Settings" label_tag="LED Settings" icon="tune"
                           description="Startup, auto-control, and macro devices"
                           description_tag="Startup, auto-control, and macro devices" callback="on_led_settings_clicked"/>
-    </lv_obj>
-    <!-- Firmware Retraction Settings (hidden if no firmware_retraction capability) -->
-    <lv_obj name="container_firmware_retraction" width="100%" style_pad_all="0" scrollable="false">
-      <bind_flag_if_eq subject="printer_has_firmware_retraction" flag="hidden" ref_value="0"/>
-      <setting_action_row name="row_firmware_retraction"
-                          label="Retraction Settings" label_tag="Retraction Settings" icon="arrow_up_right"
-                          description="Configure G10/G11 firmware retraction"
-                          description_tag="Configure G10/G11 firmware retraction" callback="on_retraction_row_clicked"/>
     </lv_obj>
     <!-- Macro Buttons (opens overlay for configuring quick buttons and standard macros) -->
     <setting_action_row name="row_macro_buttons"
@@ -105,7 +112,7 @@
     <setting_dropdown_row name="row_completion_alert"
                           label="Print Completion Alert" label_tag="Print Completion Alert" icon="notifications"
                           description="Notify when print finishes" description_tag="Notify when print finishes"
-                          options="Off&#10;Notification&#10;Alert" callback="on_completion_alert_changed"/>
+                          options="Off&#10;Notification&#10;Alert" options_tag="Off&#10;Notification&#10;Alert" callback="on_completion_alert_changed"/>
     <!-- ================================================================== -->
     <!-- MOTION SECTION -->
     <!-- ================================================================== -->
@@ -115,7 +122,7 @@
                           label="Z Movement" label_tag="Z Movement" icon="arrow_up_down"
                           description="How Z-axis movement is displayed"
                           description_tag="How Z-axis movement is displayed"
-                          options="Auto&#10;Bed Moves&#10;Nozzle Moves" callback="on_z_movement_style_changed"/>
+                          options="Auto&#10;Bed Moves&#10;Nozzle Moves" options_tag="Auto&#10;Bed Moves&#10;Nozzle Moves" callback="on_z_movement_style_changed"/>
     <!-- Machine Limits -->
     <setting_action_row name="row_machine_limits"
                         label="Machine Limits" label_tag="Machine Limits" icon="dashboard"
@@ -140,6 +147,7 @@
                             description="Time to wait before escalating to emergency stop"
                             description_tag="Time to wait before escalating to emergency stop"
                             options="15 seconds&#10;30 seconds&#10;60 seconds&#10;120 seconds"
+                            options_tag="15 seconds&#10;30 seconds&#10;60 seconds&#10;120 seconds"
                             bind_selected="settings_cancel_escalation_timeout"
                             callback="on_cancel_escalation_timeout_changed"/>
     </lv_obj>
@@ -154,6 +162,14 @@
                           label="Network Settings" label_tag="Network Settings" icon="wifi"
                           description="WiFi and Ethernet configuration"
                           description_tag="WiFi and Ethernet configuration" callback="on_network_clicked"/>
+    </lv_obj>
+    <!-- Power Devices (hidden when no power devices discovered) -->
+    <lv_obj name="container_power_devices" width="100%" style_pad_all="0" scrollable="false">
+      <bind_flag_if_eq subject="power_device_count" flag="hidden" ref_value="0"/>
+      <setting_action_row name="row_power_devices"
+                          label="Power Devices" label_tag="Power Devices" icon="power_plug"
+                          description="Control power relays and smart outlets"
+                          description_tag="Control power relays and smart outlets" callback="on_power_devices_clicked"/>
     </lv_obj>
     <!-- Printer Host (clickable - opens change host modal) -->
     <setting_action_row name="row_printer_host"
@@ -219,79 +235,12 @@
     <setting_action_row name="row_docs"
                         label="Documentation" label_tag="Documentation" icon="book" description="Guides and reference"
                         description_tag="Guides and reference" callback="on_docs_clicked"/>
-    <!-- ================================================================== -->
-    <!-- ABOUT SECTION -->
-    <!-- ================================================================== -->
-    <setting_section_header title="ABOUT" title_tag="ABOUT" icon="info"/>
-    <!-- Printer Name (7-tap easter egg trigger) -->
-    <ui_button name="row_printer" width="100%" height="content" variant="ghost" style_radius="0" style_pad_all="0">
-      <lv_obj width="100%"
-              height="content" flex_flow="row" style_flex_main_place="start" style_flex_cross_place="center"
-              style_pad_left="#space_lg" style_pad_right="#space_lg" style_pad_top="#space_md"
-              style_pad_bottom="#space_md" style_pad_gap="#space_sm" scrollable="false" clickable="false"
-              event_bubble="true">
-        <icon name="row_icon" src="printer_3d" size="sm" variant="secondary" clickable="false" event_bubble="true"/>
-        <text_body name="label"
-                   text="Printer Name" translation_tag="Printer Name" style_text_color="#text" flex_grow="1"
-                   clickable="false" event_bubble="true"/>
-        <text_muted name="value" bind_text="printer_value" clickable="false" event_bubble="true"/>
-      </lv_obj>
-      <event_cb trigger="clicked" callback="on_printer_name_clicked"/>
-    </ui_button>
-    <!-- Current Version - ui_button for native press feedback (7-tap secret to toggle beta features) -->
-    <ui_button name="row_version" width="100%" height="content" variant="ghost" style_radius="0" style_pad_all="0">
-      <lv_obj width="100%"
-              height="content" flex_flow="row" style_flex_main_place="start" style_flex_cross_place="center"
-              style_pad_left="#space_lg" style_pad_right="#space_lg" style_pad_top="#space_md"
-              style_pad_bottom="#space_md" style_pad_gap="#space_sm" scrollable="false" clickable="false"
-              event_bubble="true">
-        <icon name="row_icon" src="info" size="sm" variant="secondary" clickable="false" event_bubble="true"/>
-        <text_body name="label"
-                   text="Current Version" translation_tag="Current Version" style_text_color="#text" flex_grow="1"
-                   clickable="false" event_bubble="true"/>
-        <text_muted name="value" bind_text="version_value" clickable="false" event_bubble="true"/>
-      </lv_obj>
-      <event_cb trigger="clicked" callback="on_version_clicked"/>
-    </ui_button>
-    <!-- Update Channel (gated by beta_features) -->
-    <lv_obj name="container_update_channel" width="100%" style_pad_all="0">
-      <bind_flag_if_eq subject="show_beta_features" flag="hidden" ref_value="0"/>
-      <setting_dropdown_row name="row_update_channel"
-                            label="Update Channel" label_tag="Update Channel" icon="swap_vertical"
-                            options="Stable&#10;Beta&#10;Dev" bind_selected="update_channel"
-                            callback="on_update_channel_changed"/>
-    </lv_obj>
-    <!-- Check for Updates (reactive description shows available version; hidden on Android) -->
-    <lv_obj name="container_check_updates" width="100%" style_pad_all="0" scrollable="false">
-      <bind_flag_if_eq subject="show_update_settings" flag="hidden" ref_value="0"/>
-      <setting_action_row name="row_check_updates"
-                          label="Check for Updates" label_tag="Check for Updates" icon="refresh"
-                          bind_description="update_version_text" callback="on_check_updates_clicked"/>
-    </lv_obj>
-    <!-- Install Update (visible only when update available) -->
-    <lv_obj name="container_install_update" width="100%" style_pad_all="0">
-      <bind_flag_if_eq subject="show_update_settings" flag="hidden" ref_value="0"/>
-      <bind_flag_if_not_eq subject="update_status" flag="hidden" ref_value="2"/>
-      <setting_action_row name="row_install_update"
-                          label="Install Update" label_tag="Install Update" icon="download" description=""
-                          description_tag="" callback="on_install_update_clicked"/>
-    </lv_obj>
-    <!-- Klipper Version -->
-    <setting_info_row name="row_klipper" label="Klipper" label_tag="Klipper" icon="toy_brick_outline">
-      <text_muted name="value" text="—"/>
-    </setting_info_row>
-    <!-- Moonraker Version -->
-    <setting_info_row name="row_moonraker" label="Moonraker" label_tag="Moonraker" icon="toy_brick_outline">
-      <text_muted name="value" text="—"/>
-    </setting_info_row>
-    <!-- OS Version -->
-    <setting_info_row name="row_os" label="OS" label_tag="OS" icon="console">
-      <text_muted name="value" text="—"/>
-    </setting_info_row>
-    <!-- Total Print Hours (opens history dashboard) -->
-    <setting_action_row name="row_print_hours"
-                        label="Print Hours" label_tag="Print Hours" icon="clock" bind_description="print_hours_value"
-                        callback="on_print_hours_clicked"/>
+    <setting_action_row name="row_about"
+                        label="About" label_tag="About"
+                        icon="info"
+                        description="Version, updates, and printer info"
+                        description_tag="Version, updates, and printer info"
+                        callback="on_about_clicked"/>
     <!-- Bottom padding for scroll -->
     <lv_obj width="100%" height="#space_lg" scrollable="false"/>
   </view>

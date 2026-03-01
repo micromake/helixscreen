@@ -325,11 +325,33 @@ void PrinterImageOverlay::populate_custom_images() {
     // Auto-import any raw PNG/JPEG files dropped into the custom_images directory
     helix::PrinterImageManager::instance().auto_import_raw_images();
 
-    auto images = helix::PrinterImageManager::instance().get_custom_images();
-    spdlog::debug("[{}] Populating {} custom images", get_name(), images.size());
+    auto valid_images = helix::PrinterImageManager::instance().get_custom_images();
+    auto invalid_images = helix::PrinterImageManager::instance().get_invalid_custom_images();
+    spdlog::debug("[{}] Populating {} custom images ({} invalid)", get_name(), valid_images.size(),
+                  invalid_images.size());
 
-    for (const auto& img : images) {
-        create_list_row(list, img.id, img.display_name, "on_printer_image_card_clicked");
+    // Merge valid and invalid into one list sorted by display_name
+    struct CustomEntry {
+        const helix::PrinterImageManager::ImageInfo* info;
+        bool valid;
+    };
+    std::vector<CustomEntry> merged;
+    merged.reserve(valid_images.size() + invalid_images.size());
+    for (const auto& img : valid_images)
+        merged.push_back({&img, true});
+    for (const auto& img : invalid_images)
+        merged.push_back({&img, false});
+    std::sort(merged.begin(), merged.end(), [](const CustomEntry& a, const CustomEntry& b) {
+        return a.info->display_name < b.info->display_name;
+    });
+
+    for (const auto& entry : merged) {
+        lv_obj_t* row = create_list_row(list, entry.info->id, entry.info->display_name,
+                                        "on_printer_image_card_clicked");
+        if (row && !entry.valid) {
+            lv_obj_add_state(row, LV_STATE_DISABLED);
+            lv_obj_remove_flag(row, LV_OBJ_FLAG_CLICKABLE);
+        }
     }
 }
 
@@ -394,8 +416,7 @@ void PrinterImageOverlay::populate_usb_images(const std::string& mount_path) {
     spdlog::debug("[{}] Found {} importable images on USB", get_name(), image_paths.size());
 
     if (image_paths.empty()) {
-        lv_subject_copy_string(&usb_status_subject_,
-                               lv_tr("No PNG or JPEG images found on USB drive"));
+        lv_subject_copy_string(&usb_status_subject_, lv_tr("No images found on USB drive"));
         return;
     }
 
@@ -462,6 +483,10 @@ void PrinterImageOverlay::handle_auto_detect() {
 }
 
 void PrinterImageOverlay::handle_image_selected(const std::string& image_id) {
+    if (image_id.rfind("invalid:", 0) == 0) {
+        spdlog::warn("[{}] Ignoring selection of invalid image: {}", get_name(), image_id);
+        return;
+    }
     spdlog::info("[{}] Image selected: {}", get_name(), image_id);
     helix::PrinterImageManager::instance().set_active_image(image_id);
     update_selection_indicator(image_id);

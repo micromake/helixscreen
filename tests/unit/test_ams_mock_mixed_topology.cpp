@@ -150,14 +150,14 @@ TEST_CASE("Mixed topology get_topology returns HUB as default", "[ams][mock][mix
 TEST_CASE("Non-mixed mock: get_unit_topology falls back to system topology",
           "[ams][mock][backward_compat]") {
     // Standard mock (not mixed): unit_topologies_ is empty,
-    // so get_unit_topology() should fall back to topology_ (HUB by default)
+    // so get_unit_topology() should fall back to topology_ (LINEAR by default)
     AmsBackendMock backend(4);
 
-    REQUIRE(backend.get_topology() == PathTopology::HUB);
-    REQUIRE(backend.get_unit_topology(0) == PathTopology::HUB);
-    REQUIRE(backend.get_unit_topology(1) == PathTopology::HUB);
-    REQUIRE(backend.get_unit_topology(-1) == PathTopology::HUB);
-    REQUIRE(backend.get_unit_topology(99) == PathTopology::HUB);
+    REQUIRE(backend.get_topology() == PathTopology::LINEAR);
+    REQUIRE(backend.get_unit_topology(0) == PathTopology::LINEAR);
+    REQUIRE(backend.get_unit_topology(1) == PathTopology::LINEAR);
+    REQUIRE(backend.get_unit_topology(-1) == PathTopology::LINEAR);
+    REQUIRE(backend.get_unit_topology(99) == PathTopology::LINEAR);
 }
 
 TEST_CASE("Mixed topology system type is AFC", "[ams][mock][mixed]") {

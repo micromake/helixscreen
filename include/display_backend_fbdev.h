@@ -131,6 +131,16 @@ class DisplayBackendFbdev : public DisplayBackend {
         splash_active_ = active;
     }
 
+    /**
+     * @brief No-op for fbdev — LVGL handles touch rotation internally
+     *
+     * LVGL's indev_pointer_proc() calls lv_display_rotate_point() to
+     * transform touch coordinates for the current display rotation.
+     * The DRM backend needs this override for hardware plane rotation,
+     * but fbdev software rotation needs no additional touch transform.
+     */
+    void set_display_rotation(lv_display_rotation_t rot, int phys_w, int phys_h) override;
+
   private:
     std::string fb_device_ = "/dev/fb0";
     std::string touch_device_; // Empty = auto-detect

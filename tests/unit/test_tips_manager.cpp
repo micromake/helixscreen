@@ -5,6 +5,7 @@
 
 #include <fstream>
 #include <thread>
+#include <unistd.h>
 #include <vector>
 
 #include "../catch_amalgamated.hpp"
@@ -12,11 +13,13 @@
 using namespace helix;
 
 // Test fixture for TipsManager testing
+// Uses PID-unique temp paths to avoid collisions between parallel test shards
 class TipsManagerTestFixture {
   protected:
-    const std::string test_tips_file = "/tmp/test_printing_tips.json";
-    const std::string invalid_tips_file = "/tmp/test_invalid_tips.json";
-    const std::string empty_tips_file = "/tmp/test_empty_tips.json";
+    const std::string pid_suffix = std::to_string(getpid());
+    const std::string test_tips_file = "/tmp/test_printing_tips_" + pid_suffix + ".json";
+    const std::string invalid_tips_file = "/tmp/test_invalid_tips_" + pid_suffix + ".json";
+    const std::string empty_tips_file = "/tmp/test_empty_tips_" + pid_suffix + ".json";
 
     void SetUp() {
         // Create valid test tips JSON

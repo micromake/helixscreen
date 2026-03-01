@@ -183,7 +183,9 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
 
             // Update string subject AFTER enum so observers see consistent state
             // (PrintSelectPanel observes print_state_ string but reads print_state_enum_)
-            lv_subject_copy_string(&print_state_, state_str.c_str());
+            if (strcmp(lv_subject_get_string(&print_state_), state_str.c_str()) != 0) {
+                lv_subject_copy_string(&print_state_, state_str.c_str());
+            }
 
             // Update print_active (1 when PRINTING/PAUSED, 0 otherwise)
             // This derived subject simplifies XML bindings for card visibility
@@ -216,7 +218,9 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
 
         if (stats.contains("filename")) {
             std::string filename = stats["filename"].get<std::string>();
-            lv_subject_copy_string(&print_filename_, filename.c_str());
+            if (strcmp(lv_subject_get_string(&print_filename_), filename.c_str()) != 0) {
+                lv_subject_copy_string(&print_filename_, filename.c_str());
+            }
         }
 
         // Update layer info from print_stats.info (sent by Moonraker/mock client)
@@ -234,8 +238,8 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
                 if (current_layer != lv_subject_get_int(&print_layer_current_)) {
                     spdlog::debug("[LayerTracker] current_layer={} (from print_stats.info)",
                                   current_layer);
+                    lv_subject_set_int(&print_layer_current_, current_layer);
                 }
-                lv_subject_set_int(&print_layer_current_, current_layer);
             }
 
             if (info.contains("total_layer") && info["total_layer"].is_number()) {
@@ -243,8 +247,8 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
                 if (total_layer != lv_subject_get_int(&print_layer_total_)) {
                     spdlog::debug("[LayerTracker] total_layer={} (from print_stats.info)",
                                   total_layer);
+                    lv_subject_set_int(&print_layer_total_, total_layer);
                 }
-                lv_subject_set_int(&print_layer_total_, total_layer);
             }
         } else if (stats.contains("info")) {
             spdlog::debug("[LayerTracker] print_stats.info is null/missing - slicer may not emit "
@@ -272,13 +276,17 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
         // Update print time tracking (elapsed and remaining)
         if (stats.contains("print_duration") && stats["print_duration"].is_number()) {
             int print_seconds = static_cast<int>(stats["print_duration"].get<double>());
-            lv_subject_set_int(&print_duration_, print_seconds);
+            if (lv_subject_get_int(&print_duration_) != print_seconds) {
+                lv_subject_set_int(&print_duration_, print_seconds);
+            }
         }
 
         // total_duration = wall-clock elapsed since job started (includes prep, pauses)
         if (stats.contains("total_duration") && stats["total_duration"].is_number()) {
             int total_elapsed = static_cast<int>(stats["total_duration"].get<double>());
-            lv_subject_set_int(&print_elapsed_, total_elapsed);
+            if (lv_subject_get_int(&print_elapsed_) != total_elapsed) {
+                lv_subject_set_int(&print_elapsed_, total_elapsed);
+            }
 
             // Estimate remaining from progress using print_duration (actual print time),
             // NOT total_duration (which includes prep/preheat and inflates the estimate)
@@ -298,14 +306,20 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
                                                  (1.0 - slicer_weight) * remaining);
                 }
 
-                lv_subject_set_int(&print_time_left_, remaining);
+                if (lv_subject_get_int(&print_time_left_) != remaining) {
+                    lv_subject_set_int(&print_time_left_, remaining);
+                }
             } else if (progress >= 1 && progress < 100 && print_time == 0 &&
                        estimated_print_time_ > 0) {
                 // Fallback: use slicer estimate when print_duration hasn't started yet
                 int remaining = estimated_print_time_ * (100 - progress) / 100;
-                lv_subject_set_int(&print_time_left_, remaining);
+                if (lv_subject_get_int(&print_time_left_) != remaining) {
+                    lv_subject_set_int(&print_time_left_, remaining);
+                }
             } else if (progress >= 100) {
-                lv_subject_set_int(&print_time_left_, 0);
+                if (lv_subject_get_int(&print_time_left_) != 0) {
+                    lv_subject_set_int(&print_time_left_, 0);
+                }
             }
         }
     }
@@ -325,11 +339,15 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
             bool has_message = false;
             if (display["message"].is_string()) {
                 const auto& msg = display["message"].get_ref<const std::string&>();
-                lv_subject_copy_string(&display_message_, msg.c_str());
+                if (strcmp(lv_subject_get_string(&display_message_), msg.c_str()) != 0) {
+                    lv_subject_copy_string(&display_message_, msg.c_str());
+                }
                 has_message = !msg.empty();
             } else {
                 // null or non-string — clear the message
-                lv_subject_copy_string(&display_message_, "");
+                if (strcmp(lv_subject_get_string(&display_message_), "") != 0) {
+                    lv_subject_copy_string(&display_message_, "");
+                }
             }
             int visible = has_message ? 1 : 0;
             if (lv_subject_get_int(&display_message_visible_) != visible) {
@@ -353,7 +371,8 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
             (current_state == PrintJobState::COMPLETE ||
              current_state == PrintJobState::CANCELLED || current_state == PrintJobState::ERROR);
         int current_progress = lv_subject_get_int(&print_progress_);
-        if (!is_terminal_state || progress_pct >= current_progress) {
+        if ((!is_terminal_state || progress_pct >= current_progress) &&
+            current_progress != progress_pct) {
             lv_subject_set_int(&print_progress_, progress_pct);
         }
     }
@@ -389,7 +408,8 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
                                           current_state == PrintJobState::ERROR);
 
                 int current_progress = lv_subject_get_int(&print_progress_);
-                if (!is_terminal_state || progress_pct >= current_progress) {
+                if ((!is_terminal_state || progress_pct >= current_progress) &&
+                    current_progress != progress_pct) {
                     lv_subject_set_int(&print_progress_, progress_pct);
                 }
             }
@@ -444,29 +464,38 @@ void PrinterPrintState::update_print_show_progress() {
 // ============================================================================
 
 void PrinterPrintState::set_print_outcome(PrintOutcome outcome) {
-    lv_subject_set_int(&print_outcome_, static_cast<int>(outcome));
-    spdlog::debug("[PrinterPrintState] Print outcome set to: {}", static_cast<int>(outcome));
+    int val = static_cast<int>(outcome);
+    if (lv_subject_get_int(&print_outcome_) != val) {
+        lv_subject_set_int(&print_outcome_, val);
+        spdlog::debug("[PrinterPrintState] Print outcome set to: {}", val);
+    }
 }
 
 void PrinterPrintState::set_print_thumbnail_path(const std::string& path) {
-    // Thumbnail path is set from PrintStatusPanel's main-thread callback,
-    // so we can safely update the subject directly without ui_async_call.
+    // Thumbnail path is set from PrintStatusPanel via ui_queue_update(),
+    // so this runs on the main thread and can update the subject directly.
     if (path.empty()) {
         spdlog::debug("[PrinterPrintState] Clearing print thumbnail path");
     } else {
         spdlog::debug("[PrinterPrintState] Setting print thumbnail path: {}", path);
     }
-    lv_subject_copy_string(&print_thumbnail_path_, path.c_str());
+    if (strcmp(lv_subject_get_string(&print_thumbnail_path_), path.c_str()) != 0) {
+        lv_subject_copy_string(&print_thumbnail_path_, path.c_str());
+    }
 }
 
 void PrinterPrintState::set_print_display_filename(const std::string& name) {
     // Display filename is set from PrintStatusPanel's main-thread callback.
     spdlog::trace("[PrinterPrintState] Setting print display filename: {}", name);
-    lv_subject_copy_string(&print_display_filename_, name.c_str());
+    if (strcmp(lv_subject_get_string(&print_display_filename_), name.c_str()) != 0) {
+        lv_subject_copy_string(&print_display_filename_, name.c_str());
+    }
 }
 
 void PrinterPrintState::set_print_layer_total(int total) {
-    lv_subject_set_int(&print_layer_total_, total);
+    if (lv_subject_get_int(&print_layer_total_) != total) {
+        lv_subject_set_int(&print_layer_total_, total);
+    }
 }
 
 void PrinterPrintState::set_print_layer_current(int layer) {
@@ -476,7 +505,9 @@ void PrinterPrintState::set_print_layer_current(int layer) {
             spdlog::info("[LayerTracker] Receiving real layer data from gcode response");
             has_real_layer_data_ = true;
         }
-        lv_subject_set_int(&print_layer_current_, layer);
+        if (lv_subject_get_int(&print_layer_current_) != layer) {
+            lv_subject_set_int(&print_layer_current_, layer);
+        }
     });
 }
 
@@ -499,12 +530,26 @@ void PrinterPrintState::set_print_start_state(PrintStartPhase phase, const char*
         if (old_phase == static_cast<int>(PrintStartPhase::IDLE) &&
             phase != PrintStartPhase::IDLE) {
             reset_for_new_print();
+            // Clear terminal outcome immediately so cancel button shows during pre-print.
+            // Without this, print_outcome stays COMPLETE/CANCELLED/ERROR until Moonraker
+            // reports state=PRINTING (after PRINT_START finishes), leaving the reprint
+            // button visible for the entire pre-print duration.
+            auto current_outcome = static_cast<PrintOutcome>(lv_subject_get_int(&print_outcome_));
+            if (current_outcome != PrintOutcome::NONE) {
+                spdlog::info("[PrinterPrintState] Preparing new print - clearing outcome");
+                lv_subject_set_int(&print_outcome_, static_cast<int>(PrintOutcome::NONE));
+            }
         }
-        lv_subject_set_int(&print_start_phase_, static_cast<int>(phase));
-        if (!msg.empty()) {
+        if (lv_subject_get_int(&print_start_phase_) != static_cast<int>(phase)) {
+            lv_subject_set_int(&print_start_phase_, static_cast<int>(phase));
+        }
+        if (!msg.empty() &&
+            strcmp(lv_subject_get_string(&print_start_message_), msg.c_str()) != 0) {
             lv_subject_copy_string(&print_start_message_, msg.c_str());
         }
-        lv_subject_set_int(&print_start_progress_, clamped_progress);
+        if (lv_subject_get_int(&print_start_progress_) != clamped_progress) {
+            lv_subject_set_int(&print_start_progress_, clamped_progress);
+        }
         update_print_show_progress();
     });
 }
@@ -529,25 +574,36 @@ void PrinterPrintState::set_print_in_progress(bool in_progress) {
 }
 
 void PrinterPrintState::set_print_start_time_left(const char* text) {
-    if (text && text[0] != '\0') {
-        lv_subject_copy_string(&print_start_time_left_, text);
-    } else {
-        lv_subject_copy_string(&print_start_time_left_, "");
+    const char* new_text = (text && text[0] != '\0') ? text : "";
+    if (strcmp(lv_subject_get_string(&print_start_time_left_), new_text) != 0) {
+        lv_subject_copy_string(&print_start_time_left_, new_text);
     }
 }
 
 void PrinterPrintState::clear_print_start_time_left() {
-    lv_subject_copy_string(&print_start_time_left_, "");
-    lv_subject_set_int(&preprint_remaining_, 0);
-    lv_subject_set_int(&preprint_elapsed_, 0);
+    if (strcmp(lv_subject_get_string(&print_start_time_left_), "") != 0) {
+        lv_subject_copy_string(&print_start_time_left_, "");
+    }
+    if (lv_subject_get_int(&preprint_remaining_) != 0) {
+        lv_subject_set_int(&preprint_remaining_, 0);
+    }
+    if (lv_subject_get_int(&preprint_elapsed_) != 0) {
+        lv_subject_set_int(&preprint_elapsed_, 0);
+    }
 }
 
 void PrinterPrintState::set_preprint_remaining_seconds(int seconds) {
-    lv_subject_set_int(&preprint_remaining_, std::max(0, seconds));
+    int val = std::max(0, seconds);
+    if (lv_subject_get_int(&preprint_remaining_) != val) {
+        lv_subject_set_int(&preprint_remaining_, val);
+    }
 }
 
 void PrinterPrintState::set_preprint_elapsed_seconds(int seconds) {
-    lv_subject_set_int(&preprint_elapsed_, std::max(0, seconds));
+    int val = std::max(0, seconds);
+    if (lv_subject_get_int(&preprint_elapsed_) != val) {
+        lv_subject_set_int(&preprint_elapsed_, val);
+    }
 }
 
 void PrinterPrintState::set_estimated_print_time(int seconds) {

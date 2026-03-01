@@ -7,12 +7,12 @@
  *
  * Provides a fullscreen overlay for touch calibration with:
  * - Visual crosshair targets for touch point capture
- * - State-driven UI progression (idle -> points -> verify -> complete)
+ * - State-driven UI progression (points -> verify -> complete)
  * - Completion callback with success status
- * - Auto-start option to skip IDLE state
+ * - Sample progress feedback (touch N of 7)
  *
  * ## States:
- *   IDLE -> POINT_1 -> POINT_2 -> POINT_3 -> VERIFY -> COMPLETE
+ *   POINT_1 -> POINT_2 -> POINT_3 -> VERIFY -> COMPLETE
  *
  * ## Completion Callback:
  * - true  = Accepted and saved
@@ -87,10 +87,9 @@ class TouchCalibrationOverlay : public OverlayBase {
      * @brief Register event callbacks with lv_xml system
      *
      * Registers callbacks:
-     * - on_touch_cal_start_clicked
      * - on_touch_cal_accept_clicked
      * - on_touch_cal_retry_clicked
-     * - on_touch_cal_screen_touched
+     * - on_touch_cal_overlay_touched
      * - on_touch_cal_back_clicked
      */
     void register_callbacks() override;
@@ -150,22 +149,9 @@ class TouchCalibrationOverlay : public OverlayBase {
      */
     void hide();
 
-    /**
-     * @brief Enable auto-start mode
-     *
-     * @param auto_start If true, show() will skip IDLE and start at POINT_1
-     *
-     * When enabled (called before show()), the overlay skips the Start button
-     * and immediately begins calibration at the first point.
-     */
-    void set_auto_start(bool auto_start);
-
     //
     // === Event Handlers (called by static trampolines) ===
     //
-
-    /** @brief Handle start button click - begins calibration */
-    void handle_start_clicked();
 
     /** @brief Handle accept button click - saves calibration */
     void handle_accept_clicked();
@@ -212,9 +198,6 @@ class TouchCalibrationOverlay : public OverlayBase {
     /** @brief Position crosshair at current calibration target */
     void update_crosshair_position();
 
-    /** @brief Update step progress indicator (3 dots) */
-    void update_step_progress();
-
     /**
      * @brief Handle calibration completion from panel
      * @param cal Calibration data if successful, nullptr if cancelled
@@ -246,7 +229,6 @@ class TouchCalibrationOverlay : public OverlayBase {
 
     CompletionCallback completion_callback_;
     bool callback_invoked_ = false; ///< Guard against double-invoke
-    bool auto_start_ = false;       ///< Skip IDLE, start at POINT_1
 
     // Backup calibration for revert on timeout
     helix::TouchCalibration backup_calibration_;
@@ -257,7 +239,6 @@ class TouchCalibrationOverlay : public OverlayBase {
     //
 
     lv_obj_t* crosshair_ = nullptr;
-    lv_obj_t* step_progress_ = nullptr; ///< 3-dot progress during calibration
 
     //
     // === State Constants ===

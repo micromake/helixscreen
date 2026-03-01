@@ -288,6 +288,81 @@ echo "tmpfs       51200     48640  2560       95% /tmp"
     [ -f "$INSTALL_DIR/bin/helix-screen" ]
 }
 
+# --- User data restoration during upgrade ---
+
+@test "extract_release: restores custom_images from previous install" {
+    setup_existing_install
+    mkdir -p "$INSTALL_DIR/config/custom_images"
+    echo "my_printer.png" > "$INSTALL_DIR/config/custom_images/my_printer.png"
+
+    create_test_tarball "ad5m"
+    extract_release "ad5m"
+
+    [ -d "$INSTALL_DIR/config/custom_images" ]
+    [ -f "$INSTALL_DIR/config/custom_images/my_printer.png" ]
+    grep -q "my_printer.png" "$INSTALL_DIR/config/custom_images/my_printer.png"
+}
+
+@test "extract_release: restores printer_database.d from previous install" {
+    setup_existing_install
+    mkdir -p "$INSTALL_DIR/config/printer_database.d"
+    echo '{"custom": true}' > "$INSTALL_DIR/config/printer_database.d/my_printer.json"
+
+    create_test_tarball "ad5m"
+    extract_release "ad5m"
+
+    [ -d "$INSTALL_DIR/config/printer_database.d" ]
+    [ -f "$INSTALL_DIR/config/printer_database.d/my_printer.json" ]
+    grep -q '"custom"' "$INSTALL_DIR/config/printer_database.d/my_printer.json"
+}
+
+@test "extract_release: does not overwrite new bundled config files with old ones" {
+    setup_existing_install
+    # Simulate a bundled file that exists in both old and new install
+    echo '{"old_bundled": true}' > "$INSTALL_DIR/config/printer_database.json"
+
+    # Create tarball that ships a new printer_database.json
+    local staging="$BATS_TEST_TMPDIR/staging"
+    mkdir -p "$staging/helixscreen/bin" "$staging/helixscreen/config"
+    create_fake_arm32_elf "$staging/helixscreen/bin/helix-screen"
+    chmod +x "$staging/helixscreen/bin/helix-screen"
+    echo '{"new_bundled": true}' > "$staging/helixscreen/config/printer_database.json"
+    tar -czf "$TMP_DIR/helixscreen.tar.gz" -C "$staging" helixscreen
+    rm -rf "$staging"
+
+    extract_release "ad5m"
+
+    # New bundled file should win — not overwritten by old
+    grep -q '"new_bundled"' "$INSTALL_DIR/config/printer_database.json"
+}
+
+@test "extract_release: restores multiple user data directories" {
+    setup_existing_install
+    mkdir -p "$INSTALL_DIR/config/custom_images"
+    mkdir -p "$INSTALL_DIR/config/printer_database.d"
+    mkdir -p "$INSTALL_DIR/config/themes"
+    echo "img" > "$INSTALL_DIR/config/custom_images/test.png"
+    echo '{}' > "$INSTALL_DIR/config/printer_database.d/custom.json"
+    echo "theme" > "$INSTALL_DIR/config/themes/dark.json"
+
+    create_test_tarball "ad5m"
+    extract_release "ad5m"
+
+    [ -f "$INSTALL_DIR/config/custom_images/test.png" ]
+    [ -f "$INSTALL_DIR/config/printer_database.d/custom.json" ]
+    [ -f "$INSTALL_DIR/config/themes/dark.json" ]
+}
+
+@test "extract_release: user data restored on first install is no-op" {
+    # First install (no existing dir) — nothing to restore
+    [ ! -d "$INSTALL_DIR" ]
+    create_test_tarball "ad5m"
+    run extract_release "ad5m"
+    [ "$status" -eq 0 ]
+    # Should succeed without errors, no user data dirs expected
+    [ ! -d "$INSTALL_DIR/config/custom_images" ]
+}
+
 @test "extract_release: preserves legacy config location" {
     mkdir -p "$INSTALL_DIR/bin"
     echo "old" > "$INSTALL_DIR/bin/helix-screen"

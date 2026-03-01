@@ -5,6 +5,7 @@
 
 #include "ui_fonts.h"
 
+#include "bed_mesh_buffer.h"
 #include "bed_mesh_coordinate_transform.h"
 #include "bed_mesh_internal.h"
 #include "bed_mesh_projection.h"
@@ -93,6 +94,23 @@ static void draw_axis_line(lv_layer_t* layer, lv_draw_line_dsc_t* line_dsc, doub
     line_dsc->p2.x = static_cast<lv_value_precise_t>(end.screen_x);
     line_dsc->p2.y = static_cast<lv_value_precise_t>(end.screen_y);
     lv_draw_line(layer, line_dsc);
+}
+
+/**
+ * Draw a single axis line from 3D start to 3D end point into a pixel buffer.
+ * Projects coordinates to 2D screen space and renders the line.
+ * No LVGL calls — safe for background threads.
+ */
+static void draw_axis_line_to_buffer(helix::mesh::PixelBuffer& buf, uint8_t r, uint8_t g, uint8_t b,
+                                     uint8_t a, double start_x, double start_y, double start_z,
+                                     double end_x, double end_y, double end_z, int canvas_width,
+                                     int canvas_height, const bed_mesh_view_state_t* view_state) {
+    bed_mesh_point_3d_t start = bed_mesh_projection_project_3d_to_2d(
+        start_x, start_y, start_z, canvas_width, canvas_height, view_state);
+    bed_mesh_point_3d_t end = bed_mesh_projection_project_3d_to_2d(
+        end_x, end_y, end_z, canvas_width, canvas_height, view_state);
+
+    buf.draw_line(start.screen_x, start.screen_y, end.screen_x, end.screen_y, r, g, b, a);
 }
 
 } // anonymous namespace
@@ -583,6 +601,173 @@ void render_numeric_axis_ticks(lv_layer_t* layer, const bed_mesh_renderer_t* ren
             x_min_world, y_max_world, z_world, canvas_width, canvas_height, &renderer->view_state);
         draw_axis_tick_label(layer, &label_dsc, tick.screen_x, tick.screen_y, Z_LABEL_OFFSET_X,
                              Z_LABEL_OFFSET_Y, z_mm, canvas_width, canvas_height, true);
+    }
+}
+
+// ============================================================================
+// Buffer-targeted overloads (no LVGL calls — safe for background threads)
+// ============================================================================
+
+void render_grid_lines(PixelBuffer& buf, const bed_mesh_renderer_t* renderer, int canvas_width,
+                       int canvas_height, uint8_t line_r, uint8_t line_g, uint8_t line_b) {
+    if (!renderer || !renderer->has_mesh_data) {
+        return;
+    }
+
+    // Opacity: 70% = ~178/255
+    constexpr uint8_t grid_alpha = 178;
+
+    // Use cached projected screen coordinates (SOA arrays)
+    const auto& screen_x = renderer->projected_screen_x;
+    const auto& screen_y = renderer->projected_screen_y;
+
+    // Draw horizontal grid lines (connect points in same row)
+    for (int row = 0; row < renderer->rows; row++) {
+        for (int col = 0; col < renderer->cols - 1; col++) {
+            int p1_x = screen_x[static_cast<size_t>(row)][static_cast<size_t>(col)];
+            int p1_y = screen_y[static_cast<size_t>(row)][static_cast<size_t>(col)];
+            int p2_x = screen_x[static_cast<size_t>(row)][static_cast<size_t>(col + 1)];
+            int p2_y = screen_y[static_cast<size_t>(row)][static_cast<size_t>(col + 1)];
+
+            if (is_line_visible(p1_x, p1_y, p2_x, p2_y, canvas_width, canvas_height)) {
+                buf.draw_line(p1_x, p1_y, p2_x, p2_y, line_r, line_g, line_b, grid_alpha);
+            }
+        }
+    }
+
+    // Draw vertical grid lines (connect points in same column)
+    for (int col = 0; col < renderer->cols; col++) {
+        for (int row = 0; row < renderer->rows - 1; row++) {
+            int p1_x = screen_x[static_cast<size_t>(row)][static_cast<size_t>(col)];
+            int p1_y = screen_y[static_cast<size_t>(row)][static_cast<size_t>(col)];
+            int p2_x = screen_x[static_cast<size_t>(row + 1)][static_cast<size_t>(col)];
+            int p2_y = screen_y[static_cast<size_t>(row + 1)][static_cast<size_t>(col)];
+
+            if (is_line_visible(p1_x, p1_y, p2_x, p2_y, canvas_width, canvas_height)) {
+                buf.draw_line(p1_x, p1_y, p2_x, p2_y, line_r, line_g, line_b, grid_alpha);
+            }
+        }
+    }
+}
+
+void render_reference_floor(PixelBuffer& buf, const bed_mesh_renderer_t* renderer, int canvas_width,
+                            int canvas_height, uint8_t line_r, uint8_t line_g, uint8_t line_b) {
+    render_reference_grids(buf, renderer, canvas_width, canvas_height, line_r, line_g, line_b);
+}
+
+void render_reference_walls(PixelBuffer& buf, const bed_mesh_renderer_t* renderer,
+                            int /*canvas_width*/, int /*canvas_height*/, uint8_t /*line_r*/,
+                            uint8_t /*line_g*/, uint8_t /*line_b*/) {
+    // Stub - merged into render_reference_grids
+    (void)buf;
+    (void)renderer;
+}
+
+void render_reference_grids(PixelBuffer& buf, const bed_mesh_renderer_t* renderer, int canvas_width,
+                            int canvas_height, uint8_t line_r, uint8_t line_g, uint8_t line_b) {
+    if (!renderer || !renderer->has_mesh_data) {
+        return;
+    }
+
+    // Opacity: 60% = ~153/255
+    constexpr uint8_t ref_alpha = 153;
+
+    // Use PRINTER BED bounds for grid extent (not mesh bounds)
+    double bed_half_width, bed_half_height;
+    if (renderer->has_bed_bounds) {
+        bed_half_width = (renderer->bed_max_x - renderer->bed_min_x) / 2.0 * renderer->coord_scale;
+        bed_half_height = (renderer->bed_max_y - renderer->bed_min_y) / 2.0 * renderer->coord_scale;
+    } else {
+        bed_half_width = (renderer->cols - 1) / 2.0 * BED_MESH_SCALE;
+        bed_half_height = (renderer->rows - 1) / 2.0 * BED_MESH_SCALE;
+    }
+
+    // Get printer-mm coordinate ranges
+    double x_min_mm, x_max_mm, y_min_mm, y_max_mm;
+    double bed_center_x, bed_center_y, coord_scale;
+    if (renderer->has_bed_bounds && renderer->geometry_computed) {
+        x_min_mm = renderer->bed_min_x;
+        x_max_mm = renderer->bed_max_x;
+        y_min_mm = renderer->bed_min_y;
+        y_max_mm = renderer->bed_max_y;
+        bed_center_x = renderer->bed_center_x;
+        bed_center_y = renderer->bed_center_y;
+        coord_scale = renderer->coord_scale;
+    } else {
+        x_min_mm = 0.0;
+        x_max_mm = (renderer->cols - 1) * BED_MESH_SCALE;
+        y_min_mm = 0.0;
+        y_max_mm = (renderer->rows - 1) * BED_MESH_SCALE;
+        bed_center_x = x_max_mm / 2.0;
+        bed_center_y = y_max_mm / 2.0;
+        coord_scale = 1.0;
+    }
+
+    // Round to first/last grid line positions (aligned to GRID_SPACING_MM)
+    double x_grid_start = std::ceil(x_min_mm / GRID_SPACING_MM) * GRID_SPACING_MM;
+    double x_grid_end = std::floor(x_max_mm / GRID_SPACING_MM) * GRID_SPACING_MM;
+    double y_grid_start = std::ceil(y_min_mm / GRID_SPACING_MM) * GRID_SPACING_MM;
+    double y_grid_end = std::floor(y_max_mm / GRID_SPACING_MM) * GRID_SPACING_MM;
+
+    // Convert grid bounds to world coordinates for wall positioning
+    double x_min = helix::mesh::printer_x_to_world_x(x_grid_start, bed_center_x, coord_scale);
+    double x_max = helix::mesh::printer_x_to_world_x(x_grid_end, bed_center_x, coord_scale);
+    double y_min =
+        helix::mesh::printer_y_to_world_y(y_grid_end, bed_center_y, coord_scale); // Y inverted
+    double y_max =
+        helix::mesh::printer_y_to_world_y(y_grid_start, bed_center_y, coord_scale); // Y inverted
+
+    // Calculate Z range and wall bounds
+    double z_min_world = helix::mesh::mesh_z_to_world_z(
+        renderer->mesh_min_z, renderer->cached_z_center, renderer->view_state.z_scale);
+    double z_max_world = helix::mesh::mesh_z_to_world_z(
+        renderer->mesh_max_z, renderer->cached_z_center, renderer->view_state.z_scale);
+
+    auto bounds =
+        helix::mesh::compute_wall_bounds(z_min_world, z_max_world, bed_half_width, bed_half_height);
+    double z_floor = bounds.floor_z;
+    double z_ceiling = bounds.ceiling_z;
+
+    // ========== 1. BOTTOM GRID (XY plane at Z=z_floor) ==========
+    for (double x_mm = x_grid_start; x_mm <= x_max_mm + 0.001; x_mm += GRID_SPACING_MM) {
+        double x_world = helix::mesh::printer_x_to_world_x(x_mm, bed_center_x, coord_scale);
+        draw_axis_line_to_buffer(buf, line_r, line_g, line_b, ref_alpha, x_world, y_min, z_floor,
+                                 x_world, y_max, z_floor, canvas_width, canvas_height,
+                                 &renderer->view_state);
+    }
+    for (double y_mm = y_grid_start; y_mm <= y_max_mm + 0.001; y_mm += GRID_SPACING_MM) {
+        double y_world = helix::mesh::printer_y_to_world_y(y_mm, bed_center_y, coord_scale);
+        draw_axis_line_to_buffer(buf, line_r, line_g, line_b, ref_alpha, x_min, y_world, z_floor,
+                                 x_max, y_world, z_floor, canvas_width, canvas_height,
+                                 &renderer->view_state);
+    }
+
+    // ========== 2. BACK WALL GRID (XZ plane at Y=y_min) ==========
+    for (double x_mm = x_grid_start; x_mm <= x_max_mm + 0.001; x_mm += GRID_SPACING_MM) {
+        double x_world = helix::mesh::printer_x_to_world_x(x_mm, bed_center_x, coord_scale);
+        draw_axis_line_to_buffer(buf, line_r, line_g, line_b, ref_alpha, x_world, y_min, z_floor,
+                                 x_world, y_min, z_ceiling, canvas_width, canvas_height,
+                                 &renderer->view_state);
+    }
+    double wall_z_range = z_ceiling - z_floor;
+    double wall_z_spacing = wall_z_range / Z_AXIS_SEGMENT_COUNT;
+    if (wall_z_spacing < 0.5)
+        wall_z_spacing = wall_z_range / 3.0;
+    for (double z = z_floor; z <= z_ceiling + 0.01; z += wall_z_spacing) {
+        draw_axis_line_to_buffer(buf, line_r, line_g, line_b, ref_alpha, x_min, y_min, z, x_max,
+                                 y_min, z, canvas_width, canvas_height, &renderer->view_state);
+    }
+
+    // ========== 3. LEFT WALL GRID (YZ plane at X=x_min) ==========
+    for (double y_mm = y_grid_start; y_mm <= y_max_mm + 0.001; y_mm += GRID_SPACING_MM) {
+        double y_world = helix::mesh::printer_y_to_world_y(y_mm, bed_center_y, coord_scale);
+        draw_axis_line_to_buffer(buf, line_r, line_g, line_b, ref_alpha, x_min, y_world, z_floor,
+                                 x_min, y_world, z_ceiling, canvas_width, canvas_height,
+                                 &renderer->view_state);
+    }
+    for (double z = z_floor; z <= z_ceiling + 0.01; z += wall_z_spacing) {
+        draw_axis_line_to_buffer(buf, line_r, line_g, line_b, ref_alpha, x_min, y_min, z, x_min,
+                                 y_max, z, canvas_width, canvas_height, &renderer->view_state);
     }
 }
 

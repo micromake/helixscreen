@@ -77,7 +77,9 @@ void PrinterCalibrationState::update_from_status(const nlohmann::json& status) {
             // Store as microns (multiply by 1000) for integer subject with 0.001mm resolution
             double z_mm = mp["z_position"].get<double>();
             int z_microns = static_cast<int>(z_mm * 1000.0);
-            lv_subject_set_int(&manual_probe_z_position_, z_microns);
+            if (lv_subject_get_int(&manual_probe_z_position_) != z_microns) {
+                lv_subject_set_int(&manual_probe_z_position_, z_microns);
+            }
             spdlog::trace("[PrinterCalibrationState] Manual probe Z: {:.3f}mm", z_mm);
         }
     }
@@ -132,28 +134,36 @@ void PrinterCalibrationState::update_from_status(const nlohmann::json& status) {
         if (fr.contains("retract_length") && fr["retract_length"].is_number()) {
             // Store as centimillimeters (x100) to preserve 0.01mm precision
             int centimm = helix::units::json_to_centimm(fr, "retract_length");
-            lv_subject_set_int(&retract_length_, centimm);
-            spdlog::trace("[PrinterCalibrationState] Retract length: {:.2f}mm",
-                          helix::units::from_centimm(centimm));
+            if (lv_subject_get_int(&retract_length_) != centimm) {
+                lv_subject_set_int(&retract_length_, centimm);
+                spdlog::trace("[PrinterCalibrationState] Retract length: {:.2f}mm",
+                              helix::units::from_centimm(centimm));
+            }
         }
 
         if (fr.contains("retract_speed") && fr["retract_speed"].is_number()) {
             int speed = static_cast<int>(fr["retract_speed"].get<double>());
-            lv_subject_set_int(&retract_speed_, speed);
-            spdlog::trace("[PrinterCalibrationState] Retract speed: {}mm/s", speed);
+            if (lv_subject_get_int(&retract_speed_) != speed) {
+                lv_subject_set_int(&retract_speed_, speed);
+                spdlog::trace("[PrinterCalibrationState] Retract speed: {}mm/s", speed);
+            }
         }
 
         if (fr.contains("unretract_extra_length") && fr["unretract_extra_length"].is_number()) {
             int centimm = helix::units::json_to_centimm(fr, "unretract_extra_length");
-            lv_subject_set_int(&unretract_extra_length_, centimm);
-            spdlog::trace("[PrinterCalibrationState] Unretract extra: {:.2f}mm",
-                          helix::units::from_centimm(centimm));
+            if (lv_subject_get_int(&unretract_extra_length_) != centimm) {
+                lv_subject_set_int(&unretract_extra_length_, centimm);
+                spdlog::trace("[PrinterCalibrationState] Unretract extra: {:.2f}mm",
+                              helix::units::from_centimm(centimm));
+            }
         }
 
         if (fr.contains("unretract_speed") && fr["unretract_speed"].is_number()) {
             int speed = static_cast<int>(fr["unretract_speed"].get<double>());
-            lv_subject_set_int(&unretract_speed_, speed);
-            spdlog::trace("[PrinterCalibrationState] Unretract speed: {}mm/s", speed);
+            if (lv_subject_get_int(&unretract_speed_) != speed) {
+                lv_subject_set_int(&unretract_speed_, speed);
+                spdlog::trace("[PrinterCalibrationState] Unretract speed: {}mm/s", speed);
+            }
         }
     }
 }

@@ -24,6 +24,7 @@ These docs are **end-user facing**. They must be written for people who are NOT 
 | `guide/motion.md` | Jog pad, homing, distance increments, E-stop |
 | `guide/filament.md` | Extrusion, AMS, Spoolman, dryer control |
 | `guide/calibration.md` | Bed mesh, screws tilt, input shaper, PID |
+| `guide/touch-calibration.md` | Touch screen calibration, forcing recalibration, config reference |
 | `guide/settings.md` | Settings hub page with links to sub-pages |
 | `guide/settings/appearance.md` | Language, animations, 3D preview, display settings |
 | `guide/settings/printer.md` | Filament sensors, AMS, Spoolman, LEDs, retraction, macros |

@@ -697,7 +697,7 @@ void GcodeTestPanel::handle_specular_change(lv_obj_t* slider) {
         shininess = (float)lv_slider_get_value(shininess_slider);
     }
 
-    // Update TinyGL material
+    // Update material
     ui_gcode_viewer_set_specular(gcode_viewer_, intensity, shininess);
 }
 
@@ -722,7 +722,7 @@ void GcodeTestPanel::handle_shininess_change(lv_obj_t* slider) {
         intensity = lv_slider_get_value(intensity_slider) / 100.0f;
     }
 
-    // Update TinyGL material
+    // Update material
     ui_gcode_viewer_set_specular(gcode_viewer_, intensity, (float)value);
 }
 

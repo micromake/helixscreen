@@ -55,6 +55,7 @@ class MoonrakerAdvancedAPI {
     static constexpr uint32_t SHAPER_TIMEOUT_MS =
         300000; // 5 min - SHAPER_CALIBRATE, MEASURE_AXES_NOISE
     static constexpr uint32_t PID_TIMEOUT_MS = 900000; // 15 min - PID_CALIBRATE
+    static constexpr uint32_t MPC_TIMEOUT_MS = 900000; // 15 min - MPC_CALIBRATE
     static constexpr uint32_t PROBING_TIMEOUT_MS =
         180000; // 3 min - PROBE_CALIBRATE, Z_ENDSTOP_CALIBRATE
 
@@ -70,11 +71,29 @@ class MoonrakerAdvancedAPI {
     /// Callback for input shaper configuration query
     using InputShaperConfigCallback = std::function<void(const InputShaperConfig&)>;
 
+    /// Callback for heater control type query (returns "pid", "mpc", etc.)
+    using HeaterControlTypeCallback = std::function<void(const std::string& control_type)>;
+
     /// Callback for PID calibration progress (sample number, tolerance value; -1.0 = n/a)
     using PIDProgressCallback = std::function<void(int sample, float tolerance)>;
 
     /// Callback for PID calibration result
     using PIDCalibrateCallback = std::function<void(float kp, float ki, float kd)>;
+
+    /// Result struct for MPC calibration
+    struct MPCResult {
+        float block_heat_capacity = 0;
+        float sensor_responsiveness = 0;
+        float ambient_transfer = 0;
+        std::string fan_ambient_transfer; // Comma-separated values like "0.12, 0.18, 0.25"
+    };
+
+    /// Callback for MPC calibration result
+    using MPCCalibrateCallback = std::function<void(const MPCResult&)>;
+
+    /// Progress callback for MPC calibration (phase, total_phases, description)
+    using MPCProgressCallback =
+        std::function<void(int phase, int total_phases, const std::string& description)>;
 
     /**
      * @brief Constructor
@@ -302,6 +321,20 @@ class MoonrakerAdvancedAPI {
                                        ErrorCallback on_error);
 
     /**
+     * @brief Query the control type for a heater from printer configuration
+     *
+     * Queries configfile.settings to determine if a heater uses PID or MPC control.
+     * Returns "pid" by default if the control key is missing.
+     *
+     * @param heater Heater name ("extruder", "heater_bed", etc.)
+     * @param on_complete Called with control type string ("pid", "mpc", etc.)
+     * @param on_error Called if the heater cannot be found in config
+     */
+    virtual void get_heater_control_type(const std::string& heater,
+                                         HeaterControlTypeCallback on_complete,
+                                         ErrorCallback on_error);
+
+    /**
      * @brief Start PID calibration for a heater
      *
      * Executes PID_CALIBRATE HEATER={heater} TARGET={target_temp} command
@@ -315,6 +348,27 @@ class MoonrakerAdvancedAPI {
     virtual void start_pid_calibrate(const std::string& heater, int target_temp,
                                      PIDCalibrateCallback on_complete, ErrorCallback on_error,
                                      PIDProgressCallback on_progress = nullptr);
+
+    /**
+     * @brief Start MPC calibration for a heater (Kalico/Danger Klipper)
+     *
+     * Executes MPC_CALIBRATE HEATER={heater} TARGET={target_temp} command
+     * and collects multi-line results via gcode_response parsing.
+     *
+     * MPC calibration goes through multiple phases: ambient settling, heatup test,
+     * and fan breakpoint measurements before producing final calibration values.
+     *
+     * @param heater Heater name ("extruder", etc.)
+     * @param target_temp Target temperature for calibration
+     * @param fan_breakpoints Number of fan speed breakpoints to measure (0 = default)
+     * @param on_complete Called with MPCResult on success
+     * @param on_error Called on failure
+     * @param on_progress Called for each calibration phase (phase, total_phases, description)
+     */
+    virtual void start_mpc_calibrate(const std::string& heater, int target_temp,
+                                     int fan_breakpoints, MPCCalibrateCallback on_complete,
+                                     ErrorCallback on_error,
+                                     MPCProgressCallback on_progress = nullptr);
 
     // ========================================================================
     // Machine Limits Operations

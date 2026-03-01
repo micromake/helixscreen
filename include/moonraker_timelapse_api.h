@@ -149,6 +149,6 @@ class MoonrakerTimelapseAPI {
     void launch_http_thread(std::function<void()> func);
 
     mutable std::mutex http_threads_mutex_;
-    std::list<std::thread> http_threads_;
+    std::list<std::pair<std::thread, std::shared_ptr<std::atomic<bool>>>> http_threads_;
     std::atomic<bool> shutting_down_{false};
 };

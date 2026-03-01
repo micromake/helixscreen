@@ -10,13 +10,16 @@
 #include "ui_carousel.h"
 #include "ui_confetti.h"
 #include "ui_fan_dial.h"
+#include "ui_overlay_temp_graph.h"
 #include "ui_fonts.h"
 #include "ui_gcode_viewer.h"
 #include "ui_hsv_picker.h"
 #include "ui_icon_codepoints.h"
 #include "ui_markdown.h"
 #include "ui_notification_badge.h"
+#include "ui_panel_home.h"
 #include "ui_panel_settings.h"
+#include "ui_progress_bar.h"
 #include "ui_spinner.h"
 #include "ui_spool_canvas.h"
 #include "ui_switch.h"
@@ -155,6 +158,10 @@ void register_xml_components() {
     // Global utility callbacks used by multiple components
     lv_xml_register_event_cb(nullptr, "on_toggle_password_visibility",
                              on_toggle_password_visibility);
+    lv_xml_register_event_cb(nullptr, "on_edit_done_clicked",
+                             [](lv_event_t*) { get_global_home_panel().exit_grid_edit_mode(); });
+    lv_xml_register_event_cb(nullptr, "on_edit_add_widget_clicked",
+                             [](lv_event_t*) { get_global_home_panel().open_widget_catalog(); });
     lv_subject_init_int(&s_noop_subject, 0);
     lv_xml_register_subject(nullptr, "", &s_noop_subject);
     s_noop_subject_initialized = true;
@@ -170,6 +177,10 @@ void register_xml_components() {
     ui_ams_current_tool_init();       // AMS current tool indicator callbacks
     // NOTE: Other AMS widgets (ams_slot, filament_path_canvas) are
     // registered lazily in ui_panel_ams.cpp when the AMS panel is first accessed
+
+    // AMS edit modal (MUST be after spool_canvas and hsv_picker registration)
+    // Registered globally so FilamentPanel can use it without AMS panel lazy init
+    register_xml("ams_edit_modal.xml");
 
     // Spoolman components (MUST be after spool_canvas registration)
     register_xml("spoolman_spool_row.xml");
@@ -197,6 +208,7 @@ void register_xml_components() {
     register_xml("header_bar.xml");
     register_xml("overlay_backdrop.xml");
     register_xml("overlay_panel.xml");
+    register_xml("widget_catalog_overlay.xml");
     register_xml("toast_notification.xml");
 
     // Utility components (dividers, button rows, headers - used by modals and other components)
@@ -210,6 +222,10 @@ void register_xml_components() {
     register_xml("info_note.xml");
     register_xml("form_field.xml");
     register_xml("ui_multiselect.xml");
+
+    // Shared progress bar component (gradient indicator)
+    ui_progress_bar_init();
+    register_xml("components/progress_bar.xml");
 
     // Beta feature indicators (badge before wrapper - dependency order)
     register_xml("beta_badge.xml");
@@ -233,6 +249,7 @@ void register_xml_components() {
     register_xml("modal_dialog.xml");
     register_xml("numeric_keypad_panel.xml");
     register_xml("runout_guidance_modal.xml");
+    register_xml("shutdown_modal.xml");
     register_xml("plugin_install_modal.xml");
     register_xml("macro_enhance_modal.xml");
     register_xml("action_prompt_modal.xml");
@@ -244,6 +261,7 @@ void register_xml_components() {
     register_xml("print_file_detail.xml");
 
     // Panel widget components (dynamic instantiation from PanelWidgetConfig)
+    register_xml("components/panel_widget_printer_image.xml");
     register_xml("components/panel_widget_power.xml");
     register_xml("components/panel_widget_network.xml");
     register_xml("components/panel_widget_notifications.xml");
@@ -251,15 +269,22 @@ void register_xml_components() {
     register_xml("components/panel_widget_ams.xml");
     register_xml("components/panel_widget_temperature.xml");
     register_xml("components/panel_widget_temp_stack.xml");
+    register_xml("components/panel_widget_temp_carousel.xml");
     register_xml("components/panel_widget_led.xml");
     register_xml("components/panel_widget_humidity.xml");
     register_xml("components/panel_widget_width_sensor.xml");
-    register_xml("components/panel_widget_probe.xml");
     register_xml("components/panel_widget_filament.xml");
     register_xml("components/panel_widget_thermistor.xml");
     register_xml("components/panel_widget_fan_stack.xml");
+    register_xml("components/panel_widget_fan_carousel.xml");
     register_xml("components/panel_widget_favorite_macro_1.xml");
     register_xml("components/panel_widget_favorite_macro_2.xml");
+    register_xml("components/panel_widget_clock.xml");
+    register_xml("components/panel_widget_tips.xml");
+    register_xml("components/panel_widget_print_status.xml");
+    register_xml("components/panel_widget_shutdown.xml");
+    register_xml("components/panel_widget_job_queue.xml");
+    register_xml("job_queue_modal.xml");
     register_xml("thermistor_sensor_picker.xml");
     register_xml("favorite_macro_picker.xml");
     register_xml("macro_param_modal.xml");
@@ -269,9 +294,18 @@ void register_xml_components() {
     register_xml("home_panel.xml");
     register_xml("controls_panel.xml");
     register_xml("motion_panel.xml");
+    // TODO: Remove these old per-heater overlays once application.cpp's
+    // --overlays command-line paths and TempControlPanel::xml_component_name()
+    // are updated to use the unified TempGraphOverlay instead.
     register_xml("nozzle_temp_panel.xml");
     register_xml("bed_temp_panel.xml");
     register_xml("chamber_temp_panel.xml");
+    register_xml("temp_graph_overlay.xml");
+    // Register TempGraphOverlay event callbacks at startup (before XML is parsed)
+    lv_xml_register_event_cb(nullptr, "on_temp_graph_preset_clicked",
+                             TempGraphOverlay::on_temp_graph_preset_clicked);
+    lv_xml_register_event_cb(nullptr, "on_temp_graph_custom_clicked",
+                             TempGraphOverlay::on_temp_graph_custom_clicked);
     register_xml("fan_dial.xml");
     register_fan_dial_callbacks(); // Register FanDial event callbacks
     register_xml("fan_status_card.xml");
@@ -372,6 +406,8 @@ void register_xml_components() {
     register_xml("filament_preset_edit_modal.xml");
     register_xml("wifi_network_item.xml");
     register_xml("telemetry_data_overlay.xml");
+    register_xml("about_settings_overlay.xml");
+    register_xml("material_temps_overlay.xml");
 
     // Printer manager overlay (launched from home screen printer image)
     register_xml("printer_manager_overlay.xml");

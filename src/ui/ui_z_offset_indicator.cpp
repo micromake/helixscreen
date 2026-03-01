@@ -32,6 +32,11 @@ struct ZOffsetIndicatorData {
     int32_t arrow_opacity = 0;  // 0-255, overall opacity (for fade-out phase)
     int arrow_direction = 0;    // +1 (farther/up) or -1 (closer/down)
     bool use_faceted_toolhead = false; // Which nozzle renderer to use
+
+    // Cached theme colors (resolved once at creation, not per-frame)
+    lv_color_t color_text_muted = {};
+    lv_color_t color_text = {};
+    lv_color_t color_primary = {};
 };
 
 // ============================================================================
@@ -141,9 +146,9 @@ static void indicator_draw_cb(lv_event_t* e) {
     int32_t scale_top = coords.y1 + margin_v;
     int32_t scale_bottom = coords.y1 + h - margin_v;
 
-    lv_color_t muted_color = theme_manager_get_color("text_muted");
-    lv_color_t text_color = theme_manager_get_color("text");
-    lv_color_t primary_color = theme_manager_get_color("primary");
+    lv_color_t muted_color = data->color_text_muted;
+    lv_color_t text_color = data->color_text;
+    lv_color_t primary_color = data->color_primary;
     const lv_font_t* font = lv_font_get_default();
     int32_t font_h = lv_font_get_line_height(font);
 
@@ -226,7 +231,7 @@ static void indicator_draw_cb(lv_event_t* e) {
     int32_t nozzle_cx = (scale_x + coords.x1 + w) / 2;
     int32_t nozzle_y = (scale_top + scale_bottom) / 2;
     int32_t nozzle_scale = LV_CLAMP(5, h / 10, 12);
-    lv_color_t nozzle_color = theme_manager_get_color("text");
+    lv_color_t nozzle_color = data->color_text;
 
     if (data->use_faceted_toolhead) {
         draw_nozzle_faceted(layer, nozzle_cx, nozzle_y, nozzle_color, nozzle_scale);
@@ -464,6 +469,9 @@ static void* z_offset_indicator_xml_create(lv_xml_parser_state_t* state, const c
     // Allocate and attach widget data
     auto* data = new ZOffsetIndicatorData{};
     data->use_faceted_toolhead = false;
+    data->color_text_muted = theme_manager_get_color("text_muted");
+    data->color_text = theme_manager_get_color("text");
+    data->color_primary = theme_manager_get_color("primary");
     lv_obj_set_user_data(obj, data);
 
     // Register draw and delete callbacks

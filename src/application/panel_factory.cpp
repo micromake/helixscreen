@@ -79,23 +79,19 @@ void PanelFactory::setup_panels(lv_obj_t* screen) {
 }
 
 bool PanelFactory::create_print_status_overlay(lv_obj_t* screen) {
-    // PrintStatusPanel now inherits from OverlayBase, so use create() directly
+    // Initialize subjects eagerly so observer callbacks work from the start
+    // (e.g., print state changes while user is on a different panel).
+    // Widget tree creation is deferred to first push via PrintStatusPanel::push_overlay().
     auto& print_status = get_global_print_status_panel();
-    m_print_status_panel = print_status.create(screen);
-    if (!m_print_status_panel) {
-        spdlog::error("[PanelFactory] Failed to create print status overlay");
-        return false;
+    if (!print_status.are_subjects_initialized()) {
+        print_status.init_subjects();
     }
 
-    // Register for lifecycle callbacks (on_activate/on_deactivate)
-    // PrintStatusPanel now inherits from OverlayBase directly - no adapter needed
-    NavigationManager::instance().register_overlay_instance(m_print_status_panel, &print_status);
+    // m_print_status_panel stays nullptr — widget tree is created lazily
+    // on first push_overlay() call and destroyed on close to save memory.
+    m_print_status_panel = nullptr;
 
-    // Wire to print select panel
-    get_print_select_panel(get_printer_state(), nullptr)
-        ->set_print_status_panel(m_print_status_panel);
-
-    spdlog::debug("[PanelFactory] Print status overlay created and wired");
+    spdlog::debug("[PanelFactory] Print status overlay initialized (lazy creation)");
     return true;
 }
 

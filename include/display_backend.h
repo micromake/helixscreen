@@ -82,6 +82,46 @@ inline lv_display_rotation_t degrees_to_lv_rotation(int degrees) {
 }
 
 /**
+ * @brief Detect panel orientation from kernel cmdline
+ *
+ * Parses /proc/cmdline for video=*:panel_orientation=* to determine if the
+ * physical panel is mounted rotated. Works on any Linux regardless of display
+ * backend. No spdlog dependency so it's safe for splash binary.
+ *
+ * @return Rotation in degrees (0, 90, 180, 270), or -1 if not detected
+ */
+inline int detect_panel_orientation_from_cmdline() {
+    std::ifstream cmdline("/proc/cmdline");
+    if (!cmdline.is_open()) {
+        return -1;
+    }
+
+    std::string line;
+    std::getline(cmdline, line);
+
+    const std::string needle = "panel_orientation=";
+    auto pos = line.find(needle);
+    if (pos == std::string::npos) {
+        return -1;
+    }
+
+    auto val_start = pos + needle.size();
+    auto val_end = line.find_first_of(" \t\n", val_start);
+    std::string orientation = line.substr(val_start, val_end - val_start);
+
+    if (orientation == "normal")
+        return 0;
+    if (orientation == "upside_down")
+        return 180;
+    if (orientation == "left_side_up")
+        return 90;
+    if (orientation == "right_side_up")
+        return 270;
+
+    return -1;
+}
+
+/**
  * @brief Read display rotation from helixconfig.json
  *
  * Searches standard config paths for the /display/rotate field.
@@ -283,6 +323,33 @@ class DisplayBackend {
     virtual void set_splash_active(bool active) {
         (void)active;
     }
+
+    /**
+     * @brief Update touch rotation transform after display rotation changes
+     *
+     * For fbdev backend, transforms raw evdev touch coordinates to match
+     * the rotated display. No-op for SDL and DRM backends.
+     *
+     * @param rot LVGL rotation enum
+     * @param phys_w Native panel width (pre-rotation)
+     * @param phys_h Native panel height (pre-rotation)
+     */
+    virtual void set_display_rotation(lv_display_rotation_t rot, int phys_w, int phys_h) {
+        (void)rot;
+        (void)phys_w;
+        (void)phys_h;
+    }
+
+    /**
+     * @brief Detect panel orientation from DRM connector properties
+     *
+     * Queries the kernel's DRM connector "panel orientation" property to
+     * determine if the physical panel is mounted rotated. Works even on
+     * fbdev backends since DRM is still present in the kernel.
+     *
+     * @return Rotation in degrees (0, 90, 180, 270), or -1 if not detected
+     */
+    static int detect_panel_orientation();
 
     /**
      * @brief Blank the display (turn off backlight via framebuffer ioctl)

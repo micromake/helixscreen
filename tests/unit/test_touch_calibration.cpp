@@ -2,6 +2,7 @@
 // Copyright (C) 2025-2026 356C LLC
 
 #include "touch_calibration.h"
+#include "touch_calibration_panel.h"
 
 #include "../catch_amalgamated.hpp"
 
@@ -795,4 +796,651 @@ TEST_CASE("TouchCalibration: scoring factors for common touchscreen types",
         REQUIRE(is_usb_input_phys("i2c-1/1-005d") == false);
         // Score: 2 (known name) + 0 (not USB) = 2, plus PROP_DIRECT on real hw
     }
+}
+
+// ============================================================================
+// Post-Compute Validation Tests
+// ============================================================================
+
+TEST_CASE("TouchCalibration: validate_calibration_result accepts good calibration",
+          "[touch-calibration][validate]") {
+    // Identity calibration: residuals should be 0
+    Point screen_points[3] = {{120, 86}, {400, 408}, {680, 86}};
+    Point touch_points[3] = {{120, 86}, {400, 408}, {680, 86}};
+    TouchCalibration cal;
+    compute_calibration(screen_points, touch_points, cal);
+
+    REQUIRE(validate_calibration_result(cal, screen_points, touch_points, 800, 480) == true);
+}
+
+TEST_CASE("TouchCalibration: validate_calibration_result rejects high residual",
+          "[touch-calibration][validate]") {
+    // Manually craft a calibration with large back-transform error
+    TouchCalibration cal;
+    cal.valid = true;
+    cal.a = 0.5f;
+    cal.b = 0.0f;
+    cal.c = 0.0f;
+    cal.d = 0.0f;
+    cal.e = 0.5f;
+    cal.f = 0.0f;
+
+    Point screen_points[3] = {{120, 86}, {400, 408}, {680, 86}};
+    Point touch_points[3] = {{120, 86}, {400, 408}, {680, 86}};
+
+    REQUIRE(validate_calibration_result(cal, screen_points, touch_points, 800, 480) == false);
+}
+
+TEST_CASE("TouchCalibration: validate_calibration_result rejects off-screen center",
+          "[touch-calibration][validate]") {
+    TouchCalibration cal;
+    cal.valid = true;
+    cal.a = 1.0f;
+    cal.b = 0.0f;
+    cal.c = 5000.0f;
+    cal.d = 0.0f;
+    cal.e = 1.0f;
+    cal.f = 0.0f;
+
+    Point screen_points[3] = {{120, 86}, {400, 408}, {680, 86}};
+    Point touch_points[3] = {{500, 500}, {2000, 3500}, {3500, 500}};
+
+    REQUIRE(validate_calibration_result(cal, screen_points, touch_points, 800, 480) == false);
+}
+
+TEST_CASE("TouchCalibration: validate_calibration_result accepts real ns2009 calibration",
+          "[touch-calibration][validate]") {
+    TouchCalibration cal;
+    cal.valid = true;
+    cal.a = 0.1258f;
+    cal.b = -0.0025f;
+    cal.c = -12.63f;
+    cal.d = -0.0005f;
+    cal.e = 0.0748f;
+    cal.f = -16.20f;
+
+    // Approximate raw->screen mapping for 480x272 display with 12-bit ADC
+    Point screen_points[3] = {{72, 49}, {240, 231}, {408, 49}};
+    Point touch_points[3] = {{673, 872}, {2007, 3307}, {3342, 872}};
+
+    REQUIRE(validate_calibration_result(cal, screen_points, touch_points, 480, 272) == true);
+}
+
+// ============================================================================
+// Multi-Sample Input Filtering Tests
+// ============================================================================
+
+TEST_CASE("TouchCalibrationPanel: accepts clean samples after threshold",
+          "[touch-calibration][filtering]") {
+    helix::TouchCalibrationPanel panel;
+    panel.set_screen_size(800, 480);
+    panel.start();
+
+    REQUIRE(panel.get_state() == helix::TouchCalibrationPanel::State::POINT_1);
+
+    // Feed 7 clean samples — should advance to POINT_2
+    for (int i = 0; i < 7; i++) {
+        panel.add_sample({1000, 2000});
+    }
+    REQUIRE(panel.get_state() == helix::TouchCalibrationPanel::State::POINT_2);
+}
+
+TEST_CASE("TouchCalibrationPanel: rejects ADC-saturated samples",
+          "[touch-calibration][filtering]") {
+    helix::TouchCalibrationPanel panel;
+    panel.set_screen_size(800, 480);
+    panel.start();
+
+    // Feed 4 clean + 3 saturated (X=4095) — should still advance (4 valid >= 3 minimum)
+    for (int i = 0; i < 4; i++) {
+        panel.add_sample({1000, 2000});
+    }
+    for (int i = 0; i < 3; i++) {
+        panel.add_sample({4095, 2000});
+    }
+    REQUIRE(panel.get_state() == helix::TouchCalibrationPanel::State::POINT_2);
+}
+
+TEST_CASE("TouchCalibrationPanel: fails when too many saturated samples",
+          "[touch-calibration][filtering]") {
+    helix::TouchCalibrationPanel panel;
+    panel.set_screen_size(800, 480);
+
+    bool failure_called = false;
+    panel.set_failure_callback([&](const char*) { failure_called = true; });
+    panel.start();
+
+    // Feed 2 clean + 5 saturated — only 2 valid, below minimum of 3
+    for (int i = 0; i < 2; i++) {
+        panel.add_sample({1000, 2000});
+    }
+    for (int i = 0; i < 5; i++) {
+        panel.add_sample({4095, 3500});
+    }
+
+    // Should still be on POINT_1 (not advanced) and failure callback fired
+    REQUIRE(panel.get_state() == helix::TouchCalibrationPanel::State::POINT_1);
+    REQUIRE(failure_called == true);
+}
+
+TEST_CASE("TouchCalibrationPanel: rejects calibration with bad matrix",
+          "[touch-calibration][panel-validate]") {
+    helix::TouchCalibrationPanel panel;
+    panel.set_screen_size(800, 480);
+
+    bool failure_called = false;
+    std::string failure_reason;
+    panel.set_failure_callback([&](const char* reason) {
+        failure_called = true;
+        failure_reason = reason;
+    });
+    panel.start();
+
+    // Capture 3 points that produce a valid but terrible matrix
+    // Points very close together (not collinear, so compute_calibration succeeds)
+    // but resulting matrix will have huge residuals
+    panel.capture_point({100, 100});
+    panel.capture_point({102, 100});
+    panel.capture_point({100, 102});
+
+    // Should restart to POINT_1 (not enter VERIFY)
+    REQUIRE(panel.get_state() == helix::TouchCalibrationPanel::State::POINT_1);
+    REQUIRE(failure_called == true);
+    REQUIRE(failure_reason.find("unusual") != std::string::npos);
+}
+
+TEST_CASE("TouchCalibrationPanel: median filter removes outliers",
+          "[touch-calibration][filtering]") {
+    helix::TouchCalibrationPanel panel;
+    panel.set_screen_size(800, 480);
+    panel.start();
+
+    // Point 1: mostly 1000,2000 with one outlier
+    panel.add_sample({1000, 2000});
+    panel.add_sample({1000, 2000});
+    panel.add_sample({1000, 2000});
+    panel.add_sample({500, 3000}); // outlier
+    panel.add_sample({1000, 2000});
+    panel.add_sample({1000, 2000});
+    panel.add_sample({1000, 2000});
+    // Median should be (1000, 2000), not skewed by outlier
+
+    REQUIRE(panel.get_state() == helix::TouchCalibrationPanel::State::POINT_2);
+}
+
+// ============================================================================
+// ABS Capabilities Parsing Tests (parse_abs_capabilities)
+// ============================================================================
+
+TEST_CASE("TouchCalibration: parse_abs_capabilities basic cases",
+          "[touch-calibration][capabilities]") {
+    SECTION("single-touch only (ABS_X + ABS_Y)") {
+        // "3" = 0x3 → bits 0 and 1 set
+        auto caps = parse_abs_capabilities("3");
+        REQUIRE(caps.has_single_touch == true);
+        REQUIRE(caps.has_multitouch == false);
+    }
+
+    SECTION("both single-touch and MT in one word") {
+        // "600003" = 0x600003 → bits 0,1 (ST) and bits 21,22 of this word
+        // But this is a SINGLE word covering bits 0-31 only.
+        // MT bits 53,54 need word index 1 (bits 32-63).
+        // So "600003" has ST but NOT MT (bits 21,22 are ABS_HAT0X/ABS_HAT0Y, not MT).
+        auto caps = parse_abs_capabilities("600003");
+        REQUIRE(caps.has_single_touch == true);
+        // 0x600000 in word[0] is NOT MT — MT needs word[1]
+        REQUIRE(caps.has_multitouch == false);
+    }
+
+    SECTION("MT-only (no legacy single-touch)") {
+        // "600000 0" → word[1]=0x600000 (MT bits), word[0]=0 (no ST)
+        // After reversal: words[0]=0, words[1]=0x600000
+        auto caps = parse_abs_capabilities("600000 0");
+        REQUIRE(caps.has_single_touch == false);
+        REQUIRE(caps.has_multitouch == true);
+    }
+
+    SECTION("both MT and single-touch (two words)") {
+        // "600000 3" → word[1]=0x600000, word[0]=3
+        auto caps = parse_abs_capabilities("600000 3");
+        REQUIRE(caps.has_single_touch == true);
+        REQUIRE(caps.has_multitouch == true);
+    }
+
+    SECTION("no touch capabilities") {
+        auto caps = parse_abs_capabilities("0");
+        REQUIRE(caps.has_single_touch == false);
+        REQUIRE(caps.has_multitouch == false);
+    }
+
+    SECTION("empty string") {
+        auto caps = parse_abs_capabilities("");
+        REQUIRE(caps.has_single_touch == false);
+        REQUIRE(caps.has_multitouch == false);
+    }
+
+    SECTION("only ABS_X, no ABS_Y") {
+        // "1" = bit 0 only
+        auto caps = parse_abs_capabilities("1");
+        REQUIRE(caps.has_single_touch == false);
+        REQUIRE(caps.has_multitouch == false);
+    }
+
+    SECTION("only ABS_Y, no ABS_X") {
+        // "2" = bit 1 only
+        auto caps = parse_abs_capabilities("2");
+        REQUIRE(caps.has_single_touch == false);
+        REQUIRE(caps.has_multitouch == false);
+    }
+}
+
+TEST_CASE("TouchCalibration: parse_abs_capabilities real-world devices",
+          "[touch-calibration][capabilities]") {
+    SECTION("AD5M sun4i_ts resistive: single-touch only") {
+        // sun4i_ts reports ABS_X + ABS_Y only (no MT)
+        auto caps = parse_abs_capabilities("3");
+        REQUIRE(caps.has_single_touch == true);
+        REQUIRE(caps.has_multitouch == false);
+    }
+
+    SECTION("Goodix gt9xxnew_ts MT-only (Nebula Pad bug scenario)") {
+        // Goodix driver reports ABS_MT_POSITION_X (53) + ABS_MT_POSITION_Y (54)
+        // but NOT legacy ABS_X (0) / ABS_Y (1).
+        auto caps = parse_abs_capabilities("600000 0");
+        REQUIRE(caps.has_single_touch == false);
+        REQUIRE(caps.has_multitouch == true);
+    }
+
+    SECTION("Goodix gt9xx_ts on 64-bit Allwinner (real user device)") {
+        // From /proc/bus/input/devices on Allwinner H616 (aarch64):
+        //   B: ABS=265000000000000
+        // Single 64-bit word (>8 hex digits). Bits set:
+        //   48 (MT_TOUCH_MAJOR), 50 (MT_WIDTH_MAJOR),
+        //   53 (MT_POSITION_X), 54 (MT_POSITION_Y), 57 (MT_TRACKING_ID)
+        auto caps = parse_abs_capabilities("265000000000000");
+        REQUIRE(caps.has_single_touch == false);
+        REQUIRE(caps.has_multitouch == true);
+    }
+
+    SECTION("Goodix GT911 with both ST and MT") {
+        // Many Goodix drivers report both legacy and MT axes
+        auto caps = parse_abs_capabilities("660000 3");
+        REQUIRE(caps.has_single_touch == true);
+        REQUIRE(caps.has_multitouch == true);
+    }
+
+    SECTION("BTT HDMI5 USB HID touchscreen") {
+        // USB HID typically reports ABS_X + ABS_Y (single-touch only)
+        auto caps = parse_abs_capabilities("3");
+        REQUIRE(caps.has_single_touch == true);
+        REQUIRE(caps.has_multitouch == false);
+    }
+
+    SECTION("multi-word with three hex groups") {
+        // "0 600000 3" → words[0]=3, words[1]=0x600000, words[2]=0
+        auto caps = parse_abs_capabilities("0 600000 3");
+        REQUIRE(caps.has_single_touch == true);
+        REQUIRE(caps.has_multitouch == true);
+    }
+}
+
+TEST_CASE("TouchCalibration: parse_abs_capabilities edge cases",
+          "[touch-calibration][capabilities]") {
+    SECTION("leading zeros in hex") {
+        auto caps = parse_abs_capabilities("0000600000 00000003");
+        REQUIRE(caps.has_single_touch == true);
+        REQUIRE(caps.has_multitouch == true);
+    }
+
+    SECTION("extra whitespace between words") {
+        // istringstream handles multiple spaces
+        auto caps = parse_abs_capabilities("600000  3");
+        REQUIRE(caps.has_single_touch == true);
+        REQUIRE(caps.has_multitouch == true);
+    }
+
+    SECTION("invalid hex returns no capabilities") {
+        auto caps = parse_abs_capabilities("xyz");
+        REQUIRE(caps.has_single_touch == false);
+        REQUIRE(caps.has_multitouch == false);
+    }
+
+    SECTION("MT bit ABS_MT_POSITION_X only (no ABS_MT_POSITION_Y)") {
+        // Only bit 53 (0x200000) set, not bit 54 — incomplete MT
+        auto caps = parse_abs_capabilities("200000 0");
+        REQUIRE(caps.has_multitouch == false);
+    }
+
+    SECTION("MT bit ABS_MT_POSITION_Y only (no ABS_MT_POSITION_X)") {
+        // Only bit 54 (0x400000) set, not bit 53 — incomplete MT
+        auto caps = parse_abs_capabilities("400000 0");
+        REQUIRE(caps.has_multitouch == false);
+    }
+}
+
+// ============================================================================
+// Calibration Decision with MT-only devices
+// ============================================================================
+
+TEST_CASE("TouchCalibration: device_needs_calibration with MT-detected devices",
+          "[touch-calibration][calibration-decision]") {
+    SECTION("Goodix gt9xxnew_ts detected via MT — capacitive, no calibration needed") {
+        // has_abs_xy is true (detected via MT fallback), but Goodix is capacitive
+        REQUIRE(device_needs_calibration("Goodix-TS gt9xxnew_ts", "", true) == false);
+    }
+
+    SECTION("Goodix GT9xx detected via MT — capacitive, no calibration needed") {
+        REQUIRE(device_needs_calibration("gt9xx_ts", "", true) == false);
+    }
+
+    SECTION("MT-only resistive (hypothetical) — would need calibration") {
+        // If a resistive touchscreen only reported MT axes, it would still need cal
+        REQUIRE(device_needs_calibration("sun4i-ts", "sun4i_ts", true) == true);
+    }
+}
+
+// ============================================================================
+// Axis Swap Detection Tests (calibration_suggests_axis_swap)
+// ============================================================================
+//
+// The function computes a "cross-coupling ratio" for original and X/Y-swapped
+// touch points. A good calibration has small cross terms (b, d) relative to
+// primary terms (a, e). When axes are swapped, the cross terms dominate.
+//
+// Metric: cross_ratio = (|b| + |d|) / (|a| + |e| + epsilon)
+// Swap detected when: swapped_ratio < original_ratio * 0.5
+
+TEST_CASE("calibration_suggests_axis_swap: identity transform — no swap",
+          "[touch-calibration][axis-swap]") {
+    // Screen points == touch points → perfect identity (a=1, b=0, d=0, e=1)
+    // Cross ratio = 0 / 2 = 0. Swapping would make it worse.
+    Point screen[3] = {{120, 96}, {400, 374}, {680, 96}};
+    Point touch[3] = {{120, 96}, {400, 374}, {680, 96}};
+
+    TouchCalibration cal;
+    REQUIRE(compute_calibration(screen, touch, cal));
+    REQUIRE_FALSE(calibration_suggests_axis_swap(screen, touch, cal));
+}
+
+TEST_CASE("calibration_suggests_axis_swap: uniform scaling — no swap",
+          "[touch-calibration][axis-swap]") {
+    // Touch 0-4095 range mapped to 800x480 display
+    // Normal scaling: a≈0.195, e≈0.117, b≈0, d≈0 → clean diagonal
+    Point screen[3] = {{120, 96}, {400, 374}, {680, 96}};
+    // Touch coords proportional: tx = sx * 4095/800, ty = sy * 4095/480
+    Point touch[3] = {
+        {static_cast<int>(120 * 4095.0 / 800), static_cast<int>(96 * 4095.0 / 480)},
+        {static_cast<int>(400 * 4095.0 / 800), static_cast<int>(374 * 4095.0 / 480)},
+        {static_cast<int>(680 * 4095.0 / 800), static_cast<int>(96 * 4095.0 / 480)},
+    };
+
+    TouchCalibration cal;
+    REQUIRE(compute_calibration(screen, touch, cal));
+
+    // Verify it IS diagonal-dominant before checking swap detection
+    REQUIRE(std::abs(cal.a) > 0.1f);
+    REQUIRE(std::abs(cal.e) > 0.1f);
+    REQUIRE(std::abs(cal.b) < 0.01f);
+    REQUIRE(std::abs(cal.d) < 0.01f);
+
+    REQUIRE_FALSE(calibration_suggests_axis_swap(screen, touch, cal));
+}
+
+TEST_CASE("calibration_suggests_axis_swap: swapped axes — detects swap",
+          "[touch-calibration][axis-swap]") {
+    // Touch controller reports X/Y swapped relative to display
+    // Normal touch would be (tx, ty) proportional to (sx, sy)
+    // Swapped touch is (ty, tx) — the X value corresponds to screen Y
+    Point screen[3] = {{120, 96}, {400, 374}, {680, 96}};
+
+    // "Normal" touch proportional to screen
+    int tx0 = static_cast<int>(120 * 4095.0 / 800);
+    int ty0 = static_cast<int>(96 * 4095.0 / 480);
+    int tx1 = static_cast<int>(400 * 4095.0 / 800);
+    int ty1 = static_cast<int>(374 * 4095.0 / 480);
+    int tx2 = static_cast<int>(680 * 4095.0 / 800);
+    int ty2 = static_cast<int>(96 * 4095.0 / 480);
+
+    // Swap X↔Y to simulate broken hardware
+    Point swapped_touch[3] = {{ty0, tx0}, {ty1, tx1}, {ty2, tx2}};
+
+    TouchCalibration cal;
+    REQUIRE(compute_calibration(screen, swapped_touch, cal));
+
+    // With swapped input, cross terms should dominate
+    REQUIRE(std::abs(cal.b) > std::abs(cal.a));
+
+    REQUIRE(calibration_suggests_axis_swap(screen, swapped_touch, cal));
+}
+
+TEST_CASE("calibration_suggests_axis_swap: 90° rotation as axis swap",
+          "[touch-calibration][axis-swap]") {
+    // A 90° CW rotation: touch_x→screen_y, touch_y→screen_x
+    // This also produces high cross-coupling
+    Point screen[3] = {{120, 96}, {400, 374}, {680, 96}};
+
+    // Build touch points for 90° rotation: tx = screen_y * scale, ty = screen_x * scale
+    // Using 4095 range for both axes
+    float sx = 4095.0f / 480.0f; // X scale maps to Y range
+    float sy = 4095.0f / 800.0f; // Y scale maps to X range
+    Point touch_90[3] = {
+        {static_cast<int>(96 * sx), static_cast<int>(120 * sy)},
+        {static_cast<int>(374 * sx), static_cast<int>(400 * sy)},
+        {static_cast<int>(96 * sx), static_cast<int>(680 * sy)},
+    };
+
+    TouchCalibration cal;
+    REQUIRE(compute_calibration(screen, touch_90, cal));
+
+    // 90° rotation manifests as swapped axes — should detect
+    REQUIRE(calibration_suggests_axis_swap(screen, touch_90, cal));
+}
+
+TEST_CASE("calibration_suggests_axis_swap: invalid calibration returns false",
+          "[touch-calibration][axis-swap]") {
+    Point screen[3] = {{120, 96}, {400, 374}, {680, 96}};
+    Point touch[3] = {{120, 96}, {400, 374}, {680, 96}};
+
+    TouchCalibration bad_cal;
+    bad_cal.valid = false;
+
+    REQUIRE_FALSE(calibration_suggests_axis_swap(screen, touch, bad_cal));
+}
+
+TEST_CASE("calibration_suggests_axis_swap: degenerate swapped points",
+          "[touch-calibration][axis-swap]") {
+    // If swapping X/Y makes the touch points collinear (degenerate),
+    // compute_calibration on swapped points fails → should return false
+    // even if original has high cross-coupling
+    //
+    // Points where X values are all the same → swapping gives Y all same → collinear
+    Point screen[3] = {{120, 96}, {400, 374}, {680, 96}};
+    Point touch[3] = {{500, 100}, {500, 300}, {500, 600}};
+
+    TouchCalibration cal;
+    // Original may or may not compute (points have same X → might be degenerate)
+    // But if it does compute, swapped points will have same Y → degenerate
+    if (compute_calibration(screen, touch, cal)) {
+        // Swapped would be (100,500),(300,500),(600,500) — all Y=500, collinear
+        REQUIRE_FALSE(calibration_suggests_axis_swap(screen, touch, cal));
+    }
+}
+
+TEST_CASE("calibration_suggests_axis_swap: mild cross-coupling below threshold",
+          "[touch-calibration][axis-swap]") {
+    // A slight rotation (not a full axis swap) produces some cross-coupling
+    // but not enough to trigger the 50% threshold
+    Point screen[3] = {{120, 96}, {400, 374}, {680, 96}};
+
+    // Apply a small rotation (5°) to otherwise clean touch points
+    // cos(5°)≈0.996, sin(5°)≈0.087
+    float c = 0.9962f, s = 0.0872f;
+    float scale = 4095.0f / 800.0f;
+    float pts[][2] = {
+        {120 * scale, 96 * scale}, {400 * scale, 374 * scale}, {680 * scale, 96 * scale}};
+
+    Point rotated_touch[3];
+    for (int i = 0; i < 3; i++) {
+        rotated_touch[i].x = static_cast<int>(pts[i][0] * c - pts[i][1] * s);
+        rotated_touch[i].y = static_cast<int>(pts[i][0] * s + pts[i][1] * c);
+    }
+
+    TouchCalibration cal;
+    REQUIRE(compute_calibration(screen, rotated_touch, cal));
+
+    // Small rotation → cross terms exist but primary terms still dominate
+    // Should NOT trigger axis swap
+    REQUIRE_FALSE(calibration_suggests_axis_swap(screen, rotated_touch, cal));
+}
+
+TEST_CASE("calibration_suggests_axis_swap: Sonic Pad real-world scenario",
+          "[touch-calibration][axis-swap]") {
+    // Simulates the actual Sonic Pad bug: touchscreen axes don't match display.
+    // The user reports d=1.187 (massive X→Y cross-coupling).
+    // Touch X correlates with screen Y, touch Y correlates with screen X.
+    //
+    // Screen targets for 800x480 at standard calibration positions
+    Point screen[3] = {{120, 96}, {400, 374}, {680, 96}};
+
+    // Touch points where X axis tracks screen Y, Y axis tracks screen X
+    // This is what the hardware reports when axes are physically swapped
+    Point touch[3] = {{100, 150}, {380, 500}, {100, 850}};
+
+    TouchCalibration cal;
+    REQUIRE(compute_calibration(screen, touch, cal));
+
+    // Verify the calibration HAS high cross-coupling (the problem we're detecting)
+    float cross = std::abs(cal.b) + std::abs(cal.d);
+    float diag = std::abs(cal.a) + std::abs(cal.e);
+    REQUIRE(cross > diag * 0.5f); // Cross terms are significant
+
+    REQUIRE(calibration_suggests_axis_swap(screen, touch, cal));
+}
+
+TEST_CASE("calibration_suggests_axis_swap: swapped produces better calibration",
+          "[touch-calibration][axis-swap]") {
+    // Verify that when swap IS detected, the swapped calibration is actually better
+    Point screen[3] = {{120, 96}, {400, 374}, {680, 96}};
+
+    // Swapped axes input
+    int tx0 = static_cast<int>(120 * 4095.0 / 800);
+    int ty0 = static_cast<int>(96 * 4095.0 / 480);
+    int tx1 = static_cast<int>(400 * 4095.0 / 800);
+    int ty1 = static_cast<int>(374 * 4095.0 / 480);
+    int tx2 = static_cast<int>(680 * 4095.0 / 800);
+    int ty2 = static_cast<int>(96 * 4095.0 / 480);
+    Point swapped_touch[3] = {{ty0, tx0}, {ty1, tx1}, {ty2, tx2}};
+
+    TouchCalibration orig_cal;
+    REQUIRE(compute_calibration(screen, swapped_touch, orig_cal));
+
+    // Swap the touch points back and recompute
+    Point corrected_touch[3] = {{tx0, ty0}, {tx1, ty1}, {tx2, ty2}};
+    TouchCalibration corrected_cal;
+    REQUIRE(compute_calibration(screen, corrected_touch, corrected_cal));
+
+    // Corrected should have MUCH lower cross-coupling
+    float orig_cross = std::abs(orig_cal.b) + std::abs(orig_cal.d);
+    float orig_diag = std::abs(orig_cal.a) + std::abs(orig_cal.e) + 0.001f;
+    float corr_cross = std::abs(corrected_cal.b) + std::abs(corrected_cal.d);
+    float corr_diag = std::abs(corrected_cal.a) + std::abs(corrected_cal.e) + 0.001f;
+
+    REQUIRE(corr_cross / corr_diag < orig_cross / orig_diag * 0.1f);
+}
+
+// ============================================================================
+// TouchCalibration struct: axes_swapped field
+// ============================================================================
+
+TEST_CASE("TouchCalibration: axes_swapped defaults to false", "[touch-calibration][axis-swap]") {
+    TouchCalibration cal;
+    REQUIRE(cal.axes_swapped == false);
+}
+
+TEST_CASE("TouchCalibration: axes_swapped preserved through compute_calibration",
+          "[touch-calibration][axis-swap]") {
+    // compute_calibration should NOT reset axes_swapped (it's set externally)
+    Point screen[3] = {{0, 0}, {100, 0}, {0, 100}};
+    Point touch[3] = {{0, 0}, {100, 0}, {0, 100}};
+
+    TouchCalibration cal;
+    cal.axes_swapped = true;
+    compute_calibration(screen, touch, cal);
+
+    // axes_swapped should still be true — compute doesn't touch it
+    REQUIRE(cal.axes_swapped == true);
+}
+
+// ============================================================================
+// TouchCalibrationPanel: axes_swapped integration
+// ============================================================================
+
+TEST_CASE("TouchCalibrationPanel: axes_swapped() false for normal calibration",
+          "[touch-calibration][axis-swap][panel]") {
+    TouchCalibrationPanel panel;
+    panel.set_screen_size(800, 480);
+    panel.start();
+
+    // Feed 3 proportionally-correct touch points (no axis swap needed)
+    // Screen targets: (120,96), (400,374), (680,96)
+    float sx = 4095.0f / 800.0f, sy = 4095.0f / 480.0f;
+    panel.capture_point({static_cast<int>(120 * sx), static_cast<int>(96 * sy)});
+    panel.capture_point({static_cast<int>(400 * sx), static_cast<int>(374 * sy)});
+    panel.capture_point({static_cast<int>(680 * sx), static_cast<int>(96 * sy)});
+
+    // Should reach VERIFY state with no axis swap
+    REQUIRE(panel.get_state() == TouchCalibrationPanel::State::VERIFY);
+    REQUIRE(panel.axes_swapped() == false);
+}
+
+TEST_CASE("TouchCalibrationPanel: axes_swapped() true when axes are swapped",
+          "[touch-calibration][axis-swap][panel]") {
+    TouchCalibrationPanel panel;
+    panel.set_screen_size(800, 480);
+    panel.start();
+
+    // Feed touch points with X/Y swapped relative to screen targets
+    float sx = 4095.0f / 800.0f, sy = 4095.0f / 480.0f;
+    int tx0 = static_cast<int>(120 * sx), ty0 = static_cast<int>(96 * sy);
+    int tx1 = static_cast<int>(400 * sx), ty1 = static_cast<int>(374 * sy);
+    int tx2 = static_cast<int>(680 * sx), ty2 = static_cast<int>(96 * sy);
+
+    // Swap: report (ty, tx) instead of (tx, ty)
+    panel.capture_point({ty0, tx0});
+    panel.capture_point({ty1, tx1});
+    panel.capture_point({ty2, tx2});
+
+    // Panel should detect swap, correct it, and reach VERIFY
+    REQUIRE(panel.get_state() == TouchCalibrationPanel::State::VERIFY);
+    REQUIRE(panel.axes_swapped() == true);
+
+    // The calibration it produced should be clean (low cross-coupling)
+    const TouchCalibration* cal = panel.get_calibration();
+    REQUIRE(cal != nullptr);
+    REQUIRE(cal->valid == true);
+    REQUIRE(cal->axes_swapped == true);
+    float cross = std::abs(cal->b) + std::abs(cal->d);
+    float diag = std::abs(cal->a) + std::abs(cal->e);
+    REQUIRE(cross < diag * 0.1f); // Clean matrix after correction
+}
+
+TEST_CASE("TouchCalibrationPanel: start() resets axes_swapped",
+          "[touch-calibration][axis-swap][panel]") {
+    TouchCalibrationPanel panel;
+    panel.set_screen_size(800, 480);
+    panel.start();
+
+    // Do a swapped calibration first
+    float sx = 4095.0f / 800.0f, sy = 4095.0f / 480.0f;
+    panel.capture_point({static_cast<int>(96 * sy), static_cast<int>(120 * sx)});
+    panel.capture_point({static_cast<int>(374 * sy), static_cast<int>(400 * sx)});
+    panel.capture_point({static_cast<int>(96 * sy), static_cast<int>(680 * sx)});
+
+    // Verify swap was detected
+    REQUIRE(panel.get_state() == TouchCalibrationPanel::State::VERIFY);
+    REQUIRE(panel.axes_swapped() == true);
+
+    // Restart — should reset flag
+    panel.start();
+    REQUIRE(panel.axes_swapped() == false);
 }

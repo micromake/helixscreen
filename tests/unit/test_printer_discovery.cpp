@@ -450,6 +450,15 @@ TEST_CASE("PrinterDiscovery detects new AFC object types", "[printer_discovery][
         REQUIRE(units[1] == "AFC_OpenAMS AMS_2");
     }
 
+    SECTION("AFC_vivid detected in afc_unit_object_names") {
+        json objects = {"AFC", "AFC_vivid vivid_1"};
+        hw.parse_objects(objects);
+
+        auto units = hw.afc_unit_object_names();
+        REQUIRE(units.size() == 1);
+        REQUIRE(units[0] == "AFC_vivid vivid_1"); // Full Klipper object name (lowercase)
+    }
+
     SECTION("AFC_buffer detected in afc_buffer_names") {
         json objects = {"AFC", "AFC_buffer TN", "AFC_buffer TN1", "AFC_buffer TN2",
                         "AFC_buffer TN3"};
@@ -468,6 +477,44 @@ TEST_CASE("PrinterDiscovery detects new AFC object types", "[printer_discovery][
         REQUIRE(lanes.size() == 2);
         REQUIRE(lanes[0] == "lane1"); // sorted
         REQUIRE(lanes[1] == "lane2");
+    }
+
+    SECTION("Natural sort: lane10 comes after lane9, not before lane2") {
+        json objects = {"AFC",
+                        "AFC_stepper lane0",
+                        "AFC_stepper lane1",
+                        "AFC_stepper lane2",
+                        "AFC_stepper lane3",
+                        "AFC_lane lane4",
+                        "AFC_lane lane5",
+                        "AFC_lane lane6",
+                        "AFC_lane lane7",
+                        "AFC_lane lane8",
+                        "AFC_lane lane9",
+                        "AFC_lane lane10",
+                        "AFC_lane lane11"};
+        hw.parse_objects(objects);
+
+        auto lanes = hw.afc_lane_names();
+        REQUIRE(lanes.size() == 12);
+        // Verify natural ordering: lane0..lane11 (not alphabetical where lane10 < lane2)
+        for (int i = 0; i < 12; ++i) {
+            REQUIRE(lanes[i] == "lane" + std::to_string(i));
+        }
+    }
+
+    SECTION("Natural sort: buffer names with numeric suffixes") {
+        json objects = {"AFC", "AFC_buffer TN", "AFC_buffer TN2", "AFC_buffer TN1",
+                        "AFC_buffer TN10"};
+        hw.parse_objects(objects);
+
+        auto buffers = hw.afc_buffer_names();
+        REQUIRE(buffers.size() == 4);
+        // "TN" has no trailing digits, then TN1, TN2, TN10
+        REQUIRE(buffers[0] == "TN");
+        REQUIRE(buffers[1] == "TN1");
+        REQUIRE(buffers[2] == "TN2");
+        REQUIRE(buffers[3] == "TN10");
     }
 
     SECTION("Mixed AFC hardware - full J0eB0l setup") {
@@ -972,4 +1019,27 @@ TEST_CASE("PrinterDiscovery detects screws_tilt_adjust from config when missing 
                    {"printer", {{"kinematics", "corexy"}}}};
     hw.parse_config_keys(config);
     REQUIRE(hw.has_screws_tilt());
+}
+
+TEST_CASE("AFC unknown unit types detected generically", "[printer_discovery][afc]") {
+    PrinterDiscovery hw;
+    json objects = json::array({
+        "AFC",
+        "AFC_stepper lane1",
+        "AFC_NightOwl Owl_1",
+        "AFC_buffer TN"
+    });
+    hw.parse_objects(objects);
+
+    REQUIRE(hw.has_mmu());
+    REQUIRE(hw.mmu_type() == AmsType::AFC);
+
+    // NightOwl is not a known component prefix, so it appears as a unit object
+    auto& unit_names = hw.afc_unit_object_names();
+    REQUIRE(unit_names.size() == 1);
+    CHECK(unit_names[0] == "AFC_NightOwl Owl_1");
+
+    // Known component types should NOT appear as unit objects
+    CHECK(hw.afc_lane_names().size() == 1);   // lane1 from AFC_stepper
+    CHECK(hw.afc_buffer_names().size() == 1);  // TN from AFC_buffer
 }

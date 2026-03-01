@@ -49,22 +49,32 @@ jobs:
     name: Build (${{ matrix.display_name }})
     needs: [validate-shell]
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        platform: [pi, pi32, ad5m, cc1, k1, k2]
+        platform: [pi, pi32, ad5m, cc1, k1, ad5x, k2]
         include:
           - platform: pi
             display_name: "Raspberry Pi"
+            build_target: pi-both
           - platform: pi32
             display_name: "Raspberry Pi 32-bit"
+            build_target: pi32-both
           - platform: ad5m
-            display_name: "Adventurer 5M"
+            display_name: "Flashforge AD5M"
           - platform: cc1
             display_name: "Elegoo Centauri Carbon 1"
           - platform: k1
             display_name: "Creality K1 Series"
+            docker_image: k1
+            build_target: mips
+            build_dir: mips
+          - platform: ad5x
+            display_name: "Flashforge AD5X"
+            docker_image: ad5x
+            build_target: ad5x
+            build_dir: ad5x
           - platform: k2
             display_name: "Creality K2 Series"
 
@@ -81,47 +91,47 @@ jobs:
       uses: actions/cache@v4
       with:
         path: /tmp/.buildx-cache
-        key: buildx-${{ matrix.platform }}-${{ hashFiles(format('docker/Dockerfile.{0}', matrix.platform)) }}
+        key: buildx-${{ matrix.docker_image || matrix.platform }}-${{ hashFiles(format('docker/Dockerfile.{0}', matrix.docker_image || matrix.platform)) }}
         restore-keys: |
-          buildx-${{ matrix.platform }}-
+          buildx-${{ matrix.docker_image || matrix.platform }}-
 
     - name: Cache ccache
       uses: actions/cache@v4
       with:
-        path: /tmp/.ccache-${{ matrix.platform }}
-        key: ccache-release-${{ matrix.platform }}-${{ github.sha }}
+        path: /tmp/.ccache-${{ matrix.docker_image || matrix.platform }}
+        key: ccache-release-${{ matrix.docker_image || matrix.platform }}-${{ github.sha }}
         restore-keys: |
-          ccache-release-${{ matrix.platform }}-
+          ccache-release-${{ matrix.docker_image || matrix.platform }}-
 
     - name: Configure ccache
       run: |
-        mkdir -p /tmp/.ccache-${{ matrix.platform }}
-        printf 'max_size = 300M\ncompression = true\n' > /tmp/.ccache-${{ matrix.platform }}/ccache.conf
+        mkdir -p /tmp/.ccache-${{ matrix.docker_image || matrix.platform }}
+        printf 'max_size = 1G\ncompression = true\n' > /tmp/.ccache-${{ matrix.docker_image || matrix.platform }}/ccache.conf
 
-    - name: Build ${{ matrix.platform }} toolchain image
+    - name: Build ${{ matrix.docker_image || matrix.platform }} toolchain image
       run: |
         docker buildx build \
           --cache-from type=local,src=/tmp/.buildx-cache \
           --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max \
           --load \
-          -t helixscreen/toolchain-${{ matrix.platform }} \
-          -f docker/Dockerfile.${{ matrix.platform }} \
+          -t helixscreen/toolchain-${{ matrix.docker_image || matrix.platform }} \
+          -f docker/Dockerfile.${{ matrix.docker_image || matrix.platform }} \
           docker/
 
     - name: Cross-compile for ${{ matrix.display_name }}
       run: |
         docker run --rm \
           -v "${{ github.workspace }}":/src \
-          -v /tmp/.ccache-${{ matrix.platform }}:/root/.cache/ccache \
+          -v /tmp/.ccache-${{ matrix.docker_image || matrix.platform }}:/root/.cache/ccache \
           -w /src \
-          helixscreen/toolchain-${{ matrix.platform }} \
-          make PLATFORM_TARGET=${{ matrix.platform }} SKIP_OPTIONAL_DEPS=1 -j$(nproc)
+          helixscreen/toolchain-${{ matrix.docker_image || matrix.platform }} \
+          make PLATFORM_TARGET=${{ matrix.build_target || matrix.platform }} SKIP_OPTIONAL_DEPS=1 -j$(nproc)
 
     - name: Show ccache stats
       run: |
         docker run --rm \
-          -v /tmp/.ccache-${{ matrix.platform }}:/root/.cache/ccache \
-          helixscreen/toolchain-${{ matrix.platform }} \
+          -v /tmp/.ccache-${{ matrix.docker_image || matrix.platform }}:/root/.cache/ccache \
+          helixscreen/toolchain-${{ matrix.docker_image || matrix.platform }} \
           ccache -s
 
     # Symbol extraction and stripping are handled by the 'all' target
@@ -150,8 +160,10 @@ jobs:
       with:
         name: symbols-${{ matrix.platform }}
         path: |
-          build/${{ matrix.platform }}/bin/helix-screen.sym
-          build/${{ matrix.platform }}/bin/helix-screen.debug
+          build/${{ matrix.build_dir || matrix.platform }}/bin/helix-screen.sym
+          build/${{ matrix.build_dir || matrix.platform }}/bin/helix-screen.debug
+          build/${{ matrix.build_dir || matrix.platform }}-fbdev/bin/helix-screen.sym
+          build/${{ matrix.build_dir || matrix.platform }}-fbdev/bin/helix-screen.debug
         retention-days: 30
 
     - name: Move cache
@@ -323,7 +335,7 @@ jobs:
         ./helix-screen
         ```
 
-        ### Flashforge Adventurer 5M
+        ### Flashforge AD5M
         ```bash
         # Download and extract
         wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/helixscreen-ad5m-${{ steps.version.outputs.version }}.tar.gz
@@ -478,17 +490,54 @@ jobs:
     - name: Flatten symbol files
       run: |
         mkdir -p symbol-files
+        # upload-artifact@v4 strips the least-common-ancestor directory from
+        # multi-path uploads, so the internal structure varies:
+        #   - pi/pi32 (drm+fbdev): LCA=build/ → artifact has <platform>/bin/...
+        #   - single-dir platforms: LCA=build/<platform>/bin/ → artifact has files at root
+        # Use find to locate files regardless of nesting depth.
         for dir in artifacts/symbols-*/; do
           platform=$(basename "$dir" | sed 's/symbols-//')
-          if [ -f "${dir}helix-screen.sym" ]; then
-            cp "${dir}helix-screen.sym" "symbol-files/${platform}.sym"
+          echo "Processing $platform (contents: $(find "$dir" -name '*.sym' -o -name '*.debug' | wc -l) files)"
+
+          # DRM symbols — search for helix-screen.sym NOT in a -fbdev path
+          matches=$(find "$dir" -name 'helix-screen.sym' -not -path '*-fbdev*')
+          count=$(echo "$matches" | grep -c . || true)
+          if [ "$count" -gt 1 ]; then
+            echo "  WARNING: Multiple DRM .sym files found for $platform"
+            echo "$matches"
           fi
-          if [ -f "${dir}helix-screen.debug" ]; then
-            cp "${dir}helix-screen.debug" "symbol-files/${platform}.debug"
+          sym=$(echo "$matches" | head -1)
+          if [ -n "$sym" ]; then
+            cp "$sym" "symbol-files/${platform}.sym"
+          else
+            echo "  WARNING: No DRM .sym found for $platform"
+          fi
+
+          dbg=$(find "$dir" -name 'helix-screen.debug' -not -path '*-fbdev*' | head -1)
+          if [ -n "$dbg" ]; then
+            cp "$dbg" "symbol-files/${platform}.debug"
+          fi
+
+          # fbdev symbols (Pi only) — search in -fbdev path
+          sym_fb=$(find "$dir" -name 'helix-screen.sym' -path '*-fbdev*' | head -1)
+          if [ -n "$sym_fb" ]; then
+            cp "$sym_fb" "symbol-files/${platform}-fbdev.sym"
+          fi
+
+          dbg_fb=$(find "$dir" -name 'helix-screen.debug' -path '*-fbdev*' | head -1)
+          if [ -n "$dbg_fb" ]; then
+            cp "$dbg_fb" "symbol-files/${platform}-fbdev.debug"
           fi
         done
-        echo "Symbol files:"
-        ls -lh symbol-files/ || echo "No symbol files found"
+
+        # Validate that at least one .sym file was produced
+        sym_count=$(find symbol-files -name '*.sym' 2>/dev/null | wc -l)
+        echo "Symbol files ($sym_count .sym files):"
+        ls -lh symbol-files/
+        if [ "$sym_count" -eq 0 ]; then
+          echo "ERROR: No .sym files were produced — symbol extraction failed"
+          exit 1
+        fi
 
     - name: Extract version from tag
       id: version
@@ -630,14 +679,14 @@ jobs:
           echo "  ${CHANNEL}: ${R2_PUBLIC_URL}/${CHANNEL}/manifest.json"
         done
 
-    - name: Clean up old releases (retain 10 most recent)
+    - name: Clean up old releases (retain 5 most recent)
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
         R2_BUCKET: ${{ vars.R2_BUCKET_NAME || 'helixscreen-releases' }}
         UPLOAD_CHANNELS: ${{ steps.channels.outputs.channels }}
-        RETAIN_COUNT: 10
+        RETAIN_COUNT: 5
       run: |
         # Sort versions using semver-aware sort (numeric on each dotted component)
         semver_sort() {

@@ -6,6 +6,7 @@
 #include "ui_error_reporting.h"
 
 #include "spdlog/spdlog.h"
+#include "wifi_5ghz_detection.h"
 
 #if !defined(__APPLE__) && !defined(__ANDROID__)
 // ============================================================================
@@ -477,6 +478,8 @@ void WifiBackendWpaSupplicant::init_wpa() {
     hio_setcb_read(mon_io_, WifiBackendWpaSupplicant::_handle_wpa_events); // Static trampoline
     hio_read_start(mon_io_); // Start monitoring socket for events
 
+    resolve_5ghz_support();
+
     spdlog::debug("[WifiBackend] wpa_supplicant backend initialized successfully");
     signal_init_complete();
 }
@@ -926,10 +929,8 @@ WifiBackend::ConnectionStatus WifiBackendWpaSupplicant::get_status() {
         } else if (key == "ip_address") {
             status.ip_address = value;
         } else if (key == "freq") {
-            // Frequency in MHz - could be useful for signal info
             try {
-                int freq_mhz = std::stoi(value);
-                (void)freq_mhz; // Available if needed later
+                status.frequency_mhz = std::stoi(value);
             } catch (const std::exception&) {
                 // Ignore parse errors
             }
@@ -981,10 +982,49 @@ WifiBackend::ConnectionStatus WifiBackendWpaSupplicant::get_status() {
 }
 
 bool WifiBackendWpaSupplicant::supports_5ghz() const {
-    // Most embedded Linux WiFi adapters (ESP32, RTL8723, etc.) are 2.4GHz only
-    // Could query wpa_supplicant for driver capabilities, but default to false
-    // since target hardware (Pi Zero W, AD5M, etc.) typically uses 2.4GHz-only adapters
-    return false;
+    return supports_5ghz_cached_;
+}
+
+void WifiBackendWpaSupplicant::resolve_5ghz_support() {
+    try {
+        if (supports_5ghz_resolved_)
+            return;
+
+        // Try wpa_supplicant GET_CAPABILITY freq
+        std::string freq_resp = send_command("GET_CAPABILITY freq");
+        if (wifi_parse_freq_list_has_5ghz(freq_resp)) {
+            supports_5ghz_cached_ = true;
+            supports_5ghz_resolved_ = true;
+            spdlog::debug("[WifiBackend] 5GHz support detected via GET_CAPABILITY freq");
+            return;
+        }
+
+        // Fallback: try iw phy info
+        // Find phy name from /sys/class/net/wlan0/phy80211/name (or similar)
+        FILE* pipe = popen("iw phy phy0 info 2>/dev/null", "r");
+        if (pipe) {
+            std::string iw_output;
+            char buf[256];
+            while (fgets(buf, sizeof(buf), pipe)) {
+                iw_output += buf;
+            }
+            pclose(pipe);
+
+            if (wifi_parse_iw_phy_has_5ghz(iw_output)) {
+                supports_5ghz_cached_ = true;
+                supports_5ghz_resolved_ = true;
+                spdlog::debug("[WifiBackend] 5GHz support detected via iw phy info");
+                return;
+            }
+        }
+
+        supports_5ghz_resolved_ = true;
+        spdlog::debug("[WifiBackend] No 5GHz support detected (2.4GHz only)");
+    } catch (const std::exception& e) {
+        spdlog::warn("[WifiBackend] Error detecting 5GHz support: {}", e.what());
+        supports_5ghz_resolved_ = true;
+        // Keep cached = false (safe default)
+    }
 }
 
 // ============================================================================
@@ -1052,8 +1092,16 @@ std::vector<WiFiNetwork> WifiBackendWpaSupplicant::parse_scan_results(const std:
         bool is_secured = false;
         std::string security_type = detect_security_type(flags, is_secured);
 
+        // Parse frequency
+        int freq_mhz = 0;
+        try {
+            freq_mhz = std::stoi(freq_str);
+        } catch (const std::exception&) {
+            // Ignore parse errors, keep 0
+        }
+
         // Create network entry
-        WiFiNetwork network(ssid, signal_percent, is_secured, security_type);
+        WiFiNetwork network(ssid, signal_percent, is_secured, security_type, freq_mhz);
         networks.push_back(network);
 
         spdlog::trace("[WifiBackend] Parsed network: '{}' {}% {} {}", ssid, signal_percent,

@@ -128,12 +128,17 @@ void AmsLoadingErrorModal::register_callbacks() {
 AmsLoadingErrorModal* AmsLoadingErrorModal::get_instance_from_event(lv_event_t* e) {
     auto* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
 
-    // Traverse parent chain to find modal root with user_data
+    // Find modal root by name, then get instance from its user_data.
+    // Cannot walk parents checking any user_data — ui_button and other widgets
+    // set their own user_data, which would be miscast (prestonbrown/helixscreen#195).
     lv_obj_t* obj = target;
     while (obj) {
-        void* user_data = lv_obj_get_user_data(obj);
-        if (user_data) {
-            return static_cast<AmsLoadingErrorModal*>(user_data);
+        const char* name = lv_obj_get_name(obj);
+        if (name && strcmp(name, "ams_loading_error_modal") == 0) {
+            void* user_data = lv_obj_get_user_data(obj);
+            if (user_data) {
+                return static_cast<AmsLoadingErrorModal*>(user_data);
+            }
         }
         obj = lv_obj_get_parent(obj);
     }

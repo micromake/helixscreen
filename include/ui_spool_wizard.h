@@ -96,6 +96,7 @@ class SpoolWizardOverlay : public OverlayBase {
         int server_id = -1;     ///< Spoolman server ID, -1 = not on server
         int vendor_id = -1;
         double density = 0;
+        double diameter = 1.75; ///< Filament diameter in mm (default: 1.75)
         double weight = 0;
         double spool_weight = 0;
         int nozzle_temp_min = 0;

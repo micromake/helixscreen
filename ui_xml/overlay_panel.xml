@@ -18,6 +18,7 @@
     <prop name="title" type="string" default="Overlay"/>
     <prop name="title_tag" type="string" default=""/>
     <prop name="action_button_text" type="string" default=""/>
+    <prop name="action_button_text_tag" type="string" default=""/>
     <prop name="action_button_callback" type="string" default=""/>
     <prop name="action_button_height" type="string" default="content"/>
     <prop name="action_button_pad" type="string" default="#space_sm"/>
@@ -25,6 +26,7 @@
     <prop name="action_button_disabled_subject" type="string" default=""/>
     <!-- Second action button (left of primary) -->
     <prop name="action_button_2_text" type="string" default=""/>
+    <prop name="action_button_2_text_tag" type="string" default=""/>
     <prop name="action_button_2_bg_color" type="string" default="#secondary"/>
     <prop name="action_button_2_callback" type="string" default=""/>
     <prop name="hide_action_button_2" type="string" default="true"/>
@@ -37,10 +39,10 @@
         style_bg_color="$bg_color" scrollable="false" flex_flow="column">
     <!-- Header Bar -->
     <header_bar name="overlay_header"
-                title="$title" title_tag="$title_tag" action_button_text="$action_button_text" hide_action_button="$hide_action_button"
+                title="$title" title_tag="$title_tag" action_button_text="$action_button_text" action_button_text_tag="$action_button_text_tag" hide_action_button="$hide_action_button"
                 action_button_callback="$action_button_callback" action_button_height="$action_button_height"
                 action_button_pad="$action_button_pad" action_button_disabled_subject="$action_button_disabled_subject"
-                action_button_2_text="$action_button_2_text" action_button_2_bg_color="$action_button_2_bg_color"
+                action_button_2_text="$action_button_2_text" action_button_2_text_tag="$action_button_2_text_tag" action_button_2_bg_color="$action_button_2_bg_color"
                 action_button_2_callback="$action_button_2_callback" hide_action_button_2="$hide_action_button_2"/>
     <!-- Panel-specific overlay_content and children go here -->
   </view>

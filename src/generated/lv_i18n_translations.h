@@ -23,13 +23,13 @@ typedef enum {
 } lv_i18n_plural_type_t;
 
 typedef struct {
-    const char* locale_name;
-    const char** singulars;
-    const char** plurals[_LV_I18N_PLURAL_TYPE_NUM];
+    const char * locale_name;
+    const char * * singulars;
+    const char * * plurals[_LV_I18N_PLURAL_TYPE_NUM];
     uint8_t (*locale_plural_fn)(int32_t num);
 } lv_i18n_lang_t;
 
-typedef const lv_i18n_lang_t* lv_i18n_language_pack_t;
+typedef const lv_i18n_lang_t * lv_i18n_language_pack_t;
 
 extern const lv_i18n_language_pack_t lv_i18n_language_pack[];
 
@@ -38,20 +38,20 @@ extern const lv_i18n_language_pack_t lv_i18n_language_pack[];
  * @param langs Pointer to the array of languages (last element must be NULL)
  * @return 0 on success, -1 on error
  */
-int lv_i18n_init(const lv_i18n_language_pack_t* langs);
+int lv_i18n_init(const lv_i18n_language_pack_t * langs);
 
 /**
  * Change the current locale (language).
  * @param l_name Name of the locale to use (e.g., "en", "de", "fr")
  * @return 0 on success, -1 if locale not found
  */
-int lv_i18n_set_locale(const char* l_name);
+int lv_i18n_set_locale(const char * l_name);
 
 /**
  * Get the name of the currently active locale.
  * @return Locale name string, or NULL if not initialized
  */
-const char* lv_i18n_get_current_locale(void);
+const char * lv_i18n_get_current_locale(void);
 
 #ifdef __cplusplus
 } /* extern "C" */

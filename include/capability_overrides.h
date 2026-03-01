@@ -171,6 +171,17 @@ class CapabilityOverrides {
     }
 
     /**
+     * @brief Check if the printer is running Kalico firmware
+     *
+     * Delegates to the stored PrinterDiscovery's is_kalico() flag,
+     * which is set during the discovery sequence when Kalico-specific
+     * objects are detected.
+     */
+    [[nodiscard]] bool is_kalico() const {
+        return hardware_set_ && hardware_.is_kalico();
+    }
+
+    /**
      * @brief Save current overrides to helixconfig.json
      *
      * Persists in-memory override changes to disk.

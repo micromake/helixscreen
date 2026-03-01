@@ -5,6 +5,8 @@
 
 #include "ui_nav_manager.h"
 #include "ui_panel_common.h"
+#include "ui_update_queue.h"
+#include "ui_utils.h"
 
 #include <spdlog/spdlog.h>
 
@@ -37,6 +39,33 @@ void OverlayBase::cleanup() {
     spdlog::trace("[OverlayBase] cleanup() - {}", get_name());
     cleanup_called_ = true;
     visible_ = false;
+}
+
+void OverlayBase::destroy_overlay_ui(lv_obj_t*& cached_panel) {
+    if (!overlay_root_) {
+        return;
+    }
+
+    spdlog::info("[{}] Destroying overlay UI to free memory", get_name());
+
+    // Drain deferred observer callbacks while all pointers are still valid.
+    // observe_int_sync queues lambdas via queue_update() that capture raw
+    // panel pointers. Processing them here prevents use-after-free.
+    helix::ui::UpdateQueue::instance().drain();
+
+    // Unregister from NavigationManager before deleting the widget
+    NavigationManager::instance().unregister_overlay_close_callback(overlay_root_);
+    NavigationManager::instance().unregister_overlay_instance(overlay_root_);
+
+    // Delete the widget tree
+    helix::ui::safe_delete(overlay_root_);
+
+    // Also null the caller's cached pointer (may be the same as overlay_root_,
+    // but could be a separate copy held by the calling panel)
+    cached_panel = nullptr;
+
+    // Let derived class null its widget pointers
+    on_ui_destroyed();
 }
 
 lv_obj_t* OverlayBase::create_overlay_from_xml(lv_obj_t* parent, const char* component_name) {

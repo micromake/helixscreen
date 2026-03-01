@@ -5,16 +5,27 @@
 
 #include "ui_callback_helpers.h"
 #include "ui_error_reporting.h"
+#include "ui_filename_utils.h"
+#include "ui_gcode_viewer.h"
 #include "ui_icon.h"
 #include "ui_modal.h"
 #include "ui_nav_manager.h"
 #include "ui_print_preparation_manager.h"
+#include "ui_update_queue.h"
 #include "ui_utils.h"
 
+#include "app_globals.h"
+#include "config.h"
+#include "display_settings_manager.h"
 #include "lvgl/src/others/translation/lv_translation.h"
+#include "memory_utils.h"
+#include "moonraker_api.h"
+#include "runtime_config.h"
 #include "theme_manager.h"
 
 #include <spdlog/spdlog.h>
+
+#include <fstream>
 
 namespace helix::ui {
 
@@ -52,6 +63,12 @@ PrintSelectDetailView::~PrintSelectDetailView() {
 
     // Signal async callbacks to bail out [L012]
     alive_->store(false);
+
+    // Clean up temp gcode file
+    if (!temp_gcode_path_.empty()) {
+        std::remove(temp_gcode_path_.c_str());
+        temp_gcode_path_.clear();
+    }
 
     // CRITICAL: During static destruction (app exit), LVGL may already be gone.
     // We check if LVGL is still initialized before calling any LVGL functions.
@@ -112,6 +129,11 @@ void PrintSelectDetailView::init_subjects() {
         spdlog::debug("[DetailView] Registered pre-print toggle callbacks");
     }
 
+    // G-code viewer visibility mode (0=thumbnail, 1=3D, 2=2D)
+    UI_MANAGED_SUBJECT_INT(detail_gcode_viewer_mode_, 0, "detail_gcode_viewer_mode", subjects_);
+    // G-code loading indicator (0=hidden, 1=visible)
+    UI_MANAGED_SUBJECT_INT(detail_gcode_loading_, 0, "detail_gcode_loading", subjects_);
+
     // Enable switches default ON (1) - "perform this operation"
     // Subject=1 means switch is checked, operation is enabled
     UI_MANAGED_SUBJECT_INT(preprint_bed_mesh_, 1, "preprint_bed_mesh", subjects_);
@@ -167,6 +189,44 @@ lv_obj_t* PrintSelectDetailView::create(lv_obj_t* parent_screen) {
     // Store reference to print button for enable/disable state management
     print_button_ = lv_obj_find_by_name(overlay_root_, "print_button");
 
+    // Find and configure G-code viewer widget
+    gcode_viewer_ = lv_obj_find_by_name(overlay_root_, "detail_gcode_viewer");
+    if (gcode_viewer_) {
+        spdlog::debug("[DetailView] G-code viewer widget found");
+        ui_gcode_viewer_disable_streaming(gcode_viewer_);
+
+        // Apply render mode - priority: cmdline > env var > settings
+        const auto* config = get_runtime_config();
+        const char* env_mode = std::getenv("HELIX_GCODE_MODE");
+
+        if (config && config->gcode_render_mode >= 0) {
+            auto render_mode = static_cast<helix::GcodeViewerRenderMode>(config->gcode_render_mode);
+            ui_gcode_viewer_set_render_mode(gcode_viewer_, render_mode);
+            spdlog::debug("[DetailView] Set G-code render mode: {} (cmdline)",
+                          config->gcode_render_mode);
+        } else if (env_mode) {
+            spdlog::debug("[DetailView] G-code render mode: {} (env var)",
+                          ui_gcode_viewer_is_using_2d_mode(gcode_viewer_) ? "2D" : "3D");
+        } else {
+            int render_mode_val = DisplaySettingsManager::instance().get_gcode_render_mode();
+            if (render_mode_val == 3) {
+                // Thumbnail Only mode - skip render mode setup, viewer won't be used
+                spdlog::debug("[DetailView] G-code render mode: Thumbnail Only (settings)");
+            } else {
+                auto render_mode = static_cast<helix::GcodeViewerRenderMode>(render_mode_val);
+                ui_gcode_viewer_set_render_mode(gcode_viewer_, render_mode);
+                spdlog::debug("[DetailView] Set G-code render mode: {} (settings)",
+                              render_mode_val);
+            }
+        }
+
+        // Vertical offset to match thumbnail positioning
+        ui_gcode_viewer_set_content_offset_y(gcode_viewer_, -0.10f);
+
+        // Start paused — will resume in on_activate()
+        ui_gcode_viewer_set_paused(gcode_viewer_, true);
+    }
+
     // Look up pre-print option checkboxes
     bed_mesh_checkbox_ = lv_obj_find_by_name(overlay_root_, "bed_mesh_checkbox");
     qgl_checkbox_ = lv_obj_find_by_name(overlay_root_, "qgl_checkbox");
@@ -184,8 +244,11 @@ lv_obj_t* PrintSelectDetailView::create(lv_obj_t* parent_screen) {
     history_status_icon_ = lv_obj_find_by_name(overlay_root_, "history_status_icon");
     history_status_label_ = lv_obj_find_by_name(overlay_root_, "history_status_label");
 
-    // Initialize print preparation manager
-    prep_manager_ = std::make_unique<PrintPreparationManager>();
+    // Initialize print preparation manager (only if not already created —
+    // survives destroy-on-close so callbacks set by PrintSelectPanel persist)
+    if (!prep_manager_) {
+        prep_manager_ = std::make_unique<PrintPreparationManager>();
+    }
 
     spdlog::debug("[DetailView] Detail view created");
     return overlay_root_;
@@ -225,6 +288,19 @@ void PrintSelectDetailView::show(const std::string& filename, const std::string&
                                  const std::string& filament_type,
                                  const std::vector<std::string>& filament_colors,
                                  size_t file_size_bytes) {
+    // Lazy re-create widget tree if it was destroyed by destroy-on-close
+    if (!overlay_root_ && parent_screen_) {
+        spdlog::info("[DetailView] Re-creating widget tree (destroy-on-close recovery)");
+        if (!create(parent_screen_)) {
+            spdlog::error("[DetailView] Failed to re-create detail view");
+            return;
+        }
+        // Re-wire dependencies (subjects need re-binding to new widgets)
+        if (api_ || printer_state_) {
+            set_dependencies(api_, printer_state_);
+        }
+    }
+
     if (!overlay_root_) {
         spdlog::warn("[DetailView] Cannot show: widget not created");
         return;
@@ -242,6 +318,12 @@ void PrintSelectDetailView::show(const std::string& filename, const std::string&
 
     // Register with NavigationManager for lifecycle callbacks
     NavigationManager::instance().register_overlay_instance(overlay_root_, this);
+
+    // Register close callback to destroy widget tree when overlay closes.
+    // Frees memory when detail view is dismissed. Subjects survive;
+    // next show() call re-creates widgets via lazy creation above.
+    NavigationManager::instance().register_overlay_close_callback(
+        overlay_root_, [this]() { destroy_overlay_ui(overlay_root_); });
 
     // Push onto navigation stack - on_activate() will be called by NavigationManager
     NavigationManager::instance().push_overlay(overlay_root_);
@@ -300,10 +382,24 @@ void PrintSelectDetailView::on_activate() {
     if (!current_filename_.empty() && prep_manager_) {
         prep_manager_->scan_file_for_operations(current_filename_, current_path_);
     }
+
+    // Load gcode for 3D/2D preview (viewer stays paused until load completes)
+    load_gcode_for_preview();
 }
 
 void PrintSelectDetailView::on_deactivate() {
     spdlog::debug("[DetailView] on_deactivate()");
+
+    // Clear and pause gcode viewer immediately so the old model doesn't
+    // linger when the user selects a different file
+    if (gcode_viewer_) {
+        ui_gcode_viewer_clear(gcode_viewer_);
+        ui_gcode_viewer_set_paused(gcode_viewer_, true);
+    }
+
+    // Reset viewer mode to thumbnail so next open starts clean
+    show_gcode_viewer(false);
+    gcode_loaded_ = false;
 
     // Hide any open delete confirmation modal
     hide_delete_confirmation();
@@ -318,6 +414,11 @@ void PrintSelectDetailView::on_deactivate() {
 
 void PrintSelectDetailView::cleanup() {
     spdlog::debug("[DetailView] cleanup()");
+
+    // Pause viewer before subject cleanup to avoid rendering with freed subjects
+    if (gcode_viewer_) {
+        ui_gcode_viewer_set_paused(gcode_viewer_, true);
+    }
 
     // Signal async callbacks to bail out [L012]
     alive_->store(false);
@@ -335,6 +436,59 @@ void PrintSelectDetailView::cleanup() {
 
     // Call base class to set cleanup_called_ flag
     OverlayBase::cleanup();
+}
+
+// ============================================================================
+// Destroy-on-close support
+// ============================================================================
+
+void PrintSelectDetailView::on_ui_destroyed() {
+    spdlog::debug("[DetailView] on_ui_destroyed() - nulling widget pointers");
+
+    // Invalidate alive_ token so in-flight async callbacks (gcode download,
+    // metadata fetch, load callbacks) bail out — they captured pointers to
+    // widgets that no longer exist (e.g. gcode_viewer_).
+    alive_->store(false);
+
+    // Allocate a fresh token for the next create() cycle
+    alive_ = std::make_shared<std::atomic<bool>>(true);
+
+    // Pause and clear gcode viewer state (widget is already deleted by base)
+    gcode_loaded_ = false;
+
+    // Clean up temp gcode file so stale cached data doesn't persist
+    if (!temp_gcode_path_.empty()) {
+        std::remove(temp_gcode_path_.c_str());
+        temp_gcode_path_.clear();
+    }
+
+    // Null all child widget pointers (widget tree already deleted by base class)
+    // Note: parent_screen_ is NOT nulled — it's the parent screen (not a child
+    // widget) and is needed for lazy re-creation in show().
+    confirmation_dialog_widget_ = nullptr;
+    print_button_ = nullptr;
+    gcode_viewer_ = nullptr;
+
+    // Pre-print option checkboxes
+    bed_mesh_checkbox_ = nullptr;
+    qgl_checkbox_ = nullptr;
+    z_tilt_checkbox_ = nullptr;
+    nozzle_clean_checkbox_ = nullptr;
+    purge_line_checkbox_ = nullptr;
+    timelapse_checkbox_ = nullptr;
+
+    // Color requirements display
+    color_requirements_card_ = nullptr;
+    color_swatches_row_ = nullptr;
+
+    // History status display
+    history_status_row_ = nullptr;
+    history_status_icon_ = nullptr;
+    history_status_label_ = nullptr;
+
+    // Note: prep_manager_ is NOT reset — it holds no widget references and
+    // retains its callbacks (scan_complete, macro_analysis) set by PrintSelectPanel.
+    // It will be re-wired with dependencies in show() -> set_dependencies().
 }
 
 // ============================================================================
@@ -496,8 +650,8 @@ void PrintSelectDetailView::update_history_status(FileHistoryStatus status, int 
         ui_icon_set_variant(history_status_icon_, "success");
         // Format: "Printed N time(s)"
         char buf[64];
-        snprintf(buf, sizeof(buf), "Printed %d time%s", success_count,
-                 success_count == 1 ? "" : "s");
+        snprintf(buf, sizeof(buf),
+                 lv_tr(success_count == 1 ? "Printed %d time" : "Printed %d times"), success_count);
         lv_label_set_text(history_status_label_, buf);
         break;
     }
@@ -516,6 +670,264 @@ void PrintSelectDetailView::update_history_status(FileHistoryStatus status, int 
         lv_label_set_text(history_status_label_, lv_tr("Last print cancelled"));
         break;
     }
+}
+
+// ============================================================================
+// G-code Viewer
+// ============================================================================
+
+void PrintSelectDetailView::show_gcode_viewer(bool show) {
+    // Mode 0 = thumbnail, 1 = 3D
+    // Detail panel only supports 3D viewer — fall back to thumbnail if 2D
+    int mode = 0;
+    if (show) {
+        bool is_2d = gcode_viewer_ && ui_gcode_viewer_is_using_2d_mode(gcode_viewer_);
+        if (!is_2d) {
+            mode = 1;
+        }
+    }
+    lv_subject_set_int(&detail_gcode_viewer_mode_, mode);
+
+    // Hide loading spinner now that viewer state is resolved
+    lv_subject_set_int(&detail_gcode_loading_, 0);
+
+    spdlog::trace("[DetailView] G-code viewer mode: {} ({})", mode, mode == 0 ? "thumbnail" : "3D");
+}
+
+void PrintSelectDetailView::apply_tool_colors() {
+    if (!gcode_viewer_ || !gcode_loaded_) {
+        return;
+    }
+
+    // Try AMS slot colors first
+    if (ui_gcode_viewer_apply_ams_tool_colors(gcode_viewer_)) {
+        return;
+    }
+
+    // Fallback: use file metadata colors (from slicer)
+    if (!current_filament_colors_.empty()) {
+        std::vector<uint32_t> tool_colors;
+        for (const auto& hex : current_filament_colors_) {
+            auto parsed = ui_parse_hex_color(hex);
+            if (parsed) {
+                tool_colors.push_back(*parsed);
+            }
+        }
+        if (!tool_colors.empty()) {
+            ui_gcode_viewer_set_tool_colors(gcode_viewer_, tool_colors);
+        }
+    }
+}
+
+void PrintSelectDetailView::load_gcode_for_preview() {
+    // Skip if no viewer widget
+    if (!gcode_viewer_) {
+        spdlog::debug("[DetailView] No gcode_viewer_ widget - skipping G-code preview");
+        return;
+    }
+
+    // Skip if no API available
+    if (!api_) {
+        spdlog::debug("[DetailView] No API available - skipping G-code preview");
+        return;
+    }
+
+    // Skip if no filename
+    if (current_filename_.empty()) {
+        spdlog::debug("[DetailView] No filename - skipping G-code preview");
+        return;
+    }
+
+    // Clear previous model so stale frames don't flash when viewer becomes visible
+    ui_gcode_viewer_clear(gcode_viewer_);
+
+    // Show loading spinner over thumbnail
+    lv_subject_set_int(&detail_gcode_loading_, 1);
+
+    // Check "Thumbnail Only" render mode - skip all gcode downloading/parsing
+    if (DisplaySettingsManager::instance().get_gcode_render_mode() == 3) {
+        spdlog::info("[DetailView] G-code render mode is Thumbnail Only - skipping G-code load");
+        lv_subject_set_int(&detail_gcode_loading_, 0);
+        show_gcode_viewer(false);
+        return;
+    }
+
+    // Check config option to disable 3D rendering entirely
+    auto* cfg = Config::get_instance();
+    bool gcode_3d_enabled = cfg->get<bool>("/display/gcode_3d_enabled", true);
+    if (!gcode_3d_enabled) {
+        spdlog::info("[DetailView] G-code 3D rendering disabled via config - using thumbnail");
+        lv_subject_set_int(&detail_gcode_loading_, 0);
+        show_gcode_viewer(false);
+        return;
+    }
+
+    // Detail page only shows the 3D viewer — skip download/parse on 2D-only platforms
+    if (ui_gcode_viewer_is_using_2d_mode(gcode_viewer_)) {
+        spdlog::debug("[DetailView] 2D-only platform — skipping G-code preview (thumbnail only)");
+        lv_subject_set_int(&detail_gcode_loading_, 0);
+        show_gcode_viewer(false);
+        return;
+    }
+
+    // Generate temp file path with caching
+    std::string cache_dir = get_helix_cache_dir("gcode_temp");
+    if (cache_dir.empty()) {
+        spdlog::warn("[DetailView] No writable cache directory - skipping G-code preview");
+        lv_subject_set_int(&detail_gcode_loading_, 0);
+        show_gcode_viewer(false);
+        return;
+    }
+    std::string temp_path = cache_dir + "/detail_preview_" +
+                            std::to_string(std::hash<std::string>{}(current_filename_)) + ".gcode";
+
+    // Check if file already exists and is non-empty (cached from previous session)
+    std::ifstream cached_file(temp_path, std::ios::binary | std::ios::ate);
+    if (cached_file && cached_file.tellg() > 0) {
+        size_t cached_size = static_cast<size_t>(cached_file.tellg());
+        cached_file.close();
+
+        if (helix::is_gcode_2d_streaming_safe(cached_size)) {
+            spdlog::info("[DetailView] Using cached G-code file ({} bytes): {}", cached_size,
+                         temp_path);
+            temp_gcode_path_ = temp_path;
+
+            // Set up load callback and load the file
+            auto alive = alive_;
+            ui_gcode_viewer_set_load_callback(
+                gcode_viewer_,
+                [](lv_obj_t* viewer, void* user_data, bool success) {
+                    auto* self = static_cast<PrintSelectDetailView*>(user_data);
+                    if (!self->alive_->load()) {
+                        return;
+                    }
+                    if (!success) {
+                        spdlog::warn("[DetailView] G-code load failed from cache");
+                        self->show_gcode_viewer(false);
+                        return;
+                    }
+                    self->gcode_loaded_ = true;
+
+                    // Show all layers, no ghost (preview = full model)
+                    ui_gcode_viewer_set_print_progress(viewer, -1);
+
+                    // Apply AMS or slicer tool colors
+                    self->apply_tool_colors();
+
+                    // Unpause, show, then reset camera (must be visible for layout)
+                    ui_gcode_viewer_set_paused(viewer, false);
+                    self->show_gcode_viewer(true);
+                    lv_obj_update_layout(viewer);
+                    ui_gcode_viewer_reset_camera(viewer);
+
+                    spdlog::debug("[DetailView] G-code preview loaded from cache");
+                },
+                this);
+            ui_gcode_viewer_load_file(gcode_viewer_, temp_path.c_str());
+            return;
+        } else {
+            spdlog::debug("[DetailView] Cached file too large for streaming, removing");
+            std::remove(temp_path.c_str());
+        }
+    }
+
+    // Build full relative path for metadata lookup and download
+    std::string file_path =
+        current_path_.empty() ? current_filename_ : current_path_ + "/" + current_filename_;
+    std::string metadata_filename = file_path;
+
+    // Capture alive flag for shutdown safety [L012]
+    auto alive = alive_;
+
+    api_->files().get_file_metadata(
+        metadata_filename,
+        [this, alive, temp_path, file_path](const FileMetadata& metadata) {
+            if (!alive->load()) {
+                return;
+            }
+
+            // Check if file is safe to render given available RAM
+            if (!helix::is_gcode_2d_streaming_safe(metadata.size)) {
+                auto mem = helix::get_system_memory_info();
+                spdlog::warn("[DetailView] G-code too large for streaming: file={} bytes, "
+                             "available RAM={}MB - using thumbnail",
+                             metadata.size, mem.available_mb());
+                show_gcode_viewer(false);
+                return;
+            }
+
+            spdlog::debug("[DetailView] G-code size {} bytes - safe to render, downloading...",
+                          metadata.size);
+
+            // Clean up previous temp file if different
+            if (!temp_gcode_path_.empty() && temp_gcode_path_ != temp_path) {
+                std::remove(temp_gcode_path_.c_str());
+                temp_gcode_path_.clear();
+            }
+
+            // Stream download to disk
+            api_->transfers().download_file_to_path(
+                "gcodes", file_path, temp_path,
+                [this, alive, temp_path](const std::string& path) {
+                    if (!alive->load()) {
+                        return;
+                    }
+                    temp_gcode_path_ = path;
+
+                    spdlog::debug("[DetailView] G-code downloaded, loading into viewer: {}", path);
+
+                    // Set up load callback
+                    ui_gcode_viewer_set_load_callback(
+                        gcode_viewer_,
+                        [](lv_obj_t* viewer, void* user_data, bool success) {
+                            auto* self = static_cast<PrintSelectDetailView*>(user_data);
+                            if (!self->alive_->load()) {
+                                return;
+                            }
+                            if (!success) {
+                                spdlog::warn("[DetailView] G-code load failed after download");
+                                self->show_gcode_viewer(false);
+                                return;
+                            }
+                            self->gcode_loaded_ = true;
+
+                            // Show all layers, no ghost (preview = full model)
+                            ui_gcode_viewer_set_print_progress(viewer, -1);
+
+                            // Apply AMS or slicer tool colors
+                            self->apply_tool_colors();
+
+                            // Unpause, show, then reset camera (must be visible for layout)
+                            ui_gcode_viewer_set_paused(viewer, false);
+                            self->show_gcode_viewer(true);
+                            lv_obj_update_layout(viewer);
+                            ui_gcode_viewer_reset_camera(viewer);
+
+                            spdlog::debug("[DetailView] G-code preview loaded successfully");
+                        },
+                        this);
+
+                    // Load into viewer
+                    ui_gcode_viewer_load_file(gcode_viewer_, path.c_str());
+                },
+                [this, alive](const MoonrakerError& err) {
+                    if (!alive->load()) {
+                        return;
+                    }
+                    spdlog::warn("[DetailView] Failed to download G-code: {}", err.message);
+                    show_gcode_viewer(false);
+                });
+        },
+        [this, alive](const MoonrakerError& err) {
+            if (!alive->load()) {
+                return;
+            }
+            spdlog::debug("[DetailView] Failed to get G-code metadata: {} - skipping preview",
+                          err.message);
+            show_gcode_viewer(false);
+        },
+        true // silent
+    );
 }
 
 // ============================================================================

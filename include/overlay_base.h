@@ -193,6 +193,25 @@ class OverlayBase : public IPanelLifecycle {
     }
 
     /**
+     * @brief Destroy overlay widget tree to free memory
+     *
+     * Called by close callbacks registered via lazy_create_and_push_overlay
+     * with destroy_on_close=true. Performs:
+     * 1. Drains UpdateQueue (process pending deferred callbacks)
+     * 2. Unregisters close callback from NavigationManager
+     * 3. Unregisters overlay instance from NavigationManager
+     * 4. Deletes the widget tree via safe_delete()
+     * 5. Calls on_ui_destroyed() to null derived class widget pointers
+     *
+     * The overlay object (subjects, state) survives — only the widget tree
+     * is destroyed. Next open triggers re-creation via lazy_create_and_push_overlay.
+     *
+     * @param cached_panel Reference to the caller's cached lv_obj_t* pointer
+     *                     (the same reference passed to lazy_create_and_push_overlay)
+     */
+    void destroy_overlay_ui(lv_obj_t*& cached_panel);
+
+    /**
      * @brief Check if subjects have been initialized
      * @return true if init_subjects() was called
      */
@@ -240,6 +259,17 @@ class OverlayBase : public IPanelLifecycle {
     bool subjects_initialized_ = false; ///< True after init_subjects() called
     bool visible_ = false;              ///< True when overlay is visible
     bool cleanup_called_ = false;       ///< True after cleanup() called
+
+    /**
+     * @brief Called after widget tree is destroyed by destroy_overlay_ui()
+     *
+     * Override to null derived-class widget pointers so that create()
+     * works correctly when re-invoked. The base overlay_root_ is already
+     * nulled before this is called.
+     *
+     * Default implementation does nothing.
+     */
+    virtual void on_ui_destroyed() {}
 
     //
     // === Subject Init/Deinit Guards ===

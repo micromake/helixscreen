@@ -1402,7 +1402,7 @@ void MoonrakerSpoolmanAPIMock::update_spoolman_filament(int filament_id,
                                                         ErrorCallback /*on_error*/) {
     spdlog::info("[MoonrakerAPIMock] update_spoolman_filament({}, {} fields)", filament_id,
                  filament_data.size());
-
+    filament_updates.push_back({filament_id, filament_data});
     if (on_success) {
         on_success();
     }

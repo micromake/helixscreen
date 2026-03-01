@@ -14,11 +14,13 @@
 #include "ams_state.h"
 
 #include "ui_color_picker.h"
+#include "ui_toast_manager.h"
 #include "ui_update_queue.h"
 
 #include "ams_backend_mock.h"
 #include "app_globals.h"
 #include "format_utils.h"
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "observer_factory.h"
 #include "printer_discovery.h"
@@ -88,17 +90,16 @@ const char* AmsState::get_logo_path(const std::string& type_name) {
     // Map system names to logo paths
     // Note: All logos are 64x64 white-on-transparent PNGs
     static const std::unordered_map<std::string, const char*> logo_map = {
-        // AFC/Box Turtle (AFC firmware only runs on Box Turtle hardware)
-        {"afc", "A:assets/images/ams/box_turtle_64.png"},
+        // AFC (Armored Turtle) - has its own logo
+        {"afc", "A:assets/images/ams/afc_64.png"},
         {"box turtle", "A:assets/images/ams/box_turtle_64.png"},
         {"box_turtle", "A:assets/images/ams/box_turtle_64.png"},
         {"boxturtle", "A:assets/images/ams/box_turtle_64.png"},
 
-        // Happy Hare - generic firmware, defaults to ERCF logo
-        // (most common hardware running Happy Hare)
-        {"happy hare", "A:assets/images/ams/ercf_64.png"},
-        {"happy_hare", "A:assets/images/ams/ercf_64.png"},
-        {"happyhare", "A:assets/images/ams/ercf_64.png"},
+        // Happy Hare - generic firmware, has its own logo
+        {"happy hare", "A:assets/images/ams/happy_hare_64.png"},
+        {"happy_hare", "A:assets/images/ams/happy_hare_64.png"},
+        {"happyhare", "A:assets/images/ams/happy_hare_64.png"},
 
         // Specific hardware types (when detected or configured)
         {"ercf", "A:assets/images/ams/ercf_64.png"},
@@ -128,6 +129,7 @@ const char* AmsState::get_logo_path(const std::string& type_name) {
 AmsState::AmsState() {
     std::memset(action_detail_buf_, 0, sizeof(action_detail_buf_));
     std::memset(system_name_buf_, 0, sizeof(system_name_buf_));
+    std::memset(system_logo_buf_, 0, sizeof(system_logo_buf_));
     std::memset(current_material_text_buf_, 0, sizeof(current_material_text_buf_));
     std::memset(current_slot_text_buf_, 0, sizeof(current_slot_text_buf_));
     std::memset(current_weight_text_buf_, 0, sizeof(current_weight_text_buf_));
@@ -215,7 +217,17 @@ void AmsState::init_subjects(bool register_xml) {
     if (register_xml)
         lv_xml_register_subject(nullptr, "ams_system_name", &ams_system_name_);
 
+    // Logo uses pointer subject — bind_src expects a pointer to the path string buffer
+    lv_subject_init_pointer(&ams_system_logo_, system_logo_buf_);
+    subjects_.register_subject(&ams_system_logo_);
+    if (register_xml)
+        lv_xml_register_subject(nullptr, "ams_system_logo", &ams_system_logo_);
+
     INIT_SUBJECT_STRING(ams_current_tool_text, "---", subjects_, register_xml);
+
+    // Tool change progress subjects
+    INIT_SUBJECT_INT(toolchange_visible, 0, subjects_, register_xml);
+    INIT_SUBJECT_STRING(toolchange_text, "", subjects_, register_xml);
 
     // Filament path visualization subjects
     INIT_SUBJECT_INT(path_topology, static_cast<int>(PathTopology::HUB), subjects_, register_xml);
@@ -447,7 +459,10 @@ int AmsState::add_backend(std::unique_ptr<AmsBackend> backend) {
     }
 
     // Update backend count subject for UI binding
-    lv_subject_set_int(&backend_count_, static_cast<int>(backends_.size()));
+    int new_count = static_cast<int>(backends_.size());
+    if (lv_subject_get_int(&backend_count_) != new_count) {
+        lv_subject_set_int(&backend_count_, new_count);
+    }
 
     return index;
 }
@@ -483,8 +498,12 @@ void AmsState::clear_backends() {
     secondary_slot_subjects_.clear();
 
     // Reset backend selector subjects
-    lv_subject_set_int(&backend_count_, 0);
-    lv_subject_set_int(&active_backend_, 0);
+    if (lv_subject_get_int(&backend_count_) != 0) {
+        lv_subject_set_int(&backend_count_, 0);
+    }
+    if (lv_subject_get_int(&active_backend_) != 0) {
+        lv_subject_set_int(&active_backend_, 0);
+    }
 }
 
 AmsBackend* AmsState::get_backend() const {
@@ -498,7 +517,9 @@ int AmsState::active_backend_index() const {
 void AmsState::set_active_backend(int index) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (index >= 0 && index < static_cast<int>(backends_.size())) {
-        lv_subject_set_int(&active_backend_, index);
+        if (lv_subject_get_int(&active_backend_) != index) {
+            lv_subject_set_int(&active_backend_, index);
+        }
     }
 }
 
@@ -678,65 +699,148 @@ void AmsState::sync_from_backend() {
     AmsSystemInfo info = backend->get_system_info();
 
     // Update system-level subjects
-    lv_subject_set_int(&ams_type_, static_cast<int>(info.type));
+    int new_type = static_cast<int>(info.type);
+    if (lv_subject_get_int(&ams_type_) != new_type) {
+        lv_subject_set_int(&ams_type_, new_type);
+    }
     spdlog::debug("[AmsState] sync_from_backend: action={} ({})", static_cast<int>(info.action),
                   ams_action_to_string(info.action));
-    lv_subject_set_int(&ams_action_, static_cast<int>(info.action));
+    int new_action = static_cast<int>(info.action);
+    if (lv_subject_get_int(&ams_action_) != new_action) {
+        lv_subject_set_int(&ams_action_, new_action);
+    }
 
     // Set system name from backend type_name or fallback to type string
+    std::string sys_name;
     if (!info.type_name.empty()) {
-        lv_subject_copy_string(&ams_system_name_, info.type_name.c_str());
+        sys_name = info.type_name;
     } else {
-        lv_subject_copy_string(&ams_system_name_, ams_type_to_string(info.type));
+        sys_name = ams_type_to_string(info.type);
     }
-    lv_subject_set_int(&current_slot_, info.current_slot);
-    lv_subject_set_int(&pending_target_slot_, info.pending_target_slot);
-    lv_subject_set_int(&ams_current_tool_, info.current_tool);
+    if (strcmp(lv_subject_get_string(&ams_system_name_), sys_name.c_str()) != 0) {
+        lv_subject_copy_string(&ams_system_name_, sys_name.c_str());
+    }
+
+    // Set system logo path for declarative image binding (pointer subject for bind_src)
+    const char* logo_path = get_logo_path(sys_name);
+    const char* new_logo = logo_path ? logo_path : "";
+    if (strcmp(system_logo_buf_, new_logo) != 0) {
+        strncpy(system_logo_buf_, new_logo, sizeof(system_logo_buf_) - 1);
+        system_logo_buf_[sizeof(system_logo_buf_) - 1] = '\0';
+        lv_subject_set_pointer(&ams_system_logo_, system_logo_buf_);
+    }
+    if (lv_subject_get_int(&current_slot_) != info.current_slot) {
+        lv_subject_set_int(&current_slot_, info.current_slot);
+    }
+    if (lv_subject_get_int(&pending_target_slot_) != info.pending_target_slot) {
+        lv_subject_set_int(&pending_target_slot_, info.pending_target_slot);
+    }
+    if (lv_subject_get_int(&ams_current_tool_) != info.current_tool) {
+        lv_subject_set_int(&ams_current_tool_, info.current_tool);
+    }
 
     // Update formatted tool text (e.g., "T0", "T1", or "---" when no tool active)
     if (info.current_tool >= 0) {
         snprintf(ams_current_tool_text_buf_, sizeof(ams_current_tool_text_buf_), "T%d",
                  info.current_tool);
-        lv_subject_copy_string(&ams_current_tool_text_, ams_current_tool_text_buf_);
+        if (strcmp(lv_subject_get_string(&ams_current_tool_text_),
+                  ams_current_tool_text_buf_) != 0) {
+            lv_subject_copy_string(&ams_current_tool_text_, ams_current_tool_text_buf_);
+        }
     } else {
-        lv_subject_copy_string(&ams_current_tool_text_, "---");
+        if (strcmp(lv_subject_get_string(&ams_current_tool_text_), "---") != 0) {
+            lv_subject_copy_string(&ams_current_tool_text_, "---");
+        }
     }
 
-    lv_subject_set_int(&filament_loaded_, info.filament_loaded ? 1 : 0);
-    lv_subject_set_int(&bypass_active_, info.current_slot == -2 ? 1 : 0);
-    lv_subject_set_int(&supports_bypass_, info.supports_bypass ? 1 : 0);
+    int new_loaded = info.filament_loaded ? 1 : 0;
+    if (lv_subject_get_int(&filament_loaded_) != new_loaded) {
+        lv_subject_set_int(&filament_loaded_, new_loaded);
+    }
+    int new_bypass = info.current_slot == -2 ? 1 : 0;
+    if (lv_subject_get_int(&bypass_active_) != new_bypass) {
+        lv_subject_set_int(&bypass_active_, new_bypass);
+    }
+    int new_supports_bypass = info.supports_bypass ? 1 : 0;
+    if (lv_subject_get_int(&supports_bypass_) != new_supports_bypass) {
+        lv_subject_set_int(&supports_bypass_, new_supports_bypass);
+    }
 
     // Update external spool color from persistent settings
     auto ext_spool = helix::SettingsManager::instance().get_external_spool_info();
-    lv_subject_set_int(&external_spool_color_,
-                       ext_spool.has_value() ? static_cast<int>(ext_spool->color_rgb) : 0);
-    lv_subject_set_int(&ams_slot_count_, info.total_slots);
+    int new_ext_color = ext_spool.has_value() ? static_cast<int>(ext_spool->color_rgb) : 0;
+    if (lv_subject_get_int(&external_spool_color_) != new_ext_color) {
+        lv_subject_set_int(&external_spool_color_, new_ext_color);
+    }
+    if (lv_subject_get_int(&ams_slot_count_) != info.total_slots) {
+        lv_subject_set_int(&ams_slot_count_, info.total_slots);
+    }
+
+    // Update tool change progress display
+    if (info.number_of_toolchanges > 0) {
+        if (lv_subject_get_int(&toolchange_visible_) != 1) {
+            lv_subject_set_int(&toolchange_visible_, 1);
+        }
+        int display_current = std::max(0, info.current_toolchange + 1); // 1-based
+        snprintf(toolchange_text_buf_, sizeof(toolchange_text_buf_), "%d / %d", display_current,
+                 info.number_of_toolchanges);
+        if (strcmp(lv_subject_get_string(&toolchange_text_), toolchange_text_buf_) != 0) {
+            lv_subject_copy_string(&toolchange_text_, toolchange_text_buf_);
+        }
+    } else {
+        if (lv_subject_get_int(&toolchange_visible_) != 0) {
+            lv_subject_set_int(&toolchange_visible_, 0);
+        }
+        if (strcmp(lv_subject_get_string(&toolchange_text_), "") != 0) {
+            lv_subject_copy_string(&toolchange_text_, "");
+        }
+    }
 
     // Update action detail string
-    if (!info.operation_detail.empty()) {
-        lv_subject_copy_string(&ams_action_detail_, info.operation_detail.c_str());
-    } else {
-        lv_subject_copy_string(&ams_action_detail_, ams_action_to_string(info.action));
+    const char* detail_str =
+        !info.operation_detail.empty() ? info.operation_detail.c_str() : ams_action_to_string(info.action);
+    if (strcmp(lv_subject_get_string(&ams_action_detail_), detail_str) != 0) {
+        lv_subject_copy_string(&ams_action_detail_, detail_str);
     }
 
     // Update path visualization subjects
-    lv_subject_set_int(&path_topology_, static_cast<int>(backend->get_topology()));
-    lv_subject_set_int(&path_active_slot_, info.current_slot);
-    lv_subject_set_int(&path_filament_segment_, static_cast<int>(backend->get_filament_segment()));
-    lv_subject_set_int(&path_error_segment_, static_cast<int>(backend->infer_error_segment()));
+    int new_topology = static_cast<int>(backend->get_topology());
+    if (lv_subject_get_int(&path_topology_) != new_topology) {
+        lv_subject_set_int(&path_topology_, new_topology);
+    }
+    if (lv_subject_get_int(&path_active_slot_) != info.current_slot) {
+        lv_subject_set_int(&path_active_slot_, info.current_slot);
+    }
+    int new_filament_seg = static_cast<int>(backend->get_filament_segment());
+    if (lv_subject_get_int(&path_filament_segment_) != new_filament_seg) {
+        lv_subject_set_int(&path_filament_segment_, new_filament_seg);
+    }
+    int new_error_seg = static_cast<int>(backend->infer_error_segment());
+    if (lv_subject_get_int(&path_error_segment_) != new_error_seg) {
+        lv_subject_set_int(&path_error_segment_, new_error_seg);
+    }
     // If backend provides bowden progress (v4), use it to drive animation progress.
     // Otherwise, path_anim_progress_ stays under UI animation control.
     int bowden_progress = backend->get_bowden_progress();
-    if (bowden_progress >= 0) {
+    if (bowden_progress >= 0 && lv_subject_get_int(&path_anim_progress_) != bowden_progress) {
         lv_subject_set_int(&path_anim_progress_, bowden_progress);
     }
 
-    // Update per-slot subjects
+    // Update per-slot subjects, only firing when values actually change
+    bool any_slot_changed = false;
     for (int i = 0; i < std::min(info.total_slots, MAX_SLOTS); ++i) {
         const SlotInfo* slot = info.get_slot_global(i);
         if (slot) {
-            lv_subject_set_int(&slot_colors_[i], static_cast<int>(slot->color_rgb));
-            lv_subject_set_int(&slot_statuses_[i], static_cast<int>(slot->status));
+            int new_color = static_cast<int>(slot->color_rgb);
+            if (lv_subject_get_int(&slot_colors_[i]) != new_color) {
+                lv_subject_set_int(&slot_colors_[i], new_color);
+                any_slot_changed = true;
+            }
+            int new_status = static_cast<int>(slot->status);
+            if (lv_subject_get_int(&slot_statuses_[i]) != new_status) {
+                lv_subject_set_int(&slot_statuses_[i], new_status);
+                any_slot_changed = true;
+            }
         }
     }
 
@@ -755,28 +859,35 @@ void AmsState::sync_from_backend() {
         ToolState::instance().save_spool_assignments_if_dirty(get_moonraker_api());
     }
 
-    // Clear remaining slot subjects
+    // Clear remaining slot subjects, only firing when values actually change
     for (int i = info.total_slots; i < MAX_SLOTS; ++i) {
-        lv_subject_set_int(&slot_colors_[i], static_cast<int>(AMS_DEFAULT_SLOT_COLOR));
-        lv_subject_set_int(&slot_statuses_[i], static_cast<int>(SlotStatus::UNKNOWN));
+        int default_color = static_cast<int>(AMS_DEFAULT_SLOT_COLOR);
+        if (lv_subject_get_int(&slot_colors_[i]) != default_color) {
+            lv_subject_set_int(&slot_colors_[i], default_color);
+            any_slot_changed = true;
+        }
+        int default_status = static_cast<int>(SlotStatus::UNKNOWN);
+        if (lv_subject_get_int(&slot_statuses_[i]) != default_status) {
+            lv_subject_set_int(&slot_statuses_[i], default_status);
+            any_slot_changed = true;
+        }
     }
 
-    bump_slots_version();
+    if (any_slot_changed) {
+        spdlog::trace("[AmsState] Slot data changed, bumping version");
+        bump_slots_version();
+    }
 
     // Sync dryer state (for systems with integrated drying like ValgACE)
     sync_dryer_from_backend();
 
-    // Sync "Currently Loaded" display subjects
-    sync_current_loaded_from_backend();
+    // Sync "Currently Loaded" display subjects (pass info to avoid re-fetching)
+    sync_current_loaded_from_backend(info);
 
     spdlog::debug("[AMS State] Synced from backend - type={}, slots={}, action={}, segment={}",
                   ams_type_to_string(info.type), info.total_slots,
                   ams_action_to_string(info.action),
                   path_segment_to_string(backend->get_filament_segment()));
-
-    // Refresh Spoolman weights now that slot data is available
-    // (this catches initial load and any re-syncs)
-    refresh_spoolman_weights();
 }
 
 void AmsState::update_slot(int slot_index) {
@@ -789,9 +900,20 @@ void AmsState::update_slot(int slot_index) {
 
     SlotInfo slot = backend->get_slot_info(slot_index);
     if (slot.slot_index >= 0) {
-        lv_subject_set_int(&slot_colors_[slot_index], static_cast<int>(slot.color_rgb));
-        lv_subject_set_int(&slot_statuses_[slot_index], static_cast<int>(slot.status));
-        bump_slots_version();
+        bool changed = false;
+        int new_color = static_cast<int>(slot.color_rgb);
+        if (lv_subject_get_int(&slot_colors_[slot_index]) != new_color) {
+            lv_subject_set_int(&slot_colors_[slot_index], new_color);
+            changed = true;
+        }
+        int new_status = static_cast<int>(slot.status);
+        if (lv_subject_get_int(&slot_statuses_[slot_index]) != new_status) {
+            lv_subject_set_int(&slot_statuses_[slot_index], new_status);
+            changed = true;
+        }
+        if (changed) {
+            bump_slots_version();
+        }
 
         // Sync spool to ToolState if this slot maps to a tool
         if (slot.mapped_tool >= 0 && slot.spoolman_id > 0) {
@@ -874,26 +996,50 @@ void AmsState::sync_dryer_from_backend() {
     auto* backend = get_backend(0);
     if (!backend) {
         // No backend - clear dryer state
-        lv_subject_set_int(&dryer_supported_, 0);
-        lv_subject_set_int(&dryer_active_, 0);
+        if (lv_subject_get_int(&dryer_supported_) != 0) {
+            lv_subject_set_int(&dryer_supported_, 0);
+        }
+        if (lv_subject_get_int(&dryer_active_) != 0) {
+            lv_subject_set_int(&dryer_active_, 0);
+        }
         return;
     }
 
     DryerInfo dryer = backend->get_dryer_info();
 
     // Update integer subjects
-    lv_subject_set_int(&dryer_supported_, dryer.supported ? 1 : 0);
-    lv_subject_set_int(&dryer_active_, dryer.active ? 1 : 0);
-    lv_subject_set_int(&dryer_current_temp_, static_cast<int>(dryer.current_temp_c));
-    lv_subject_set_int(&dryer_target_temp_, static_cast<int>(dryer.target_temp_c));
-    lv_subject_set_int(&dryer_remaining_min_, dryer.remaining_min);
-    lv_subject_set_int(&dryer_progress_pct_, dryer.get_progress_pct());
+    int new_supported = dryer.supported ? 1 : 0;
+    if (lv_subject_get_int(&dryer_supported_) != new_supported) {
+        lv_subject_set_int(&dryer_supported_, new_supported);
+    }
+    int new_dryer_active = dryer.active ? 1 : 0;
+    if (lv_subject_get_int(&dryer_active_) != new_dryer_active) {
+        lv_subject_set_int(&dryer_active_, new_dryer_active);
+    }
+    int new_cur_temp = static_cast<int>(dryer.current_temp_c);
+    if (lv_subject_get_int(&dryer_current_temp_) != new_cur_temp) {
+        lv_subject_set_int(&dryer_current_temp_, new_cur_temp);
+    }
+    int new_tgt_temp = static_cast<int>(dryer.target_temp_c);
+    if (lv_subject_get_int(&dryer_target_temp_) != new_tgt_temp) {
+        lv_subject_set_int(&dryer_target_temp_, new_tgt_temp);
+    }
+    if (lv_subject_get_int(&dryer_remaining_min_) != dryer.remaining_min) {
+        lv_subject_set_int(&dryer_remaining_min_, dryer.remaining_min);
+    }
+    int new_progress = dryer.get_progress_pct();
+    if (lv_subject_get_int(&dryer_progress_pct_) != new_progress) {
+        lv_subject_set_int(&dryer_progress_pct_, new_progress);
+    }
 
     // Format temperature text strings
     if (dryer.supported) {
         snprintf(dryer_current_temp_text_buf_, sizeof(dryer_current_temp_text_buf_), "%d°C",
                  static_cast<int>(dryer.current_temp_c));
-        lv_subject_copy_string(&dryer_current_temp_text_, dryer_current_temp_text_buf_);
+        if (strcmp(lv_subject_get_string(&dryer_current_temp_text_),
+                  dryer_current_temp_text_buf_) != 0) {
+            lv_subject_copy_string(&dryer_current_temp_text_, dryer_current_temp_text_buf_);
+        }
 
         if (dryer.target_temp_c > 0) {
             snprintf(dryer_target_temp_text_buf_, sizeof(dryer_target_temp_text_buf_), "%d°C",
@@ -901,7 +1047,10 @@ void AmsState::sync_dryer_from_backend() {
         } else {
             snprintf(dryer_target_temp_text_buf_, sizeof(dryer_target_temp_text_buf_), "Off");
         }
-        lv_subject_copy_string(&dryer_target_temp_text_, dryer_target_temp_text_buf_);
+        if (strcmp(lv_subject_get_string(&dryer_target_temp_text_),
+                  dryer_target_temp_text_buf_) != 0) {
+            lv_subject_copy_string(&dryer_target_temp_text_, dryer_target_temp_text_buf_);
+        }
 
         // Format time remaining text
         if (dryer.active && dryer.remaining_min > 0) {
@@ -911,11 +1060,19 @@ void AmsState::sync_dryer_from_backend() {
         } else {
             dryer_time_text_buf_[0] = '\0';
         }
-        lv_subject_copy_string(&dryer_time_text_, dryer_time_text_buf_);
+        if (strcmp(lv_subject_get_string(&dryer_time_text_), dryer_time_text_buf_) != 0) {
+            lv_subject_copy_string(&dryer_time_text_, dryer_time_text_buf_);
+        }
     } else {
-        lv_subject_copy_string(&dryer_current_temp_text_, "---");
-        lv_subject_copy_string(&dryer_target_temp_text_, "---");
-        lv_subject_copy_string(&dryer_time_text_, "");
+        if (strcmp(lv_subject_get_string(&dryer_current_temp_text_), "---") != 0) {
+            lv_subject_copy_string(&dryer_current_temp_text_, "---");
+        }
+        if (strcmp(lv_subject_get_string(&dryer_target_temp_text_), "---") != 0) {
+            lv_subject_copy_string(&dryer_target_temp_text_, "---");
+        }
+        if (strcmp(lv_subject_get_string(&dryer_time_text_), "") != 0) {
+            lv_subject_copy_string(&dryer_time_text_, "");
+        }
     }
 
     spdlog::trace("[AMS State] Synced dryer - supported={}, active={}, temp={}→{}°C, {}min left",
@@ -925,18 +1082,27 @@ void AmsState::sync_dryer_from_backend() {
 
 void AmsState::set_action_detail(const std::string& detail) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    lv_subject_copy_string(&ams_action_detail_, detail.c_str());
-    spdlog::debug("[AMS State] Action detail set: {}", detail);
+    if (strcmp(lv_subject_get_string(&ams_action_detail_), detail.c_str()) != 0) {
+        lv_subject_copy_string(&ams_action_detail_, detail.c_str());
+        spdlog::debug("[AMS State] Action detail set: {}", detail);
+    }
 }
 
 void AmsState::set_action(AmsAction action) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    lv_subject_set_int(&ams_action_, static_cast<int>(action));
-    spdlog::debug("[AMS State] Action set: {}", ams_action_to_string(action));
+    int val = static_cast<int>(action);
+    if (lv_subject_get_int(&ams_action_) != val) {
+        lv_subject_set_int(&ams_action_, val);
+        spdlog::debug("[AMS State] Action set: {}", ams_action_to_string(action));
+    }
 }
 
 void AmsState::set_pending_target_slot(int slot) {
-    helix::ui::queue_update([this, slot]() { lv_subject_set_int(&pending_target_slot_, slot); });
+    helix::ui::queue_update([this, slot]() {
+        if (lv_subject_get_int(&pending_target_slot_) != slot) {
+            lv_subject_set_int(&pending_target_slot_, slot);
+        }
+    });
 }
 
 bool AmsState::is_filament_operation_active() {
@@ -955,30 +1121,63 @@ bool AmsState::is_filament_operation_active() {
     }
 }
 
+void AmsState::set_current_loaded_defaults() {
+    if (strcmp(lv_subject_get_string(&current_material_text_), "---") != 0) {
+        lv_subject_copy_string(&current_material_text_, "---");
+    }
+    const char* default_slot = lv_tr("Currently Loaded");
+    if (strcmp(lv_subject_get_string(&current_slot_text_), default_slot) != 0) {
+        lv_subject_copy_string(&current_slot_text_, default_slot);
+    }
+    if (strcmp(lv_subject_get_string(&current_weight_text_), "") != 0) {
+        lv_subject_copy_string(&current_weight_text_, "");
+    }
+    if (lv_subject_get_int(&current_has_weight_) != 0) {
+        lv_subject_set_int(&current_has_weight_, 0);
+    }
+    if (lv_subject_get_int(&current_color_) != 0x505050) {
+        lv_subject_set_int(&current_color_, 0x505050);
+    }
+}
+
 void AmsState::sync_current_loaded_from_backend() {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     if (backends_.empty()) {
-        // No backend - show empty state
-        lv_subject_copy_string(&current_material_text_, "---");
-        lv_subject_copy_string(&current_slot_text_, "Currently Loaded");
-        lv_subject_copy_string(&current_weight_text_, "");
-        lv_subject_set_int(&current_has_weight_, 0);
-        lv_subject_set_int(&current_color_, 0x505050);
+        set_current_loaded_defaults();
+        return;
+    }
+
+    auto* backend = get_backend(0);
+    if (backend) {
+        sync_current_loaded_from_backend(backend->get_system_info());
+    }
+}
+
+void AmsState::sync_current_loaded_from_backend(const AmsSystemInfo& primary_info) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    if (backends_.empty()) {
+        set_current_loaded_defaults();
         return;
     }
 
     // Search ALL backends to find the one with filament loaded.
     // In multi-backend setups (e.g., AMS_1 + AMS_2), only one backend
     // will have filament actively loaded at a time.
+    // Use pre-fetched primary_info for backend 0 to avoid redundant get_system_info().
     AmsBackend* loaded_backend = nullptr;
     int slot_index = -1;
     bool filament_loaded = false;
 
-    for (auto& b : backends_) {
+    for (size_t idx = 0; idx < backends_.size(); ++idx) {
+        auto& b = backends_[idx];
         if (!b)
             continue;
-        AmsSystemInfo info = b->get_system_info();
+        AmsSystemInfo secondary_info;
+        if (idx != 0)
+            secondary_info = b->get_system_info();
+        const AmsSystemInfo& info = (idx == 0) ? primary_info : secondary_info;
         if (info.filament_loaded) {
             loaded_backend = b.get();
             slot_index = info.current_slot;
@@ -997,30 +1196,32 @@ void AmsState::sync_current_loaded_from_backend() {
     if (!loaded_backend) {
         loaded_backend = backends_[0].get();
         if (loaded_backend) {
-            AmsSystemInfo info = loaded_backend->get_system_info();
-            slot_index = info.current_slot;
-            filament_loaded = info.filament_loaded;
+            slot_index = primary_info.current_slot;
+            filament_loaded = primary_info.filament_loaded;
         }
     }
 
     if (!loaded_backend) {
-        lv_subject_copy_string(&current_material_text_, "---");
-        lv_subject_copy_string(&current_slot_text_, "Currently Loaded");
-        lv_subject_copy_string(&current_weight_text_, "");
-        lv_subject_set_int(&current_has_weight_, 0);
+        set_current_loaded_defaults();
         lv_subject_set_int(&current_color_, 0x505050);
         return;
     }
 
     // Check for bypass mode (slot_index == -2)
     if (slot_index == -2 && loaded_backend->is_bypass_active()) {
-        lv_subject_copy_string(&current_slot_text_, "Current: Bypass");
+        const char* bypass_text = lv_tr("Current: Bypass");
+        if (strcmp(lv_subject_get_string(&current_slot_text_), bypass_text) != 0) {
+            lv_subject_copy_string(&current_slot_text_, bypass_text);
+        }
 
         // Show actual spool info if external spool is assigned
         auto ext_spool = get_external_spool_info();
         if (ext_spool.has_value()) {
             const auto& ext = ext_spool.value();
-            lv_subject_set_int(&current_color_, static_cast<int>(ext.color_rgb));
+            int ext_color = static_cast<int>(ext.color_rgb);
+            if (lv_subject_get_int(&current_color_) != ext_color) {
+                lv_subject_set_int(&current_color_, ext_color);
+            }
 
             // Build label from spool info
             std::string color_label;
@@ -1037,24 +1238,44 @@ void AmsState::sync_current_loaded_from_backend() {
             } else if (!ext.material.empty()) {
                 label = ext.material;
             } else {
-                label = "External";
+                label = lv_tr("External");
             }
-            lv_subject_copy_string(&current_material_text_, label.c_str());
+            if (strcmp(lv_subject_get_string(&current_material_text_), label.c_str()) != 0) {
+                lv_subject_copy_string(&current_material_text_, label.c_str());
+            }
 
             if (ext.total_weight_g > 0.0f && ext.remaining_weight_g >= 0.0f) {
                 snprintf(current_weight_text_buf_, sizeof(current_weight_text_buf_), "%.0fg",
                          ext.remaining_weight_g);
-                lv_subject_copy_string(&current_weight_text_, current_weight_text_buf_);
-                lv_subject_set_int(&current_has_weight_, 1);
+                if (strcmp(lv_subject_get_string(&current_weight_text_),
+                          current_weight_text_buf_) != 0) {
+                    lv_subject_copy_string(&current_weight_text_, current_weight_text_buf_);
+                }
+                if (lv_subject_get_int(&current_has_weight_) != 1) {
+                    lv_subject_set_int(&current_has_weight_, 1);
+                }
             } else {
-                lv_subject_copy_string(&current_weight_text_, "");
-                lv_subject_set_int(&current_has_weight_, 0);
+                if (strcmp(lv_subject_get_string(&current_weight_text_), "") != 0) {
+                    lv_subject_copy_string(&current_weight_text_, "");
+                }
+                if (lv_subject_get_int(&current_has_weight_) != 0) {
+                    lv_subject_set_int(&current_has_weight_, 0);
+                }
             }
         } else {
-            lv_subject_copy_string(&current_material_text_, "External");
-            lv_subject_copy_string(&current_weight_text_, "");
-            lv_subject_set_int(&current_has_weight_, 0);
-            lv_subject_set_int(&current_color_, 0x888888);
+            const char* ext_text = lv_tr("External");
+            if (strcmp(lv_subject_get_string(&current_material_text_), ext_text) != 0) {
+                lv_subject_copy_string(&current_material_text_, ext_text);
+            }
+            if (strcmp(lv_subject_get_string(&current_weight_text_), "") != 0) {
+                lv_subject_copy_string(&current_weight_text_, "");
+            }
+            if (lv_subject_get_int(&current_has_weight_) != 0) {
+                lv_subject_set_int(&current_has_weight_, 0);
+            }
+            if (lv_subject_get_int(&current_color_) != 0x888888) {
+                lv_subject_set_int(&current_color_, 0x888888);
+            }
         }
     } else if (slot_index >= 0 && filament_loaded) {
         // Filament is loaded - show slot info from the backend that has it loaded
@@ -1074,7 +1295,10 @@ void AmsState::sync_current_loaded_from_backend() {
         }
 
         // Set color
-        lv_subject_set_int(&current_color_, static_cast<int>(slot_info.color_rgb));
+        int slot_color = static_cast<int>(slot_info.color_rgb);
+        if (lv_subject_get_int(&current_color_) != slot_color) {
+            lv_subject_set_int(&current_color_, slot_color);
+        }
 
         // Build material label - color name + material (e.g., "Red PLA")
         // Use Spoolman color name if available, otherwise identify from hex
@@ -1096,7 +1320,9 @@ void AmsState::sync_current_loaded_from_backend() {
             } else {
                 label = "Filament";
             }
-            lv_subject_copy_string(&current_material_text_, label.c_str());
+            if (strcmp(lv_subject_get_string(&current_material_text_), label.c_str()) != 0) {
+                lv_subject_copy_string(&current_material_text_, label.c_str());
+            }
         }
 
         // Set slot label with unit name
@@ -1105,8 +1331,8 @@ void AmsState::sync_current_loaded_from_backend() {
 
             if (is_tool_changer(sys.type) && sys.units.empty()) {
                 // Pure tool changer with no AMS units — show tool index (0-based)
-                snprintf(current_slot_text_buf_, sizeof(current_slot_text_buf_), "Current: Tool %d",
-                         slot_index);
+                snprintf(current_slot_text_buf_, sizeof(current_slot_text_buf_),
+                         lv_tr("Current: Tool %d"), slot_index);
             } else {
                 std::string unit_display;
                 int display_slot = slot_index + 1; // 1-based global slot number
@@ -1122,32 +1348,40 @@ void AmsState::sync_current_loaded_from_backend() {
                 if (!unit_display.empty() && sys.units.size() > 1) {
                     // Multi-unit: show unit name + slot number on one line
                     snprintf(current_slot_text_buf_, sizeof(current_slot_text_buf_),
-                             "Current: %s · Slot %d", unit_display.c_str(), display_slot);
+                             lv_tr("Current: %s · Slot %d"), unit_display.c_str(), display_slot);
                 } else {
                     snprintf(current_slot_text_buf_, sizeof(current_slot_text_buf_),
-                             "Current: Slot %d", display_slot);
+                             lv_tr("Current: Slot %d"), display_slot);
                 }
             }
-            lv_subject_copy_string(&current_slot_text_, current_slot_text_buf_);
+            if (strcmp(lv_subject_get_string(&current_slot_text_),
+                      current_slot_text_buf_) != 0) {
+                lv_subject_copy_string(&current_slot_text_, current_slot_text_buf_);
+            }
         }
 
         // Show remaining weight if available (from Spoolman or backend)
         if (slot_info.total_weight_g > 0.0f && slot_info.remaining_weight_g >= 0.0f) {
             snprintf(current_weight_text_buf_, sizeof(current_weight_text_buf_), "%.0fg",
                      slot_info.remaining_weight_g);
-            lv_subject_copy_string(&current_weight_text_, current_weight_text_buf_);
-            lv_subject_set_int(&current_has_weight_, 1);
+            if (strcmp(lv_subject_get_string(&current_weight_text_),
+                      current_weight_text_buf_) != 0) {
+                lv_subject_copy_string(&current_weight_text_, current_weight_text_buf_);
+            }
+            if (lv_subject_get_int(&current_has_weight_) != 1) {
+                lv_subject_set_int(&current_has_weight_, 1);
+            }
         } else {
-            lv_subject_copy_string(&current_weight_text_, "");
-            lv_subject_set_int(&current_has_weight_, 0);
+            if (strcmp(lv_subject_get_string(&current_weight_text_), "") != 0) {
+                lv_subject_copy_string(&current_weight_text_, "");
+            }
+            if (lv_subject_get_int(&current_has_weight_) != 0) {
+                lv_subject_set_int(&current_has_weight_, 0);
+            }
         }
     } else {
         // No filament loaded - show empty state
-        lv_subject_copy_string(&current_material_text_, "---");
-        lv_subject_copy_string(&current_slot_text_, "Currently Loaded");
-        lv_subject_copy_string(&current_weight_text_, "");
-        lv_subject_set_int(&current_has_weight_, 0);
-        lv_subject_set_int(&current_color_, 0x505050);
+        set_current_loaded_defaults();
     }
 
     spdlog::trace("[AMS State] Synced current loaded - slot={}, has_weight={}", slot_index,
@@ -1210,13 +1444,18 @@ void AmsState::update_modal_text_subjects() {
     // Format temperature (e.g., "55°C")
     snprintf(dryer_modal_temp_text_buf_, sizeof(dryer_modal_temp_text_buf_), "%d°C",
              modal_target_temp_c_);
-    lv_subject_copy_string(&dryer_modal_temp_text_, dryer_modal_temp_text_buf_);
+    if (strcmp(lv_subject_get_string(&dryer_modal_temp_text_), dryer_modal_temp_text_buf_) != 0) {
+        lv_subject_copy_string(&dryer_modal_temp_text_, dryer_modal_temp_text_buf_);
+    }
 
     // Format duration using utility (e.g., "4h", "30m", "4h 30m")
     std::string duration = helix::format::duration(modal_duration_min_ * 60);
     snprintf(dryer_modal_duration_text_buf_, sizeof(dryer_modal_duration_text_buf_), "%s",
              duration.c_str());
-    lv_subject_copy_string(&dryer_modal_duration_text_, dryer_modal_duration_text_buf_);
+    if (strcmp(lv_subject_get_string(&dryer_modal_duration_text_),
+              dryer_modal_duration_text_buf_) != 0) {
+        lv_subject_copy_string(&dryer_modal_duration_text_, dryer_modal_duration_text_buf_);
+    }
 }
 
 // ============================================================================
@@ -1240,13 +1479,35 @@ void AmsState::refresh_spoolman_weights() {
         return;
     }
 
-    // Skip Spoolman weight polling when the backend tracks weight locally
-    // (e.g., AFC decrements weight via extruder position every 10s during
-    // printing). Spoolman's weight is stale because these backends never
-    // write back to it, so polling would overwrite accurate live data.
-    if (backend->tracks_weight_locally()) {
-        return;
+    uint32_t now = lv_tick_get();
+
+    // Circuit breaker: if open, check if backoff period has elapsed
+    if (spoolman_cb_open_) {
+        uint32_t elapsed = now - spoolman_cb_tripped_at_ms_;
+        if (elapsed < SPOOLMAN_CB_BACKOFF_MS) {
+            spdlog::trace("[AmsState] Spoolman circuit breaker open, {}ms remaining",
+                          SPOOLMAN_CB_BACKOFF_MS - elapsed);
+            return;
+        }
+        // Backoff elapsed — half-open: allow one probe request through
+        spdlog::info("[AmsState] Spoolman circuit breaker half-open, probing...");
+        spoolman_cb_open_ = false;
     }
+
+    // Debounce: skip if called too recently
+    if (spoolman_last_refresh_ms_ > 0) {
+        uint32_t since_last = now - spoolman_last_refresh_ms_;
+        if (since_last < SPOOLMAN_DEBOUNCE_MS) {
+            spdlog::trace("[AmsState] Spoolman refresh debounced ({}ms since last)", since_last);
+            return;
+        }
+    }
+    spoolman_last_refresh_ms_ = now;
+
+    // When the backend tracks weight locally (e.g., AFC decrements weight
+    // via extruder position), we still need total_weight_g (initial weight)
+    // from Spoolman — the backend only provides remaining weight.
+    bool local_weight = backend->tracks_weight_locally();
 
     int slot_count = backend->get_system_info().total_slots;
     int linked_count = 0;
@@ -1260,7 +1521,7 @@ void AmsState::refresh_spoolman_weights() {
 
             api_->spoolman().get_spoolman_spool(
                 spoolman_id,
-                [slot_index, spoolman_id](const std::optional<SpoolInfo>& spool_opt) {
+                [slot_index, spoolman_id, local_weight](const std::optional<SpoolInfo>& spool_opt) {
                     if (!spool_opt.has_value()) {
                         spdlog::warn("[AmsState] Spoolman spool {} not found", spoolman_id);
                         return;
@@ -1274,11 +1535,12 @@ void AmsState::refresh_spoolman_weights() {
                         int expected_spoolman_id; // To verify slot wasn't reassigned
                         float remaining_weight_g;
                         float total_weight_g;
+                        bool local_weight; // Backend tracks remaining weight locally
                     };
 
                     auto update_data = std::make_unique<WeightUpdate>(WeightUpdate{
                         slot_index, spoolman_id, static_cast<float>(spool.remaining_weight_g),
-                        static_cast<float>(spool.initial_weight_g)});
+                        static_cast<float>(spool.initial_weight_g), local_weight});
 
                     helix::ui::queue_update<WeightUpdate>(std::move(update_data), [](WeightUpdate*
                                                                                          d) {
@@ -1289,6 +1551,14 @@ void AmsState::refresh_spoolman_weights() {
 
                         AmsState& state = AmsState::instance();
                         std::lock_guard<std::recursive_mutex> lock(state.mutex_);
+
+                        // Success response — reset circuit breaker (on UI thread)
+                        if (state.spoolman_consecutive_failures_ > 0) {
+                            spdlog::info("[AmsState] Spoolman recovered after {} failures",
+                                         state.spoolman_consecutive_failures_);
+                        }
+                        state.spoolman_consecutive_failures_ = 0;
+                        state.spoolman_unavailable_notified_ = false;
 
                         auto* primary = state.get_backend(0);
                         if (!primary) {
@@ -1305,12 +1575,18 @@ void AmsState::refresh_spoolman_weights() {
                             return;
                         }
 
+                        // When backend tracks weight locally, only update total_weight
+                        // (initial weight from Spoolman). Preserve the backend's
+                        // remaining_weight which is more accurate than Spoolman's.
+                        float new_remaining =
+                            d->local_weight ? slot.remaining_weight_g : d->remaining_weight_g;
+
                         // Skip update if weights haven't changed (avoids UI refresh cascade)
-                        if (slot.remaining_weight_g == d->remaining_weight_g &&
+                        if (slot.remaining_weight_g == new_remaining &&
                             slot.total_weight_g == d->total_weight_g) {
                             spdlog::trace(
                                 "[AmsState] Slot {} weights unchanged ({:.0f}g / {:.0f}g)",
-                                d->slot_index, d->remaining_weight_g, d->total_weight_g);
+                                d->slot_index, new_remaining, d->total_weight_g);
                             return;
                         }
 
@@ -1324,18 +1600,52 @@ void AmsState::refresh_spoolman_weights() {
                         // fires 16+ G-code commands per cycle and saturates the CPU.
                         // Since these weights come FROM Spoolman (an external source),
                         // there's no need to write them back to firmware.
-                        slot.remaining_weight_g = d->remaining_weight_g;
+                        slot.remaining_weight_g = new_remaining;
                         slot.total_weight_g = d->total_weight_g;
                         primary->set_slot_info(d->slot_index, slot, /*persist=*/false);
                         state.bump_slots_version();
 
-                        spdlog::debug("[AmsState] Updated slot {} weights: {:.0f}g / {:.0f}g",
-                                      d->slot_index, d->remaining_weight_g, d->total_weight_g);
+                        spdlog::debug("[AmsState] Updated slot {} weights: {:.0f}g / {:.0f}g{}",
+                                      d->slot_index, new_remaining, d->total_weight_g,
+                                      d->local_weight ? " (local remaining)" : "");
                     });
                 },
                 [spoolman_id](const MoonrakerError& err) {
                     spdlog::warn("[AmsState] Failed to fetch Spoolman spool {}: {}", spoolman_id,
                                  err.message);
+
+                    // Track failure for circuit breaker (post to UI thread for
+                    // thread-safe access to AmsState and ToastManager)
+                    helix::ui::queue_update([]() {
+                        if (s_shutdown_flag.load(std::memory_order_acquire)) {
+                            return;
+                        }
+
+                        AmsState& state = AmsState::instance();
+                        std::lock_guard<std::recursive_mutex> lock(state.mutex_);
+
+                        state.spoolman_consecutive_failures_++;
+
+                        if (state.spoolman_consecutive_failures_ >= SPOOLMAN_CB_FAILURE_THRESHOLD) {
+                            state.spoolman_cb_open_ = true;
+                            state.spoolman_cb_tripped_at_ms_ = lv_tick_get();
+                            spdlog::warn(
+                                "[AmsState] Spoolman circuit breaker OPEN after {} failures, "
+                                "backing off {}s",
+                                state.spoolman_consecutive_failures_,
+                                SPOOLMAN_CB_BACKOFF_MS / 1000);
+
+                            // Notify user once per outage
+                            if (!state.spoolman_unavailable_notified_) {
+                                state.spoolman_unavailable_notified_ = true;
+                                // i18n: Spoolman is a product name, do not translate
+                                ToastManager::instance().show(
+                                    ToastSeverity::WARNING,
+                                    lv_tr("Spoolman unavailable — filament weights may be stale"),
+                                    6000);
+                            }
+                        }
+                    });
                 });
         }
     }
@@ -1343,6 +1653,15 @@ void AmsState::refresh_spoolman_weights() {
     if (linked_count > 0) {
         spdlog::trace("[AmsState] Refreshing Spoolman weights for {} linked slots", linked_count);
     }
+}
+
+void AmsState::reset_spoolman_circuit_breaker() {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    spoolman_last_refresh_ms_ = 0;
+    spoolman_consecutive_failures_ = 0;
+    spoolman_cb_tripped_at_ms_ = 0;
+    spoolman_cb_open_ = false;
+    spoolman_unavailable_notified_ = false;
 }
 
 void AmsState::start_spoolman_polling() {
@@ -1393,11 +1712,16 @@ std::optional<SlotInfo> AmsState::get_external_spool_info() const {
 void AmsState::set_external_spool_info(const SlotInfo& info) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     helix::SettingsManager::instance().set_external_spool_info(info);
-    lv_subject_set_int(&external_spool_color_, static_cast<int>(info.color_rgb));
+    int new_color = static_cast<int>(info.color_rgb);
+    if (lv_subject_get_int(&external_spool_color_) != new_color) {
+        lv_subject_set_int(&external_spool_color_, new_color);
+    }
 }
 
 void AmsState::clear_external_spool_info() {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     helix::SettingsManager::instance().clear_external_spool_info();
-    lv_subject_set_int(&external_spool_color_, 0);
+    if (lv_subject_get_int(&external_spool_color_) != 0) {
+        lv_subject_set_int(&external_spool_color_, 0);
+    }
 }

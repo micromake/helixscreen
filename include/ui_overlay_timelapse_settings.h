@@ -184,3 +184,6 @@ class TimelapseSettingsOverlay : public OverlayBase {
 // Global accessor
 TimelapseSettingsOverlay& get_global_timelapse_settings();
 void init_global_timelapse_settings(MoonrakerAPI* api);
+
+/// Open the timelapse settings overlay (lazy-creates if needed)
+void open_timelapse_settings();

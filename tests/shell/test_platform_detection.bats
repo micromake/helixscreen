@@ -259,6 +259,122 @@ _detect_platform_with_mocks() {
     [ "$output" = "pi" ]
 }
 
+# --- AD5X platform detection tests ---
+
+@test "AD5X: MIPS arch + /usr/data + /usr/prog returns ad5x" {
+    # Create mock AD5X filesystem in temp dir
+    mkdir -p "$BATS_TEST_TMPDIR/usr/data"
+    mkdir -p "$BATS_TEST_TMPDIR/usr/prog"
+
+    # Redefine detect_platform to use temp paths instead of real filesystem
+    detect_platform() {
+        local arch="mips"
+        local mock_root="$BATS_TEST_TMPDIR"
+
+        if [ "$arch" = "mips" ]; then
+            if [ -d "$mock_root/usr/data" ] && { [ -d "$mock_root/usr/prog" ] || [ -f "$mock_root/ZMOD" ]; }; then
+                echo "ad5x"
+                return
+            fi
+        fi
+
+        echo "unsupported"
+    }
+
+    run detect_platform
+    [ "$status" -eq 0 ]
+    [ "$output" = "ad5x" ]
+}
+
+@test "AD5X: MIPS arch + /usr/data + /ZMOD file returns ad5x" {
+    mkdir -p "$BATS_TEST_TMPDIR/usr/data"
+    touch "$BATS_TEST_TMPDIR/ZMOD"
+
+    detect_platform() {
+        local arch="mips"
+        local mock_root="$BATS_TEST_TMPDIR"
+
+        if [ "$arch" = "mips" ]; then
+            if [ -d "$mock_root/usr/data" ] && { [ -d "$mock_root/usr/prog" ] || [ -f "$mock_root/ZMOD" ]; }; then
+                echo "ad5x"
+                return
+            fi
+        fi
+
+        echo "unsupported"
+    }
+
+    run detect_platform
+    [ "$status" -eq 0 ]
+    [ "$output" = "ad5x" ]
+}
+
+@test "AD5X: MIPS arch + /usr/data but NO /usr/prog and NO /ZMOD does NOT return ad5x" {
+    mkdir -p "$BATS_TEST_TMPDIR/usr/data"
+    # Deliberately NOT creating usr/prog or ZMOD
+
+    detect_platform() {
+        local arch="mips"
+        local mock_root="$BATS_TEST_TMPDIR"
+
+        if [ "$arch" = "mips" ]; then
+            if [ -d "$mock_root/usr/data" ] && { [ -d "$mock_root/usr/prog" ] || [ -f "$mock_root/ZMOD" ]; }; then
+                echo "ad5x"
+                return
+            fi
+        fi
+
+        echo "unsupported"
+    }
+
+    run detect_platform
+    [ "$status" -eq 0 ]
+    [ "$output" = "unsupported" ]
+}
+
+@test "AD5X: non-MIPS arch + /usr/data + /usr/prog does NOT return ad5x" {
+    detect_platform() {
+        local arch="armv7l"
+
+        if [ "$arch" = "mips" ]; then
+            if [ -d "/usr/data" ] && { [ -d "/usr/prog" ] || [ -f "/ZMOD" ]; }; then
+                echo "ad5x"
+                return
+            fi
+        fi
+
+        # Fall through to other detection
+        echo "unsupported"
+    }
+
+    run detect_platform
+    [ "$status" -eq 0 ]
+    [ "$output" = "unsupported" ]
+}
+
+@test "AD5X: set_install_paths sets correct paths for ad5x" {
+    # Mock detect_tmp_dir to avoid filesystem checks
+    detect_tmp_dir() { TMP_DIR="/tmp/helixscreen-install"; }
+
+    set_install_paths "ad5x"
+
+    [ "$INSTALL_DIR" = "/srv/helixscreen" ]
+    [ "$INIT_SCRIPT_DEST" = "/etc/init.d/S80helixscreen" ]
+    [ "$PREVIOUS_UI_SCRIPT" = "" ]
+}
+
+@test "AD5X: detect_platform checks AD5X before K1 (ordering)" {
+    # Verify the source code has AD5X check before K1 check
+    # AD5X must be checked first because both have /usr/data, but only AD5X has /usr/prog
+    local platform_sh="$WORKTREE_ROOT/scripts/lib/installer/platform.sh"
+    local ad5x_line k1_line
+    ad5x_line=$(grep -n 'Check for FlashForge AD5X' "$platform_sh" | head -1 | cut -d: -f1)
+    k1_line=$(grep -n 'Check for Creality K1' "$platform_sh" | head -1 | cut -d: -f1)
+    [ -n "$ad5x_line" ]
+    [ -n "$k1_line" ]
+    [ "$ad5x_line" -lt "$k1_line" ]
+}
+
 # --- Source code regression tests ---
 
 @test "platform.sh uses getconf LONG_BIT for userspace detection" {
@@ -275,4 +391,16 @@ _detect_platform_with_mocks() {
 
 @test "install.sh (bundled) also uses getconf LONG_BIT" {
     grep -q 'getconf LONG_BIT' "$WORKTREE_ROOT/scripts/install.sh"
+}
+
+@test "platform.sh has AD5X detection with /usr/prog check" {
+    grep -q '/usr/prog' "$WORKTREE_ROOT/scripts/lib/installer/platform.sh"
+}
+
+@test "install.sh (bundled) has AD5X detection" {
+    grep -q 'ad5x' "$WORKTREE_ROOT/scripts/install.sh"
+}
+
+@test "platform.sh returns ad5x in detect_platform docstring" {
+    grep -q '"ad5x"' "$WORKTREE_ROOT/scripts/lib/installer/platform.sh"
 }

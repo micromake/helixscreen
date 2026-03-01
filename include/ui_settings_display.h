@@ -35,8 +35,7 @@ namespace helix::settings {
  * @brief Overlay for configuring display-related settings
  *
  * This overlay provides controls for:
-     * - Theme colors action row
-
+ * - Theme colors action row
  * - Brightness slider with percentage label
  * - Sleep timeout dropdown (Never/1m/5m/10m/30m)
  * - Bed mesh and G-code render mode dropdowns
@@ -278,6 +277,9 @@ class DisplaySettingsOverlay : public OverlayBase {
 
     static void on_brightness_changed(lv_event_t* e);
     static void on_sleep_while_printing_changed(lv_event_t* e);
+#ifdef HELIX_ENABLE_SCREENSAVER
+    static void on_screensaver_changed(lv_event_t* e);
+#endif
     static void on_theme_preset_changed(lv_event_t* e);
     static void on_theme_settings_clicked(lv_event_t* e);
     static void on_apply_theme_clicked(lv_event_t* e);

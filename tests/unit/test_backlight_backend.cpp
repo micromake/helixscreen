@@ -4,6 +4,10 @@
 #include "backlight_backend.h"
 #include "runtime_config.h"
 
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+
 #include "../catch_amalgamated.hpp"
 
 // RAII guard to temporarily enable test mode on global RuntimeConfig
@@ -57,3 +61,108 @@ TEST_CASE("BacklightBackend factory creates Simulated backend in test mode", "[a
     REQUIRE(backend->set_brightness(100));
     REQUIRE(backend->get_brightness() == 100);
 }
+
+// ============================================================================
+// Sysfs backend bl_power tests (Linux only)
+// ============================================================================
+
+#ifdef __linux__
+namespace fs = std::filesystem;
+
+// RAII helper to create a fake sysfs backlight tree in /tmp
+struct FakeSysfsBacklight {
+    fs::path base_dir;
+    fs::path device_dir;
+
+    explicit FakeSysfsBacklight(int max_brightness = 255) {
+        base_dir = fs::temp_directory_path() / ("helix_test_bl_" + std::to_string(getpid()));
+        device_dir = base_dir / "test_backlight";
+        fs::create_directories(device_dir);
+
+        write_file("max_brightness", std::to_string(max_brightness));
+        write_file("brightness", std::to_string(max_brightness));
+        write_file("bl_power", "0"); // 0 = on
+    }
+
+    ~FakeSysfsBacklight() {
+        fs::remove_all(base_dir);
+    }
+
+    void write_file(const std::string& name, const std::string& value) const {
+        std::ofstream f(device_dir / name);
+        f << value;
+    }
+
+    std::string read_file(const std::string& name) const {
+        std::ifstream f(device_dir / name);
+        std::string value;
+        f >> value;
+        return value;
+    }
+
+    FakeSysfsBacklight(const FakeSysfsBacklight&) = delete;
+    FakeSysfsBacklight& operator=(const FakeSysfsBacklight&) = delete;
+};
+
+TEST_CASE("Sysfs backend discovers fake backlight device", "[api][backlight][sysfs]") {
+    FakeSysfsBacklight fake;
+    auto backend = BacklightBackend::create_sysfs(fake.base_dir.string());
+
+    REQUIRE(backend->is_available());
+    REQUIRE(std::string(backend->name()) == "Sysfs");
+}
+
+TEST_CASE("Sysfs backend set_brightness writes brightness file", "[api][backlight][sysfs]") {
+    FakeSysfsBacklight fake(255);
+    auto backend = BacklightBackend::create_sysfs(fake.base_dir.string());
+    REQUIRE(backend->is_available());
+
+    REQUIRE(backend->set_brightness(50));
+    // 50% of 255 = 127
+    REQUIRE(fake.read_file("brightness") == "127");
+}
+
+TEST_CASE("Sysfs backend set_brightness(0) sets bl_power off", "[api][backlight][sysfs]") {
+    FakeSysfsBacklight fake;
+    auto backend = BacklightBackend::create_sysfs(fake.base_dir.string());
+    REQUIRE(backend->is_available());
+
+    // Initially bl_power is on (0)
+    REQUIRE(fake.read_file("bl_power") == "0");
+
+    // Setting brightness to 0 should power off the backlight
+    REQUIRE(backend->set_brightness(0));
+    REQUIRE(fake.read_file("brightness") == "0");
+    REQUIRE(fake.read_file("bl_power") == "1");
+}
+
+TEST_CASE("Sysfs backend restores bl_power on when brightness > 0", "[api][backlight][sysfs]") {
+    FakeSysfsBacklight fake;
+    auto backend = BacklightBackend::create_sysfs(fake.base_dir.string());
+    REQUIRE(backend->is_available());
+
+    // Power off
+    REQUIRE(backend->set_brightness(0));
+    REQUIRE(fake.read_file("bl_power") == "1");
+
+    // Power back on
+    REQUIRE(backend->set_brightness(75));
+    REQUIRE(fake.read_file("bl_power") == "0");
+}
+
+TEST_CASE("Sysfs backend works without bl_power file", "[api][backlight][sysfs]") {
+    FakeSysfsBacklight fake;
+    // Remove bl_power to simulate a driver that doesn't expose it
+    fs::remove(fake.device_dir / "bl_power");
+
+    auto backend = BacklightBackend::create_sysfs(fake.base_dir.string());
+    REQUIRE(backend->is_available());
+
+    // Should still work — bl_power write is non-fatal
+    REQUIRE(backend->set_brightness(0));
+    REQUIRE(fake.read_file("brightness") == "0");
+
+    REQUIRE(backend->set_brightness(100));
+    REQUIRE(fake.read_file("brightness") == "255");
+}
+#endif // __linux__

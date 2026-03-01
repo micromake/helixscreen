@@ -295,19 +295,6 @@ libnl-clean:
 	$(Q)rm -f $(BUILD_DIR)/lib/libnl*.a 2>/dev/null || true
 	$(ECHO) "$(GREEN)✓ libnl cleaned$(RESET)"
 
-# Clean TinyGL build artifacts
-tinygl-clean:
-ifeq ($(ENABLE_TINYGL_3D),yes)
-	$(ECHO) "$(CYAN)Cleaning TinyGL build artifacts...$(RESET)"
-	$(Q)if [ -d "$(TINYGL_DIR)" ] && [ -f "$(TINYGL_DIR)/Makefile" ]; then \
-		cd $(TINYGL_DIR) && $(MAKE) clean 2>/dev/null || true; \
-	fi
-	$(Q)rm -f $(BUILD_DIR)/lib/libTinyGL.a 2>/dev/null || true
-	$(ECHO) "$(GREEN)✓ TinyGL cleaned$(RESET)"
-else
-	@echo "TinyGL not enabled (ENABLE_TINYGL_3D=no)"
-endif
-
 # Clean wpa_supplicant build artifacts (Linux only)
 wpa-clean:
 ifneq ($(UNAME_S),Darwin)
@@ -322,7 +309,7 @@ else
 endif
 
 # Clean all submodule libraries
-libs-clean: libhv-clean sdl2-clean lvgl-clean libnl-clean tinygl-clean wpa-clean
+libs-clean: libhv-clean sdl2-clean lvgl-clean libnl-clean wpa-clean
 	$(ECHO) "$(GREEN)✓ All library artifacts cleaned$(RESET)"
 
 # =============================================================================
@@ -354,7 +341,7 @@ else ifeq ($(UNAME_S),Darwin)
 		./configure --with-http-client
 	$(Q)MACOSX_DEPLOYMENT_TARGET=$(MACOS_MIN_VERSION) $(MAKE) -C $(LIBHV_DIR) libhv
 else
-	$(Q)cd $(LIBHV_DIR) && ./configure --with-http-client
+	$(Q)cd $(LIBHV_DIR) && ./configure --with-http-client $(if $(filter yes,$(ENABLE_SSL)),--with-openssl)
 	$(Q)$(MAKE) -C $(LIBHV_DIR) libhv
 endif
 	# Copy built library to architecture-specific output directory
@@ -584,7 +571,7 @@ setup-hooks:
 # Build/Dependency Help
 # ============================================================================
 
-.PHONY: libhv-clean sdl2-clean lvgl-clean libnl-clean tinygl-clean wpa-clean libs-clean distclean help-build
+.PHONY: libhv-clean sdl2-clean lvgl-clean libnl-clean wpa-clean libs-clean distclean help-build
 help-build:
 	@if [ -t 1 ] && [ -n "$(TERM)" ] && [ "$(TERM)" != "dumb" ]; then \
 		B='$(BOLD)'; G='$(GREEN)'; Y='$(YELLOW)'; C='$(CYAN)'; X='$(RESET)'; \
@@ -630,4 +617,4 @@ help-build:
 	echo "  $${Y}V=1$${X}                 - Verbose (show compiler commands)"; \
 	echo "  $${Y}JOBS=N$${X}              - Parallel job count"; \
 	echo "  $${Y}NO_COLOR=1$${X}          - Disable colored output"; \
-	echo "  $${Y}ENABLE_TINYGL_3D$${X}=no - Disable 3D rendering"
+	echo "  $${Y}ENABLE_GLES_3D$${X}=no   - Disable 3D GLES rendering"

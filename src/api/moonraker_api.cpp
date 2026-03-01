@@ -32,6 +32,7 @@ MoonrakerAPI::MoonrakerAPI(MoonrakerClient& client, PrinterState& state) : clien
     history_api_ = std::make_unique<MoonrakerHistoryAPI>(client);
     job_api_ = std::make_unique<MoonrakerJobAPI>(client);
     motion_api_ = std::make_unique<MoonrakerMotionAPI>(client, safety_limits_);
+    queue_api_ = std::make_unique<MoonrakerQueueAPI>(client);
     rest_api_ = std::make_unique<MoonrakerRestAPI>(client, http_base_url_);
     spoolman_api_ = std::make_unique<MoonrakerSpoolmanAPI>(client);
     timelapse_api_ = std::make_unique<MoonrakerTimelapseAPI>(client, http_base_url_);
@@ -64,12 +65,12 @@ MoonrakerAPI::~MoonrakerAPI() {
 
     // Join tracked HTTP threads (power device operations)
     {
-        std::list<std::thread> threads_to_join;
+        std::list<std::pair<std::thread, std::shared_ptr<std::atomic<bool>>>> threads_to_join;
         {
             std::lock_guard<std::mutex> lock(http_threads_mutex_);
             threads_to_join = std::move(http_threads_);
         }
-        for (auto& t : threads_to_join) {
+        for (auto& [t, _] : threads_to_join) {
             if (t.joinable()) {
                 t.join();
             }
@@ -92,7 +93,23 @@ void MoonrakerAPI::launch_http_thread(std::function<void()> func) {
         return;
     }
 
-    http_threads_.emplace_back([func = std::move(func)]() { func(); });
+    // Prune completed threads to prevent unbounded list growth
+    for (auto it = http_threads_.begin(); it != http_threads_.end();) {
+        if (it->second->load()) {
+            it->first.join();
+            it = http_threads_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    auto done = std::make_shared<std::atomic<bool>>(false);
+    http_threads_.emplace_back(
+        std::thread([func = std::move(func), done]() {
+            func();
+            done->store(true);
+        }),
+        done);
 }
 
 bool MoonrakerAPI::ensure_http_base_url() {

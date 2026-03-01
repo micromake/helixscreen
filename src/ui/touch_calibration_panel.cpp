@@ -10,6 +10,9 @@
 
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
+#include <vector>
+
 namespace helix {
 
 // Default screen dimensions used when invalid values are provided
@@ -20,6 +23,7 @@ TouchCalibrationPanel::TouchCalibrationPanel() = default;
 
 TouchCalibrationPanel::~TouchCalibrationPanel() {
     stop_countdown_timer();
+    stop_fast_revert_timer();
 }
 
 void TouchCalibrationPanel::set_completion_callback(CompletionCallback cb) {
@@ -36,6 +40,14 @@ void TouchCalibrationPanel::set_countdown_callback(CountdownCallback cb) {
 
 void TouchCalibrationPanel::set_timeout_callback(TimeoutCallback cb) {
     timeout_callback_ = std::move(cb);
+}
+
+void TouchCalibrationPanel::set_fast_revert_callback(FastRevertCallback cb) {
+    fast_revert_callback_ = std::move(cb);
+}
+
+void TouchCalibrationPanel::set_sample_progress_callback(SampleProgressCallback cb) {
+    sample_progress_callback_ = std::move(cb);
 }
 
 void TouchCalibrationPanel::set_verify_timeout_seconds(int seconds) {
@@ -74,6 +86,8 @@ Point TouchCalibrationPanel::compute_target_position(int step) const {
 void TouchCalibrationPanel::start() {
     state_ = State::POINT_1;
     calibration_.valid = false;
+    axes_swapped_ = false;
+    reset_samples();
 
     // Calculate screen target positions using named constants
     screen_points_[0] = compute_target_position(0);
@@ -93,21 +107,54 @@ void TouchCalibrationPanel::capture_point(Point raw) {
         break;
     case State::POINT_3:
         touch_points_[2] = raw;
-        // Compute calibration and check for degenerate case (collinear points)
-        if (compute_calibration(screen_points_, touch_points_, calibration_)) {
-            state_ = State::VERIFY;
-            start_countdown_timer();
-        } else {
-            // Calibration failed (collinear/duplicate points) - restart from POINT_1
+
+        if (!compute_calibration(screen_points_, touch_points_, calibration_)) {
             spdlog::warn(
                 "[TouchCalibrationPanel] Calibration failed (degenerate points), restarting");
             state_ = State::POINT_1;
             calibration_.valid = false;
-            // Notify caller about the failure
             if (failure_callback_) {
                 failure_callback_("Touch points too close together. Please try again.");
             }
+            break;
         }
+
+        // Check if swapping touch X/Y produces a better calibration
+        if (calibration_suggests_axis_swap(screen_points_, touch_points_, calibration_)) {
+            spdlog::info("[TouchCalibrationPanel] Auto-detected swapped touch axes, correcting");
+            for (int i = 0; i < 3; i++) {
+                std::swap(touch_points_[i].x, touch_points_[i].y);
+            }
+            if (!compute_calibration(screen_points_, touch_points_, calibration_)) {
+                spdlog::warn("[TouchCalibrationPanel] Recompute after axis swap failed");
+                state_ = State::POINT_1;
+                calibration_.valid = false;
+                if (failure_callback_) {
+                    failure_callback_(
+                        "Calibration failed after axis correction. Please try again.");
+                }
+                break;
+            }
+            axes_swapped_ = true;
+            calibration_.axes_swapped = true;
+        }
+
+        // Validate the matrix produces reasonable results
+        if (!validate_calibration_result(calibration_, screen_points_, touch_points_, screen_width_,
+                                         screen_height_)) {
+            spdlog::warn(
+                "[TouchCalibrationPanel] Calibration matrix failed validation, restarting");
+            state_ = State::POINT_1;
+            calibration_.valid = false;
+            if (failure_callback_) {
+                failure_callback_("Calibration produced unusual results. Please try again.");
+            }
+            break;
+        }
+
+        state_ = State::VERIFY;
+        start_countdown_timer();
+        start_fast_revert_timer();
         break;
     default:
         // No-op in IDLE, VERIFY, COMPLETE states
@@ -115,8 +162,101 @@ void TouchCalibrationPanel::capture_point(Point raw) {
     }
 }
 
+bool TouchCalibrationPanel::is_saturated_sample(const Point& sample) {
+    return sample.x == 4095 || sample.y == 4095 || sample.x == 65535 || sample.y == 65535;
+}
+
+void TouchCalibrationPanel::reset_samples() {
+    sample_count_ = 0;
+}
+
+bool TouchCalibrationPanel::compute_median_point(Point& out) {
+    std::vector<int> valid_x, valid_y;
+    for (int i = 0; i < sample_count_; i++) {
+        Point p{sample_buffer_[i].x, sample_buffer_[i].y};
+        if (!is_saturated_sample(p)) {
+            valid_x.push_back(p.x);
+            valid_y.push_back(p.y);
+        }
+    }
+
+    if (static_cast<int>(valid_x.size()) < MIN_VALID_SAMPLES) {
+        spdlog::warn("[TouchCalibrationPanel] Only {}/{} valid samples (need {})", valid_x.size(),
+                     sample_count_, MIN_VALID_SAMPLES);
+        return false;
+    }
+
+    std::sort(valid_x.begin(), valid_x.end());
+    std::sort(valid_y.begin(), valid_y.end());
+    size_t mid = valid_x.size() / 2;
+    out.x = valid_x[mid];
+    out.y = valid_y[mid];
+
+    spdlog::debug("[TouchCalibrationPanel] Median from {}/{} valid samples: ({}, {})",
+                  valid_x.size(), sample_count_, out.x, out.y);
+    return true;
+}
+
+TouchCalibrationPanel::Progress TouchCalibrationPanel::get_progress() const {
+    Progress p{};
+    p.state = state_;
+    p.current_sample = sample_count_;
+    p.total_samples = SAMPLES_REQUIRED;
+
+    switch (state_) {
+    case State::POINT_1:
+        p.point_num = 1;
+        break;
+    case State::POINT_2:
+        p.point_num = 2;
+        break;
+    case State::POINT_3:
+        p.point_num = 3;
+        break;
+    default:
+        p.point_num = 0;
+        break;
+    }
+    return p;
+}
+
+void TouchCalibrationPanel::add_sample(Point raw) {
+    // Auto-start on first tap if in IDLE state (don't count this tap as a sample —
+    // the crosshair isn't visible yet, so the user's first tap ON the crosshair is touch 1)
+    if (state_ == State::IDLE) {
+        start();
+        return;
+    }
+
+    if (state_ != State::POINT_1 && state_ != State::POINT_2 && state_ != State::POINT_3) {
+        return;
+    }
+
+    if (sample_count_ < SAMPLES_REQUIRED) {
+        sample_buffer_[sample_count_] = {raw.x, raw.y};
+        sample_count_++;
+
+        if (sample_progress_callback_) {
+            sample_progress_callback_();
+        }
+    }
+
+    if (sample_count_ >= SAMPLES_REQUIRED) {
+        Point median;
+        if (compute_median_point(median)) {
+            capture_point(median);
+        } else {
+            if (failure_callback_) {
+                failure_callback_("Too much noise — tap the target again with a firm press.");
+            }
+        }
+        reset_samples();
+    }
+}
+
 void TouchCalibrationPanel::accept() {
     stop_countdown_timer();
+    stop_fast_revert_timer();
 
     if (state_ != State::VERIFY) {
         return;
@@ -129,23 +269,18 @@ void TouchCalibrationPanel::accept() {
 }
 
 void TouchCalibrationPanel::retry() {
-    stop_countdown_timer();
-
     if (state_ != State::VERIFY) {
         return;
     }
 
-    state_ = State::POINT_1;
-    calibration_.valid = false;
-
-    // Recalculate screen points using named constants
-    screen_points_[0] = compute_target_position(0);
-    screen_points_[1] = compute_target_position(1);
-    screen_points_[2] = compute_target_position(2);
+    stop_countdown_timer();
+    stop_fast_revert_timer();
+    start(); // Resets state to POINT_1 and recalculates target positions
 }
 
 void TouchCalibrationPanel::cancel() {
     stop_countdown_timer();
+    stop_fast_revert_timer();
 
     state_ = State::IDLE;
     calibration_.valid = false;
@@ -209,6 +344,50 @@ void TouchCalibrationPanel::countdown_timer_cb(lv_timer_t* timer) {
             self->timeout_callback_();
         }
         self->stop_countdown_timer();
+    }
+}
+
+void TouchCalibrationPanel::report_verify_touch(bool on_screen) {
+    if (state_ != State::VERIFY)
+        return;
+    verify_raw_touch_count_++;
+    if (on_screen) {
+        verify_onscreen_touch_count_++;
+    }
+}
+
+void TouchCalibrationPanel::start_fast_revert_timer() {
+    verify_raw_touch_count_ = 0;
+    verify_onscreen_touch_count_ = 0;
+    fast_revert_timer_ = lv_timer_create(fast_revert_timer_cb, FAST_REVERT_CHECK_MS, this);
+    lv_timer_set_repeat_count(fast_revert_timer_, 1);
+    spdlog::debug("[TouchCalibrationPanel] Started fast-revert timer ({}ms)", FAST_REVERT_CHECK_MS);
+}
+
+void TouchCalibrationPanel::stop_fast_revert_timer() {
+    if (fast_revert_timer_) {
+        lv_timer_delete(fast_revert_timer_);
+        fast_revert_timer_ = nullptr;
+    }
+}
+
+void TouchCalibrationPanel::fast_revert_timer_cb(lv_timer_t* timer) {
+    auto* self = static_cast<TouchCalibrationPanel*>(lv_timer_get_user_data(timer));
+    self->fast_revert_timer_ = nullptr; // Timer auto-deletes (repeat_count=1)
+
+    if (self->state_ != State::VERIFY)
+        return;
+
+    if (self->verify_raw_touch_count_ > 0 && self->verify_onscreen_touch_count_ == 0) {
+        spdlog::warn("[TouchCalibrationPanel] Fast-revert: {} raw touches, 0 on-screen — "
+                     "matrix is broken, reverting",
+                     self->verify_raw_touch_count_);
+        if (self->fast_revert_callback_) {
+            self->fast_revert_callback_();
+        }
+    } else {
+        spdlog::debug("[TouchCalibrationPanel] Fast-revert check passed: {}/{} on-screen",
+                      self->verify_onscreen_touch_count_, self->verify_raw_touch_count_);
     }
 }
 

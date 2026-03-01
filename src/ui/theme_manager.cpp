@@ -268,7 +268,7 @@ lv_color_t theme_get_accent_color() {
     return theme_compute_more_saturated(primary, secondary);
 }
 
-lv_color_t theme_manager_get_contrast_text(lv_color_t bg_color) {
+lv_color_t theme_manager_get_contrast_color(lv_color_t bg_color) {
     int brightness = theme_compute_brightness(bg_color);
     auto& tm = ThemeManager::instance();
     // Dark background needs light text (dark palette has light-colored text for readability)
@@ -1424,7 +1424,7 @@ static bool is_icon_font(const lv_font_t* font);
 /**
  * Helper to update button label text with contrast-aware color
  *
- * Uses theme_manager_get_contrast_text() which correctly picks dark text
+ * Uses theme_manager_get_contrast_color() which correctly picks dark text
  * (from light palette) for light backgrounds, and light text (from dark
  * palette) for dark backgrounds.
  */
@@ -1434,7 +1434,7 @@ static void apply_button_text_contrast(lv_obj_t* btn) {
 
     // Get button's background color and pick contrast text via theme system
     lv_color_t bg_color = lv_obj_get_style_bg_color(btn, LV_PART_MAIN);
-    lv_color_t text_color = theme_manager_get_contrast_text(bg_color);
+    lv_color_t text_color = theme_manager_get_contrast_color(bg_color);
 
     // Check for disabled state - use muted color
     bool btn_disabled = lv_obj_has_state(btn, LV_STATE_DISABLED);
@@ -2057,6 +2057,8 @@ const char* theme_manager_size_to_font_token(const char* size, const char* defau
         return "font_body";
     } else if (strcmp(effective_size, "lg") == 0) {
         return "font_heading";
+    } else if (strcmp(effective_size, "xl") == 0) {
+        return "font_xl";
     }
 
     // Unknown size - warn and return default

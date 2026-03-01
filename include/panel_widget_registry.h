@@ -24,8 +24,32 @@ struct PanelWidgetDef {
     const char* translation_tag;           // For i18n
     const char* hardware_gate_subject;     // nullptr = always available
     bool default_enabled = true;           // Whether enabled in fresh/default config
+    int colspan = 1;                       // Default grid columns spanned
+    int rowspan = 1;                       // Default grid rows spanned
+    int min_colspan = 0;                   // Minimum columns (0 = use colspan)
+    int min_rowspan = 0;                   // Minimum rows (0 = use rowspan)
+    int max_colspan = 0;                   // Maximum columns (0 = use colspan, i.e. not scalable)
+    int max_rowspan = 0;                   // Maximum rows (0 = use rowspan, i.e. not scalable)
     WidgetFactory factory = nullptr;       // nullptr = pure XML or externally managed
     SubjectInitFn init_subjects = nullptr; // Called once before XML creation
+
+    // Resolved accessors (0 = "use default colspan/rowspan")
+    int effective_min_colspan() const {
+        return min_colspan > 0 ? min_colspan : colspan;
+    }
+    int effective_min_rowspan() const {
+        return min_rowspan > 0 ? min_rowspan : rowspan;
+    }
+    int effective_max_colspan() const {
+        return max_colspan > 0 ? max_colspan : colspan;
+    }
+    int effective_max_rowspan() const {
+        return max_rowspan > 0 ? max_rowspan : rowspan;
+    }
+    bool is_scalable() const {
+        return effective_max_colspan() > effective_min_colspan() ||
+               effective_max_rowspan() > effective_min_rowspan();
+    }
 };
 
 const std::vector<PanelWidgetDef>& get_all_widget_defs();
@@ -33,5 +57,8 @@ const PanelWidgetDef* find_widget_def(std::string_view id);
 size_t widget_def_count();
 void register_widget_factory(std::string_view id, WidgetFactory factory);
 void register_widget_subjects(std::string_view id, SubjectInitFn init_fn);
+// Internal — called once from PanelWidgetManager::init_widget_subjects().
+// Do not call directly; widget factories require runtime context (singletons, shared resources).
+void init_widget_registrations();
 
 } // namespace helix

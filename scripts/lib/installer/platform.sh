@@ -27,7 +27,7 @@ KLIPPER_USER=""
 KLIPPER_HOME=""
 
 # Detect platform
-# Returns: "ad5m", "k1", "pi", "pi32", or "unsupported"
+# Returns: "ad5m", "ad5x", "k1", "pi", "pi32", or "unsupported"
 detect_platform() {
     local arch kernel
     arch=$(uname -m)
@@ -38,6 +38,15 @@ detect_platform() {
         # AD5M has a specific kernel identifier
         if echo "$kernel" | grep -q "ad5m\|5.4.61"; then
             echo "ad5m"
+            return
+        fi
+    fi
+
+    # Check for FlashForge AD5X (MIPS with /usr/data and FlashForge indicators)
+    # AD5X uses Ingenic X2600 (MIPS); identified by /usr/prog/ dir or /ZMOD file alongside /usr/data/
+    if [ "$arch" = "mips" ]; then
+        if [ -d "/usr/data" ] && { [ -d "/usr/prog" ] || [ -f "/ZMOD" ]; }; then
+            echo "ad5x"
             return
         fi
     fi
@@ -365,6 +374,13 @@ set_install_paths() {
                 log_info "Install directory: ${INSTALL_DIR}"
                 ;;
         esac
+    elif [ "$platform" = "ad5x" ]; then
+        # FlashForge AD5X - uses ZMOD, /usr/data structure
+        INSTALL_DIR="/srv/helixscreen"
+        INIT_SCRIPT_DEST="/etc/init.d/S80helixscreen"
+        PREVIOUS_UI_SCRIPT=""
+        log_info "Platform: FlashForge AD5X (ZMOD)"
+        log_info "Install directory: ${INSTALL_DIR}"
     elif [ "$platform" = "k1" ]; then
         # Creality K1 series - uses /usr/data structure
         case "$firmware" in

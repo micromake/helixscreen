@@ -19,6 +19,7 @@
 #include "moonraker_api.h"
 #include "observer_factory.h"
 #include "printer_state.h"
+#include "ui/ui_cleanup_helpers.h"
 
 #include <spdlog/spdlog.h>
 
@@ -58,12 +59,17 @@ void AmsOperationSidebar::register_callbacks_static() {
 AmsOperationSidebar* AmsOperationSidebar::get_instance_from_event(lv_event_t* e) {
     auto* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
 
-    // Traverse parent chain to find ams_sidebar component root with user_data
+    // Find the ams_sidebar component root by name, then get our instance from its user_data.
+    // Cannot walk parents checking any user_data — ui_button and other widgets set their own
+    // user_data, which would be miscast as AmsOperationSidebar* (L069).
     lv_obj_t* obj = target;
     while (obj) {
-        void* user_data = lv_obj_get_user_data(obj);
-        if (user_data) {
-            return static_cast<AmsOperationSidebar*>(user_data);
+        const char* name = lv_obj_get_name(obj);
+        if (name && strcmp(name, "ams_operation_sidebar") == 0) {
+            void* user_data = lv_obj_get_user_data(obj);
+            if (user_data) {
+                return static_cast<AmsOperationSidebar*>(user_data);
+            }
         }
         obj = lv_obj_get_parent(obj);
     }
@@ -125,7 +131,7 @@ bool AmsOperationSidebar::setup(lv_obj_t* panel) {
         return false;
     }
 
-    sidebar_root_ = lv_obj_find_by_name(panel, "sidebar");
+    sidebar_root_ = lv_obj_find_by_name(panel, "ams_operation_sidebar");
     if (!sidebar_root_) {
         spdlog::error("[AmsSidebar] sidebar component not found in panel");
         return false;
@@ -146,6 +152,7 @@ bool AmsOperationSidebar::setup(lv_obj_t* panel) {
     // Hide settings button if no device sections
     update_settings_visibility();
 
+    active_ = true;
     spdlog::debug("[AmsSidebar] Setup complete");
     return true;
 }
@@ -172,7 +179,7 @@ void AmsOperationSidebar::init_observers() {
     action_observer_ = observe_int_sync<AmsOperationSidebar>(
         AmsState::instance().get_ams_action_subject(), this,
         [](AmsOperationSidebar* self, int action_int) {
-            if (!self->sidebar_root_)
+            if (!self->active_ || !self->sidebar_root_)
                 return;
             auto action = static_cast<AmsAction>(action_int);
             spdlog::debug("[AmsSidebar] Action changed: {} (prev={})", ams_action_to_string(action),
@@ -210,7 +217,7 @@ void AmsOperationSidebar::init_observers() {
     current_slot_observer_ =
         observe_int_sync<AmsOperationSidebar>(AmsState::instance().get_current_slot_subject(), this,
                                               [](AmsOperationSidebar* self, int /*slot_index*/) {
-                                                  if (!self->sidebar_root_)
+                                                  if (!self->active_ || !self->sidebar_root_)
                                                       return;
                                                   self->update_current_loaded_display();
                                               });
@@ -219,15 +226,33 @@ void AmsOperationSidebar::init_observers() {
     bypass_spool_observer_ = observe_int_sync<AmsOperationSidebar>(
         AmsState::instance().get_external_spool_color_subject(), this,
         [](AmsOperationSidebar* self, int /*color_rgb*/) {
-            if (!self->sidebar_root_)
+            if (!self->active_ || !self->sidebar_root_)
                 return;
             self->update_current_loaded_display();
+        });
+
+    // Color observer: reactively updates loaded card swatch color
+    color_observer_ = observe_int_sync<AmsOperationSidebar>(
+        AmsState::instance().get_current_color_subject(), this,
+        [](AmsOperationSidebar* self, int color_int) {
+            if (!self->active_ || !self->sidebar_root_)
+                return;
+            lv_obj_t* swatch = lv_obj_find_by_name(self->sidebar_root_, "loaded_swatch");
+            if (swatch) {
+                lv_color_t color = lv_color_hex(static_cast<uint32_t>(color_int));
+                lv_obj_set_style_bg_color(swatch, color, 0);
+                lv_obj_set_style_border_color(swatch, color, 0);
+            }
         });
 
     // Extruder temp observer: checks pending preheat load
     extruder_temp_observer_ = observe_int_sync<AmsOperationSidebar>(
         printer_state_.get_active_extruder_temp_subject(), this,
-        [](AmsOperationSidebar* self, int /*temp_centi*/) { self->check_pending_load(); });
+        [](AmsOperationSidebar* self, int /*temp_centi*/) {
+            if (!self->active_)
+                return;
+            self->check_pending_load();
+        });
 }
 
 // ============================================================================
@@ -235,30 +260,39 @@ void AmsOperationSidebar::init_observers() {
 // ============================================================================
 
 void AmsOperationSidebar::cleanup() {
-    // Reset dryer card
-    dryer_card_.reset();
+    // Clear active flag FIRST to prevent observer callbacks from using freed widgets
+    active_ = false;
 
-    // Clear observers (except extruder_temp if preheat pending)
-    action_observer_.reset();
-    current_slot_observer_.reset();
-    bypass_spool_observer_.reset();
-
-    if (pending_load_slot_ < 0) {
-        extruder_temp_observer_.reset();
-    }
-    // extruder_temp_observer_ intentionally kept if preheat pending
-
-    // Don't cancel preheat state
-    pending_bypass_enable_ = false;
-    prev_ams_action_ = AmsAction::IDLE;
-
-    // Clear widget refs
+    // Nullify widget refs BEFORE resetting observers — any cascading observer
+    // callbacks that slip through the active_ guard will see null pointers and
+    // bail out, preventing use-after-free on deleted LVGL objects.
     if (sidebar_root_) {
         lv_obj_set_user_data(sidebar_root_, nullptr);
     }
     sidebar_root_ = nullptr;
     step_progress_ = nullptr;
     step_progress_container_ = nullptr;
+
+    // Reset ALL observers unconditionally. Keeping extruder_temp_observer_ alive
+    // across panel switches is unsafe — the sidebar may be destroyed while the
+    // observer still holds a raw pointer to it.
+    action_observer_.reset();
+    current_slot_observer_.reset();
+    bypass_spool_observer_.reset();
+    color_observer_.reset();
+    extruder_temp_observer_.reset();
+
+    // Reset dryer card AFTER observers — dryer_card_ may have its own observers
+    // that reference widget pointers; resetting it before our observers could
+    // trigger callbacks on already-null widget pointers.
+    dryer_card_.reset();
+
+    // Clear all pending state
+    pending_bypass_enable_ = false;
+    pending_load_slot_ = -1;
+    pending_load_target_temp_ = 0;
+    ui_initiated_heat_ = false;
+    prev_ams_action_ = AmsAction::IDLE;
 
     spdlog::debug("[AmsSidebar] Cleaned up");
 }
@@ -319,18 +353,7 @@ void AmsOperationSidebar::update_current_loaded_display() {
         return;
     }
 
-    // Sync subjects for reactive XML binding
-    AmsState::instance().sync_current_loaded_from_backend();
-
-    // Color binding not supported in XML — set swatch color via C++
-    lv_obj_t* loaded_swatch = lv_obj_find_by_name(sidebar_root_, "loaded_swatch");
-    if (loaded_swatch) {
-        uint32_t color_rgb = static_cast<uint32_t>(
-            lv_subject_get_int(AmsState::instance().get_current_color_subject()));
-        lv_color_t color = lv_color_hex(color_rgb);
-        lv_obj_set_style_bg_color(loaded_swatch, color, 0);
-        lv_obj_set_style_border_color(loaded_swatch, color, 0);
-    }
+    // Subjects updated reactively by sync_from_backend(); color swatch driven by color_observer_
 }
 
 // ============================================================================
@@ -348,15 +371,12 @@ void AmsOperationSidebar::update_action_display(AmsAction action) {
 // ============================================================================
 
 void AmsOperationSidebar::recreate_step_progress_for_operation(StepOperationType op_type) {
-    if (!step_progress_container_) {
+    if (!active_ || !step_progress_container_) {
         return;
     }
 
     // Delete existing step progress widget if any
-    if (step_progress_) {
-        lv_obj_del(step_progress_);
-        step_progress_ = nullptr;
-    }
+    safe_delete_obj(step_progress_);
 
     current_operation_type_ = op_type;
 
@@ -512,7 +532,7 @@ void AmsOperationSidebar::start_operation(StepOperationType op_type, int target_
 }
 
 void AmsOperationSidebar::update_step_progress(AmsAction action) {
-    if (!step_progress_container_) {
+    if (!active_ || !step_progress_container_) {
         return;
     }
 

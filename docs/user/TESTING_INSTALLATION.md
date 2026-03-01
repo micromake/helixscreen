@@ -211,7 +211,7 @@ HelixScreen is an **add-on** to existing Klipper installations. We don't ship cu
 2. **Verify config preserved:**
    ```bash
    # helixconfig.json should still exist with your settings
-   cat /opt/helixscreen/helixconfig.json | head -5
+   cat /opt/helixscreen/config/helixconfig.json | head -5
    ```
 
 3. **Service should restart automatically and UI should appear.**
@@ -356,7 +356,7 @@ ps --no-headers -o comm 1
 
 3. **Verify config preserved:**
    ```bash
-   cat /opt/helixscreen/helixconfig.json | head -5
+   cat /opt/helixscreen/config/helixconfig.json | head -5
    ```
 
 #### Uninstall Test
@@ -538,7 +538,7 @@ ps --no-headers -o comm 1
 
 2. **Verify config preserved:**
    ```bash
-   cat /usr/data/helixscreen/helixconfig.json | head -5
+   cat /usr/data/helixscreen/config/helixconfig.json | head -5
    ```
 
 #### Uninstall Test

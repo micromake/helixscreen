@@ -38,6 +38,15 @@
 
 set -e
 
+# Stop firmware display-management services that conflict with HelixScreen.
+# Creality SonicPad/Nebula Pad ships display-sleep.sh which polls X11 DPMS via
+# xset. When X isn't running (fbdev mode), xset fails and the script interprets
+# the empty response as "monitor Off", killing the backlight every 2 seconds.
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl stop display-sleep.service 2>/dev/null || true
+fi
+killall display-sleep.sh 2>/dev/null || true
+
 # Hide the Linux console text cursor (visible as a blinking block on fbdev)
 setterm --cursor off 2>/dev/null || printf '\033[?25l' > /dev/tty1 2>/dev/null || true
 
@@ -94,9 +103,39 @@ else
     exit 1
 fi
 
+# Select the appropriate binary: DRM (primary) or fbdev (fallback)
+# Checks: env override → ldd shared lib resolution → default to primary
+select_binary() {
+    _sb_bin_dir=$1
+    _sb_primary="${_sb_bin_dir}/helix-screen"
+    _sb_fallback="${_sb_bin_dir}/helix-screen-fbdev"
+
+    # No fallback available (non-Pi, dev builds)
+    if [ ! -x "$_sb_fallback" ]; then
+        echo "$_sb_primary"
+        return
+    fi
+
+    # User forced fbdev via env — skip DRM entirely
+    if [ "${HELIX_DISPLAY_BACKEND:-}" = "fbdev" ]; then
+        echo "$_sb_fallback"
+        return
+    fi
+
+    # Check if primary binary's shared libs are all resolvable
+    if command -v ldd >/dev/null 2>&1; then
+        if ldd "$_sb_primary" 2>/dev/null | grep -q "not found"; then
+            echo "$_sb_fallback"
+            return
+        fi
+    fi
+
+    echo "$_sb_primary"
+}
+
 SPLASH_BIN="${BIN_DIR}/helix-splash"
-MAIN_BIN="${BIN_DIR}/helix-screen"
 WATCHDOG_BIN="${BIN_DIR}/helix-watchdog"
+FALLBACK_BIN="${BIN_DIR}/helix-screen-fbdev"
 
 # Derive the install root (parent of bin/)
 INSTALL_DIR="$(cd "${BIN_DIR}/.." && pwd)"
@@ -157,17 +196,20 @@ LOG_DEST="${CLI_LOG_DEST:-${HELIX_LOG_DEST:-auto}}"
 LOG_FILE="${CLI_LOG_FILE:-${HELIX_LOG_FILE:-}}"
 LOG_LEVEL="${CLI_LOG_LEVEL:-${HELIX_LOG_LEVEL:-}}"
 
-# Default display backend to fbdev on embedded Linux targets.
-# DRM atomic modesetting has compatibility issues with some SoCs and breaks
-# framebuffer-based VNC setups. fbdev works reliably across all Pi hardware.
-# Can be overridden by setting HELIX_DISPLAY_BACKEND in the environment or
-# systemd service file.
+# Select binary AFTER env file is sourced so HELIX_DISPLAY_BACKEND=fbdev in env file works
+MAIN_BIN=$(select_binary "${BIN_DIR}")
+
+# Default display backend based on which binary was selected.
+# Only set explicitly when dual binaries exist (Pi with DRM+fbdev).
+# Non-Pi platforms (AD5M, K1, etc.) have only one binary and the C++ code
+# auto-detects the backend, so we leave the env var unset.
 if [ -z "${HELIX_DISPLAY_BACKEND:-}" ]; then
-    case "$(uname -s)" in
-        Linux)
-            export HELIX_DISPLAY_BACKEND=fbdev
-            ;;
-    esac
+    if [ "$(basename "${MAIN_BIN}")" = "helix-screen-fbdev" ]; then
+        export HELIX_DISPLAY_BACKEND=fbdev
+    elif [ -x "${FALLBACK_BIN}" ]; then
+        # Dual-binary Pi: primary selected, use DRM
+        export HELIX_DISPLAY_BACKEND=drm
+    fi
 fi
 
 # Log function (must be defined before first use)
@@ -181,6 +223,7 @@ if [ ! -x "${MAIN_BIN}" ]; then
     echo "Error: Cannot find helix-screen binary at ${MAIN_BIN}" >&2
     exit 1
 fi
+log "Selected binary: $(basename "${MAIN_BIN}")"
 
 # Check if watchdog is available (embedded targets only, provides crash recovery)
 USE_WATCHDOG=0
@@ -210,7 +253,7 @@ fi
 cleanup() {
     log "Shutting down..."
     # Kill watchdog/helix-screen if we started them
-    killall helix-watchdog helix-screen helix-splash 2>/dev/null || true
+    killall helix-watchdog helix-screen helix-screen-fbdev helix-splash 2>/dev/null || true
 }
 
 trap cleanup EXIT INT TERM
@@ -255,19 +298,47 @@ fi
 
 # Run main application (via watchdog if available for crash recovery)
 # Note: PASSTHROUGH_ARGS is unquoted to allow word splitting (POSIX compatible)
+# Use "cmd || EXIT_CODE=$?" to capture non-zero exit codes under set -e,
+# allowing the crash fallback logic below to run instead of aborting the script.
+EXIT_CODE=0
 if [ "${USE_WATCHDOG}" = "1" ]; then
     # Watchdog supervises helix-screen and manages splash lifecycle
     # Watchdog and splash auto-detect resolution from display hardware
     log "Starting via watchdog supervisor"
     # shellcheck disable=SC2086
     "${WATCHDOG_BIN}" ${SPLASH_ARGS} -- \
-        "${MAIN_BIN}" ${EXTRA_FLAGS} ${PASSTHROUGH_ARGS}
-    EXIT_CODE=$?
+        "${MAIN_BIN}" ${EXTRA_FLAGS} ${PASSTHROUGH_ARGS} || EXIT_CODE=$?
 else
     # Direct launch (development, or watchdog not built)
     # shellcheck disable=SC2086
-    "${MAIN_BIN}" ${EXTRA_FLAGS} ${PASSTHROUGH_ARGS}
-    EXIT_CODE=$?
+    "${MAIN_BIN}" ${EXTRA_FLAGS} ${PASSTHROUGH_ARGS} || EXIT_CODE=$?
+fi
+
+# Runtime crash fallback: if DRM binary crashed and fbdev fallback exists, retry.
+# Only retry on genuine crashes, NOT on signal-based exits (SIGTERM=143 from systemctl stop,
+# SIGKILL=137, SIGINT=130, SIGHUP=129). Crash signals: SIGABRT=134, SIGFPE=136, SIGBUS=138, SIGSEGV=139.
+_is_crash_exit() {
+    case "$1" in
+        134|136|138|139) return 0 ;;  # ABRT, FPE, BUS, SEGV
+    esac
+    # Non-signal exits (1-127) are also worth retrying (e.g., GL init failure)
+    [ "$1" -gt 0 ] && [ "$1" -lt 128 ]
+}
+if _is_crash_exit ${EXIT_CODE} && [ "$(basename "${MAIN_BIN}")" = "helix-screen" ] \
+   && [ -x "${FALLBACK_BIN}" ]; then
+    log "DRM binary exited with code ${EXIT_CODE}, retrying with fbdev fallback..."
+    export HELIX_DISPLAY_BACKEND=fbdev
+    if [ "${USE_WATCHDOG}" = "1" ]; then
+        # shellcheck disable=SC2086
+        "${WATCHDOG_BIN}" ${SPLASH_ARGS} -- \
+            "${FALLBACK_BIN}" ${EXTRA_FLAGS} ${PASSTHROUGH_ARGS}
+        EXIT_CODE=$?
+    else
+        # shellcheck disable=SC2086
+        "${FALLBACK_BIN}" ${EXTRA_FLAGS} ${PASSTHROUGH_ARGS}
+        EXIT_CODE=$?
+    fi
+    log "fbdev fallback exited with code ${EXIT_CODE}"
 fi
 
 log "Exiting with code ${EXIT_CODE}"

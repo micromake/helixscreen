@@ -99,6 +99,11 @@ class AmsSpoolmanOverlay : public OverlayBase {
         return "Spoolman";
     }
 
+    /**
+     * @brief Null widget pointers after destroy-on-close
+     */
+    void on_ui_destroyed() override;
+
     //
     // === Public API ===
     //

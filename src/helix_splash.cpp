@@ -376,19 +376,17 @@ int main(int argc, char** argv) {
     // Initialize LVGL
     lv_init();
 
-    // Create display backend — force fbdev for splash to avoid DRM master contention.
+    // Force fbdev for splash to avoid DRM master contention.
     // On DRM systems, only one process can hold the master lease. If splash takes it,
-    // helix-screen can't flush frames until splash dies. Using fbdev for splash avoids
-    // this entirely since fbdev has no master concept. DRM is still used for resolution
-    // detection (read-only, no master needed).
+    // helix-screen can't flush frames until splash dies. Using fbdev avoids this
+    // entirely since fbdev has no master concept.
+    // On DRM-only systems (no /dev/fb0), skip the splash entirely — the main binary
+    // will start faster without a splash blocking DRM master acquisition.
     auto backend = DisplayBackend::create(DisplayBackendType::FBDEV);
     if (!backend) {
-        // Fallback to auto-detect if fbdev isn't available (e.g. desktop/SDL)
-        backend = DisplayBackend::create();
-    }
-    if (!backend) {
-        fprintf(stderr, "helix-splash: Failed to create display backend\n");
-        return 1;
+        fprintf(stderr, "helix-splash: No framebuffer available, skipping splash "
+                        "(DRM-only systems don't support concurrent splash)\n");
+        return 0;
     }
 
     // Auto-detect resolution from display hardware if not overridden via CLI
@@ -422,6 +420,16 @@ int main(int argc, char** argv) {
     // Apply display rotation if configured (CLI arg from watchdog, or config fallback)
     if (rotation == 0) {
         rotation = read_config_rotation(0);
+    }
+    // Auto-detect from kernel if no config/CLI rotation (first boot).
+    // panel_orientation is informational — kernel does NOT rotate the
+    // framebuffer, we must do it ourselves.
+    if (rotation == 0) {
+        int kernel_rot = detect_panel_orientation_from_cmdline();
+        if (kernel_rot > 0) {
+            rotation = kernel_rot;
+            fprintf(stderr, "helix-splash: Auto-detected panel orientation: %d°\n", rotation);
+        }
     }
     if (rotation != 0) {
         lv_display_set_rotation(display, degrees_to_lv_rotation(rotation));

@@ -113,6 +113,8 @@ void PrintSelectListView::cleanup() {
     trailing_spacer_ = nullptr;
     visible_start_ = -1;
     visible_end_ = -1;
+    last_leading_height_ = -1;
+    last_trailing_height_ = -1;
     spdlog::debug("[PrintSelectListView] cleanup()");
 }
 
@@ -393,32 +395,42 @@ void PrintSelectListView::update_visible(const std::vector<PrintFileData>& file_
     spdlog::trace("[PrintSelectListView] Scroll: y={} viewport={} visible={}-{}/{} stride={}",
                   scroll_y, viewport_height, first_visible, last_visible, total_rows, row_stride);
 
-    // Update leading spacer height
+    // Update spacer heights (only when changed to avoid redundant relayout)
     int leading_height = first_visible * row_stride;
     if (leading_spacer_) {
-        lv_obj_set_height(leading_spacer_, leading_height);
-        lv_obj_move_to_index(leading_spacer_, 0);
+        if (leading_height != last_leading_height_) {
+            lv_obj_set_height(leading_spacer_, leading_height);
+            last_leading_height_ = leading_height;
+        }
+        if (lv_obj_get_index(leading_spacer_) != 0) {
+            lv_obj_move_to_index(leading_spacer_, 0);
+        }
     }
 
-    // Update trailing spacer height
-    int trailing_height = (total_rows - last_visible) * row_stride;
+    int trailing_height = std::max(0, (total_rows - last_visible) * row_stride);
     if (trailing_spacer_) {
-        lv_obj_set_height(trailing_spacer_, std::max(0, trailing_height));
+        if (trailing_height != last_trailing_height_) {
+            lv_obj_set_height(trailing_spacer_, trailing_height);
+            last_trailing_height_ = trailing_height;
+        }
     }
 
-    // Mark all pool rows as available
-    std::fill(list_pool_indices_.begin(), list_pool_indices_.end(), static_cast<ssize_t>(-1));
-
-    // Assign pool rows to visible indices
+    // Assign pool rows to visible indices, skipping rows that already show correct file
     size_t pool_idx = 0;
     for (int file_idx = first_visible; file_idx < last_visible && pool_idx < list_pool_.size();
          file_idx++, pool_idx++) {
         lv_obj_t* row = list_pool_[pool_idx];
-        configure_row(row, pool_idx, static_cast<size_t>(file_idx), file_list[file_idx]);
-        list_pool_indices_[pool_idx] = file_idx;
 
-        // Position row after leading spacer
-        lv_obj_move_to_index(row, static_cast<int>(pool_idx) + 1);
+        if (list_pool_indices_[pool_idx] != file_idx) {
+            configure_row(row, pool_idx, static_cast<size_t>(file_idx), file_list[file_idx]);
+            list_pool_indices_[pool_idx] = file_idx;
+        }
+
+        // Ensure row is in correct position (guard to avoid redundant relayout)
+        int target_index = static_cast<int>(pool_idx) + 1;
+        if (lv_obj_get_index(row) != target_index) {
+            lv_obj_move_to_index(row, target_index);
+        }
     }
 
     // Hide unused pool rows

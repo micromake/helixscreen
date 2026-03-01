@@ -23,9 +23,7 @@
       <text_muted name="probe_progress_text"
                   width="100%" bind_text="bed_mesh_probe_text" text="Initializing..." translation_tag="Initializing..." style_text_align="center"/>
       <!-- Progress bar -->
-      <lv_bar name="probe_progress_bar"
-              width="90%" height="12" bind_value="bed_mesh_probe_progress" min_value="0" max_value="100"
-              style_bg_color="#card_bg" style_radius="#space_xs"/>
+      <progress_bar name="probe_progress_bar" width="90%" bind_value="bed_mesh_probe_progress"/>
       <!-- E-Stop button (prominent, red) -->
       <ui_button name="btn_emergency_stop"
                  width="100%" height="#button_height_lg" variant="danger" icon="alert_octagon" text="EMERGENCY STOP" translation_tag="EMERGENCY STOP"

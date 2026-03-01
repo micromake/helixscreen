@@ -63,7 +63,8 @@ namespace helix::ui {
  */
 template <typename PanelType, typename Getter>
 bool lazy_create_and_push_overlay(Getter getter, lv_obj_t*& cached_panel, lv_obj_t* parent_screen,
-                                  const char* panel_display_name, const char* caller_name) {
+                                  const char* panel_display_name, const char* caller_name,
+                                  bool destroy_on_close = false) {
     spdlog::debug("[{}] {} clicked - opening panel", caller_name, panel_display_name);
 
     // Create panel on first access (lazy initialization)
@@ -89,7 +90,19 @@ bool lazy_create_and_push_overlay(Getter getter, lv_obj_t*& cached_panel, lv_obj
 
         // Register with NavigationManager for lifecycle callbacks
         NavigationManager::instance().register_overlay_instance(cached_panel, &panel);
-        spdlog::info("[{}] {} panel created", caller_name, panel_display_name);
+
+        // Register close callback to destroy widget tree when overlay closes.
+        // Frees 400-800KB per overlay. Subjects survive; next open re-creates widgets.
+        if (destroy_on_close) {
+            NavigationManager::instance().register_overlay_close_callback(
+                cached_panel, [&cached_panel, getter]() {
+                    PanelType& p = getter();
+                    p.destroy_overlay_ui(cached_panel);
+                });
+        }
+
+        spdlog::info("[{}] {} panel created{}", caller_name, panel_display_name,
+                     destroy_on_close ? " (destroy-on-close)" : "");
     }
 
     // Push panel onto navigation history and show it

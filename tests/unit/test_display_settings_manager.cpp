@@ -306,7 +306,7 @@ TEST_CASE_METHOD(LVGLTestFixture, "DisplaySettingsManager options strings", "[di
     SECTION("gcode render mode options") {
         const char* options = DisplaySettingsManager::get_gcode_render_mode_options();
         REQUIRE(options != nullptr);
-        REQUIRE(std::string(options) == "Auto\n3D View\n2D Layers");
+        REQUIRE(std::string(options) == "Auto\n3D View\n2D Layers\nThumbnail Only");
     }
 
     SECTION("time format options") {

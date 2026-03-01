@@ -242,6 +242,13 @@ void MoonrakerManager::create_client(const RuntimeConfig& runtime_config) {
         spdlog::debug("[MoonrakerManager] Creating MOCK client (Voron 2.4, {}x speed)", speedup);
         auto mock = std::make_unique<MoonrakerClientMock>(
             MoonrakerClientMock::PrinterType::VORON_24, speedup);
+        // Disable MMU if AMS is explicitly disabled via CLI or env var
+        const char* mock_ams_env = std::getenv("HELIX_MOCK_AMS");
+        bool ams_disabled = runtime_config.disable_mock_ams ||
+                            (mock_ams_env && std::string(mock_ams_env) == "none");
+        if (ams_disabled) {
+            mock->set_mmu_enabled(false);
+        }
         m_client = std::move(mock);
     } else {
         spdlog::debug("[MoonrakerManager] Creating REAL client");

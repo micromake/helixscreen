@@ -10,6 +10,8 @@
 // Linux Implementation: NetworkManager fallback via nmcli
 // ============================================================================
 
+#include "wifi_5ghz_detection.h"
+
 #include <algorithm>
 #include <cerrno>
 #include <cstdio>
@@ -71,12 +73,29 @@ WiFiError WifiBackendNetworkManager::start() {
 
     // Compute 5GHz support once (blocking here is fine — only happens at startup)
     if (!supports_5ghz_resolved_) {
-        std::string props = exec_nmcli("-t -f WIFI-PROPERTIES device show " + wifi_interface_);
-        supports_5ghz_cached_ = (!props.empty() && (props.find("5GHz") != std::string::npos ||
-                                                    props.find("5 GHz") != std::string::npos));
+        try {
+            std::string props = exec_nmcli("-t -f WIFI-PROPERTIES device show " + wifi_interface_);
+            supports_5ghz_cached_ = wifi_parse_nm_wifi_properties_has_5ghz(props);
+
+            // Fallback: try iw if nmcli didn't give us a clear answer
+            if (!supports_5ghz_cached_) {
+                FILE* pipe = popen("iw phy phy0 info 2>/dev/null", "r");
+                if (pipe) {
+                    std::string iw_output;
+                    char buf[256];
+                    while (fgets(buf, sizeof(buf), pipe)) {
+                        iw_output += buf;
+                    }
+                    pclose(pipe);
+                    supports_5ghz_cached_ = wifi_parse_iw_phy_has_5ghz(iw_output);
+                }
+            }
+        } catch (const std::exception& e) {
+            spdlog::warn("[WifiBackend] NM: Error detecting 5GHz support: {}", e.what());
+            // Keep cached = false (safe default)
+        }
         supports_5ghz_resolved_ = true;
-        bool has_5ghz = supports_5ghz_cached_.load();
-        spdlog::debug("[WifiBackend] NM: 5GHz support: {}", has_5ghz);
+        spdlog::debug("[WifiBackend] NM: 5GHz support: {}", supports_5ghz_cached_.load());
     }
 
     return WiFiErrorHelper::success();
@@ -815,9 +834,7 @@ void WifiBackendNetworkManager::request_status_refresh() {
     status_refresh_requested_ = true;
     // Lock CV mutex to ensure notify isn't lost between predicate
     // check and wait_for entry in status_thread_func
-    {
-        std::lock_guard<std::mutex> lock(status_cv_mutex_);
-    }
+    { std::lock_guard<std::mutex> lock(status_cv_mutex_); }
     status_cv_.notify_one();
 }
 

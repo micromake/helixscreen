@@ -28,6 +28,7 @@
 #include "led/led_controller.h"
 #include "moonraker_manager.h"
 #include "panel_factory.h"
+#include "job_queue_state.h"
 #include "print_history_manager.h"
 #include "screenshot.h"
 #include "sound_manager.h"
@@ -78,6 +79,7 @@
 #include "ui_panel_print_status.h"
 #include "ui_panel_screws_tilt.h"
 #include "ui_panel_settings.h"
+#include "ui_settings_about.h"
 #include "ui_panel_spoolman.h"
 #include "ui_panel_step_test.h"
 #include "ui_panel_temp_control.h"
@@ -157,10 +159,13 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <filesystem>
+#include <fstream>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -176,6 +181,9 @@ extern std::string g_log_file_cli;
 extern std::string g_log_level_cli;
 
 namespace {
+
+// Crash loop detection marker file path
+constexpr const char* CRASH_MARKER_PATH = "config/.crash_restart_count";
 
 /**
  * @brief Recursively invalidate all widgets in the tree
@@ -256,6 +264,41 @@ int Application::run(int argc, char** argv) {
         return 1;
     }
 
+    // Crash loop detection: track rapid restarts via marker file
+    {
+        constexpr size_t MAX_CRASH_RESTARTS = 3;
+        constexpr long long CRASH_WINDOW_SEC = 120;
+        auto now_epoch = std::chrono::duration_cast<std::chrono::seconds>(
+                             std::chrono::system_clock::now().time_since_epoch())
+                             .count();
+
+        // Read existing timestamps and filter to recent window
+        std::vector<long long> recent_timestamps;
+        {
+            std::ifstream in(CRASH_MARKER_PATH);
+            long long ts;
+            while (in >> ts) {
+                if (now_epoch - ts < CRASH_WINDOW_SEC) {
+                    recent_timestamps.push_back(ts);
+                }
+            }
+        }
+
+        if (recent_timestamps.size() >= MAX_CRASH_RESTARTS) {
+            spdlog::warn("[Application] Crash loop detected: {} restarts within {}s, "
+                         "resetting counter",
+                         recent_timestamps.size(), CRASH_WINDOW_SEC);
+            std::filesystem::remove(CRASH_MARKER_PATH);
+        } else {
+            // Write filtered timestamps plus current restart
+            std::ofstream out(CRASH_MARKER_PATH, std::ios::trunc);
+            for (auto ts : recent_timestamps) {
+                out << ts << "\n";
+            }
+            out << now_epoch << "\n";
+        }
+    }
+
     // Phase 3: Initialize logging
     if (!init_logging()) {
         return 1;
@@ -308,6 +351,11 @@ int Application::run(int argc, char** argv) {
         shutdown();
         return 1;
     }
+
+    // Phase 8c: Rotation probe + layout manager init
+    // Deferred from init_display() so lv_tr() is available for probe strings.
+    // Must run before Phase 9 (UI creation depends on layout dimensions).
+    run_rotation_probe_and_layout();
 
     // Phase 9a: Initialize core subjects and state (PrinterState, AmsState)
     // Must happen before Moonraker init because API creation needs PrinterState
@@ -683,20 +731,40 @@ bool Application::init_display() {
     m_screen_width = m_display->width();
     m_screen_height = m_display->height();
 
-    // Initialize layout manager (after display dimensions are known)
-    auto& layout_mgr = helix::LayoutManager::instance();
-    if (!m_args.layout.empty() && m_args.layout != "auto") {
-        layout_mgr.set_override(m_args.layout);
-    } else {
-        // Check config file for display.layout
-        std::string config_layout = m_config->get<std::string>("/display/layout", "auto");
-        if (config_layout != "auto") {
-            layout_mgr.set_override(config_layout);
+    // The interactive rotation probe is deferred to after init_translations()
+    // (Phase 8b) so that lv_tr() is available for its user-facing strings.
+    // However, kernel-detected orientation (panel_orientation=upside_down) can
+    // be applied immediately — no UI needed. This ensures the splash screen
+    // renders right-side up.
+    {
+        int config_rotation = m_config->get<int>("/display/rotate", 0);
+        if (config_rotation == 0 && m_args.rotation == 0) {
+            int kernel_orientation = DisplayBackend::detect_panel_orientation();
+            if (kernel_orientation >= 0) {
+                // Orientation detected (0=Normal, 90, 180, 270).
+                // 0 means Normal — no rotation needed, but mark as probed.
+                if (kernel_orientation > 0) {
+                    spdlog::info(
+                        "[Application] Applying kernel panel orientation: {}° (pre-splash)",
+                        kernel_orientation);
+                    m_display->apply_rotation(kernel_orientation);
+                    m_screen_width = m_display->width();
+                    m_screen_height = m_display->height();
+                } else {
+                    spdlog::info("[Application] Kernel panel orientation: Normal (0°, pre-splash)");
+                }
+                m_config->set("/display/rotate", kernel_orientation);
+                m_config->set("/display/rotation_probed", true);
+                m_config->save();
+            }
+        } else if (config_rotation > 0) {
+            spdlog::info("[Application] Applying config rotation: {}° (pre-splash)",
+                         config_rotation);
+            m_display->apply_rotation(config_rotation);
+            m_screen_width = m_display->width();
+            m_screen_height = m_display->height();
         }
     }
-    layout_mgr.init(m_screen_width, m_screen_height);
-    spdlog::info("[Application] Layout: {} ({})", layout_mgr.name(),
-                 layout_mgr.is_standard() ? "default" : "override");
 
     // Register LVGL log handler AFTER lv_init() (called inside display->init())
     // Must be after lv_init() because it resets global state and clears callbacks
@@ -802,6 +870,83 @@ bool Application::init_assets() {
     spdlog::debug("[Application] Assets registered");
     helix::MemoryMonitor::log_now("after_fonts_loaded");
     return true;
+}
+
+void Application::run_rotation_probe_and_layout() {
+    // Run rotation probe on first boot if no rotation is configured.
+    // Skip if: CLI rotation set, env var set, already probed, or config already
+    // has a /display/rotate key (even if 0 — means user already configured it).
+    // HELIX_FORCE_ROTATION_PROBE=1 bypasses all guards (for testing on SDL).
+    {
+        bool force_probe = (std::getenv("HELIX_FORCE_ROTATION_PROBE") != nullptr);
+        bool should_probe = false;
+
+        if (force_probe) {
+            should_probe = true;
+            spdlog::info("[Application] Rotation probe forced via HELIX_FORCE_ROTATION_PROBE");
+        }
+#if defined(HELIX_DISPLAY_FBDEV) || defined(HELIX_DISPLAY_DRM)
+        else if (m_args.rotation == 0 && !std::getenv("HELIX_DISPLAY_ROTATION")) {
+            bool probed = m_config->get<bool>("/display/rotation_probed", false);
+            bool has_rotate_key = m_config->exists("/display/rotate");
+            should_probe = !probed && !has_rotate_key;
+            if (!should_probe) {
+                spdlog::info("[Application] Rotation probe skipped: probed={}, has_rotate_key={}",
+                             probed, has_rotate_key);
+            }
+        } else {
+            spdlog::info(
+                "[Application] Rotation probe skipped: cli_rotation={}, env={}", m_args.rotation,
+                std::getenv("HELIX_DISPLAY_ROTATION") ? std::getenv("HELIX_DISPLAY_ROTATION")
+                                                      : "unset");
+        }
+#else
+        spdlog::debug("[Application] Rotation probe skipped: not embedded build");
+#endif
+
+        if (should_probe) {
+            // Try auto-detecting panel orientation from kernel first.
+            // panel_orientation is informational — the kernel does NOT rotate
+            // the framebuffer for us. We must apply the rotation ourselves.
+            int kernel_orientation = DisplayBackend::detect_panel_orientation();
+            if (kernel_orientation >= 0) {
+                // Orientation detected (0=Normal, 90, 180, 270).
+                if (kernel_orientation > 0) {
+                    spdlog::info("[Application] Auto-detected panel orientation: {}° — "
+                                 "applying now and saving to config",
+                                 kernel_orientation);
+                    m_display->apply_rotation(kernel_orientation);
+                    m_screen_width = m_display->width();
+                    m_screen_height = m_display->height();
+                } else {
+                    spdlog::info("[Application] Auto-detected panel orientation: Normal (0°) — "
+                                 "no rotation needed, saving to config");
+                }
+                m_config->set("/display/rotate", kernel_orientation);
+                m_config->set("/display/rotation_probed", true);
+                m_config->save();
+            } else {
+                // kernel_orientation == -1: not detected, run interactive probe
+                m_display->run_rotation_probe();
+                m_screen_width = m_display->width();
+                m_screen_height = m_display->height();
+            }
+        }
+    }
+
+    // Initialize layout manager (after display dimensions are known)
+    auto& layout_mgr = helix::LayoutManager::instance();
+    if (!m_args.layout.empty() && m_args.layout != "auto") {
+        layout_mgr.set_override(m_args.layout);
+    } else {
+        std::string config_layout = m_config->get<std::string>("/display/layout", "auto");
+        if (config_layout != "auto") {
+            layout_mgr.set_override(config_layout);
+        }
+    }
+    layout_mgr.init(m_screen_width, m_screen_height);
+    spdlog::info("[Application] Layout: {} ({})", layout_mgr.name(),
+                 layout_mgr.is_standard() ? "default" : "override");
 }
 
 bool Application::register_widgets() {
@@ -1006,7 +1151,8 @@ bool Application::init_ui() {
         spdlog::error("[Application] Failed to create print status overlay");
         return false;
     }
-    m_overlay_panels.print_status = m_panels->print_status_panel();
+    // print_status is now lazily created via PrintStatusPanel::push_overlay()
+    m_overlay_panels.print_status = nullptr;
 
     // Initialize keypad
     m_panels->init_keypad(m_screen);
@@ -1039,6 +1185,14 @@ bool Application::init_moonraker() {
         std::make_unique<PrintHistoryManager>(m_moonraker->api(), get_moonraker_client());
     set_print_history_manager(m_history_manager.get());
     spdlog::debug("[Application] PrintHistoryManager created");
+
+    // Create job queue state manager
+    m_job_queue_state =
+        std::make_unique<JobQueueState>(m_moonraker->api(), get_moonraker_client());
+    m_job_queue_state->init_subjects();
+    set_job_queue_state(m_job_queue_state.get());
+    m_job_queue_state->fetch();
+    spdlog::debug("[Application] JobQueueState created");
 
     // Initialize macro modification manager (for PRINT_START wizard)
     m_moonraker->init_macro_analysis(m_config);
@@ -1302,8 +1456,8 @@ void Application::create_overlays() {
         }
     }
 
-    if (m_args.overlays.print_status && m_overlay_panels.print_status) {
-        NavigationManager::instance().push_overlay(m_overlay_panels.print_status);
+    if (m_args.overlays.print_status) {
+        PrintStatusPanel::push_overlay(m_screen);
     }
 
     if (m_args.overlays.bed_mesh) {
@@ -1473,14 +1627,31 @@ void Application::create_overlays() {
         spdlog::info("[Application] Opened sensor settings overlay via CLI");
     }
 
-    if (m_args.overlays.touch_calibration) {
+    // Force touch calibration: --calibrate-touch flag, env var, OR config force_calibration option
+    bool force_touch_cal = m_args.calibrate_touch;
+    if (!force_touch_cal) {
+        force_touch_cal = (std::getenv("HELIX_TOUCH_CALIBRATE") != nullptr);
+    }
+    if (!force_touch_cal && m_config) {
+        force_touch_cal = m_config->get<bool>("/input/force_calibration", false);
+    }
+
+    if (force_touch_cal || m_args.overlays.touch_calibration) {
         auto& overlay = helix::ui::get_touch_calibration_overlay();
         overlay.init_subjects();
-        lv_obj_t* panel_obj = overlay.create(m_screen);
-        if (panel_obj) {
-            NavigationManager::instance().push_overlay(panel_obj);
-            spdlog::info("[Application] Opened touch calibration overlay via CLI");
-        }
+        overlay.register_callbacks();
+        overlay.create(m_screen);
+
+        // Completion callback: clear config flag on success if it was set
+        bool clear_config = m_config && m_config->get<bool>("/input/force_calibration", false);
+        overlay.show([this, clear_config](bool success) {
+            if (success && clear_config && m_config) {
+                m_config->set<bool>("/input/force_calibration", false);
+                m_config->save();
+                spdlog::info("[Application] Cleared force_calibration config flag after success");
+            }
+        });
+        spdlog::info("[Application] Opened touch calibration overlay (force={})", force_touch_cal);
     }
 
     if (m_args.overlays.hardware_health) {
@@ -1620,12 +1791,12 @@ void Application::setup_discovery_callbacks() {
             get_global_settings_panel().populate_led_chips();
 
             // Fetch print hours now that connection is live, and refresh on job changes
-            get_global_settings_panel().fetch_print_hours();
-            c->client->register_method_callback("notify_history_changed",
-                                                "SettingsPanel_print_hours",
-                                                [](const nlohmann::json& /*data*/) {
-                                                    get_global_settings_panel().fetch_print_hours();
-                                                });
+            helix::settings::get_about_settings_overlay().fetch_print_hours();
+            c->client->register_method_callback(
+                "notify_history_changed", "AboutOverlay_print_hours",
+                [](const nlohmann::json& /*data*/) {
+                    helix::settings::get_about_settings_overlay().fetch_print_hours();
+                });
 
             // Register for timelapse events when timelapse is detected
             c->client->register_method_callback(
@@ -1651,6 +1822,9 @@ void Application::setup_discovery_callbacks() {
 
             // Record telemetry session event now that hardware data is available
             TelemetryManager::instance().record_session();
+            TelemetryManager::instance().record_hardware_profile();
+            TelemetryManager::instance().record_settings_snapshot();
+            TelemetryManager::instance().record_memory_snapshot("session_start");
 
             // Fetch safety limits and build volume from Klipper config (stepper ranges,
             // min_extrude_temp, max_temp, etc.) — runs for ALL discovery completions
@@ -2486,6 +2660,9 @@ void Application::shutdown() {
     // Uninstall crash handler (clean shutdown is not a crash)
     crash_handler::uninstall();
 
+    // Clean shutdown means no crash loop -- remove the marker file
+    std::filesystem::remove(CRASH_MARKER_PATH);
+
     // Stop hot reloader thread before anything else
     if (m_hot_reloader) {
         m_hot_reloader->stop();
@@ -2497,11 +2674,21 @@ void Application::shutdown() {
 
     spdlog::info("[Application] Shutting down...");
 
+    // Disconnect the WebSocket client FIRST to stop background threads
+    // (mock simulation, WebSocket I/O). This prevents races where the
+    // background thread delivers notifications that trigger new API requests
+    // (history fetch, metascan, webcam detection) after we've started teardown.
+    // The client object remains valid for later unregister_method_callback() calls.
+    if (m_moonraker && m_moonraker->client()) {
+        m_moonraker->client()->disconnect();
+    }
+
     // Clear app_globals references BEFORE destroying managers to prevent
     // destructors (e.g., PrintSelectPanel) from accessing destroyed objects
     set_moonraker_manager(nullptr);
     set_moonraker_api(nullptr);
     set_moonraker_client(nullptr);
+    set_job_queue_state(nullptr);
     set_print_history_manager(nullptr);
     set_temperature_history_manager(nullptr);
 
@@ -2528,15 +2715,9 @@ void Application::shutdown() {
         m_plugin_manager.reset();
     }
 
-    // Disconnect the client FIRST to stop background threads (mock simulation, WebSocket).
-    // This prevents races where the simulation thread dispatches callbacks from
-    // method_callbacks_ while we're erasing/destroying entries on the main thread.
-    if (m_moonraker && m_moonraker->client()) {
-        m_moonraker->client()->disconnect();
-    }
-
     // Reset managers in reverse order (MoonrakerManager handles print_start_collector cleanup)
-    // History manager MUST be reset before moonraker (uses client for unregistration)
+    // Job queue and history managers MUST be reset before moonraker (use client for unregistration)
+    m_job_queue_state.reset();
     m_history_manager.reset();
     m_temp_history_manager.reset();
 
@@ -2563,6 +2744,17 @@ void Application::shutdown() {
     // they must unsubscribe while the client's mutex is still alive.
     AmsState::instance().clear_backends();
 
+    // Drain deferred UI callbacks BEFORE destroying panels.
+    // observe_int_sync/observe_string defer via ui_queue_update(), so queued
+    // callbacks may hold 'this' pointers to living panels. Processing them
+    // after m_panels.reset() causes use-after-free (SIGSEGV).
+    helix::ui::update_queue_shutdown();
+
+    // Stop ALL LVGL animations before destroying panels.
+    // Animations hold widget pointers; completion callbacks fired during
+    // lv_anim_delete_all() would dereference freed objects if panels are gone.
+    lv_anim_delete_all();
+
     m_panels.reset();
     m_subjects.reset();
 
@@ -2570,16 +2762,6 @@ void Application::shutdown() {
     if (m_display) {
         m_display->restore_display_on_shutdown();
     }
-
-    // Clear pending async callbacks BEFORE destroying panels.
-    // This prevents use-after-free: async observer callbacks may have been queued
-    // with stale 'self' pointers that will crash if processed after panel destruction.
-    helix::ui::update_queue_shutdown();
-
-    // Stop ALL LVGL animations before destroying panels.
-    // Animations hold pointers to objects; if panels are destroyed first,
-    // a pending anim_timer tick can try to refresh styles on freed objects.
-    lv_anim_delete_all();
 
     // Destroy ALL static panel/overlay globals via self-registration pattern.
     // This deinits local subjects (via SubjectManager) and releases ObserverGuards.

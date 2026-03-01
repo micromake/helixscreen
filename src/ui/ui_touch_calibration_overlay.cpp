@@ -7,7 +7,6 @@
 #include "ui_effects.h"
 #include "ui_event_safety.h"
 #include "ui_nav_manager.h"
-#include "ui_step_progress.h"
 #include "ui_toast_manager.h"
 
 #include "config.h"
@@ -40,13 +39,6 @@ TouchCalibrationOverlay& get_touch_calibration_overlay() {
 // ============================================================================
 // Static Trampolines for LVGL Callbacks
 // ============================================================================
-
-static void on_touch_cal_start_clicked(lv_event_t* e) {
-    (void)e;
-    LVGL_SAFE_EVENT_CB_BEGIN("[TouchCalibrationOverlay] start clicked");
-    get_touch_calibration_overlay().handle_start_clicked();
-    LVGL_SAFE_EVENT_CB_END();
-}
 
 static void on_touch_cal_accept_clicked(lv_event_t* e) {
     (void)e;
@@ -138,13 +130,35 @@ TouchCalibrationOverlay::TouchCalibrationOverlay() {
         lv_subject_copy_string(&accept_button_text_, accept_text_buffer_);
 
         // Update instruction text
-        lv_subject_copy_string(&instruction_subject_, "Calibration timed out. Please try again.");
+        lv_subject_copy_string(&instruction_subject_,
+                               lv_tr("Calibration timed out. Please try again."));
 
         // Restart calibration from POINT_1
         panel_->start();
         update_state_subject();
         update_crosshair_position();
-        update_step_progress();
+    });
+
+    // Set up sample progress callback for UI updates
+    panel_->set_sample_progress_callback([this]() { update_instruction_text(); });
+
+    // Set up fast-revert callback for broken matrix detection during verify
+    panel_->set_fast_revert_callback([this]() {
+        spdlog::warn("[{}] Fast-revert: broken matrix detected, reverting", get_name());
+
+        // Restore backup calibration
+        if (has_backup_) {
+            DisplayManager* dm = DisplayManager::instance();
+            if (dm) {
+                dm->apply_touch_calibration(backup_calibration_);
+            }
+            has_backup_ = false;
+        }
+
+        panel_->retry();
+        update_state_subject();
+        update_instruction_text();
+        update_crosshair_position();
     });
 
     spdlog::debug("[{}] Instance created", get_name());
@@ -165,7 +179,6 @@ TouchCalibrationOverlay::~TouchCalibrationOverlay() {
     // Clear widget pointers (owned by LVGL)
     overlay_root_ = nullptr;
     crosshair_ = nullptr;
-    step_progress_ = nullptr;
 }
 
 // ============================================================================
@@ -184,8 +197,8 @@ void TouchCalibrationOverlay::init_subjects() {
     UI_MANAGED_SUBJECT_INT(state_subject_, STATE_IDLE, "touch_cal_state", subjects_);
 
     // Instruction text subject
-    UI_MANAGED_SUBJECT_STRING(instruction_subject_, instruction_buffer_,
-                              "Tap Start to begin calibration", "touch_cal_instruction", subjects_);
+    UI_MANAGED_SUBJECT_STRING(instruction_subject_, instruction_buffer_, "Tap anywhere to begin",
+                              "touch_cal_instruction", subjects_);
 
     // Accept button text subject (for countdown display)
     UI_MANAGED_SUBJECT_STRING(accept_button_text_, accept_text_buffer_, "Accept",
@@ -203,7 +216,6 @@ void TouchCalibrationOverlay::register_callbacks() {
     spdlog::debug("[{}] Registering event callbacks", get_name());
 
     register_xml_callbacks({
-        {"on_touch_cal_start_clicked", on_touch_cal_start_clicked},
         {"on_touch_cal_accept_clicked", on_touch_cal_accept_clicked},
         {"on_touch_cal_retry_clicked", on_touch_cal_retry_clicked},
         {"on_touch_cal_overlay_touched", on_touch_cal_overlay_touched},
@@ -243,31 +255,6 @@ lv_obj_t* TouchCalibrationOverlay::create(lv_obj_t* parent) {
         spdlog::warn("[{}] Crosshair widget not found in XML", get_name());
     }
 
-    // Create step progress widget (3 dots for calibration points)
-    // Place it below the instruction label
-    lv_obj_t* content = lv_obj_find_by_name(overlay_root_, "calibration_content");
-    if (content) {
-        // Create container for step progress (centered horizontally, below instruction)
-        lv_obj_t* step_container = lv_obj_create(content);
-        lv_obj_remove_style_all(step_container);
-        lv_obj_set_size(step_container, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-        lv_obj_align(step_container, LV_ALIGN_TOP_MID, 0, 80); // Below instruction
-        lv_obj_add_flag(step_container, LV_OBJ_FLAG_FLOATING); // Don't affect layout
-
-        // Create horizontal 3-step progress (no labels, just dots)
-        static const ui_step_t steps[] = {
-            {"", StepState::Pending},
-            {"", StepState::Pending},
-            {"", StepState::Pending},
-        };
-        step_progress_ = ui_step_progress_create(step_container, steps, 3, true, nullptr);
-        if (step_progress_) {
-            // Initially hidden (shown during POINT_1/2/3)
-            lv_obj_add_flag(step_container, LV_OBJ_FLAG_HIDDEN);
-            spdlog::debug("[{}] Step progress widget created", get_name());
-        }
-    }
-
     // Initially hidden
     lv_obj_add_flag(overlay_root_, LV_OBJ_FLAG_HIDDEN);
 
@@ -285,31 +272,19 @@ void TouchCalibrationOverlay::show(CompletionCallback callback) {
         return;
     }
 
-    spdlog::debug("[{}] Showing overlay (auto_start={})", get_name(), auto_start_);
+    spdlog::debug("[{}] Showing overlay", get_name());
 
     // Store completion callback
     completion_callback_ = std::move(callback);
     callback_invoked_ = false;
 
-    // Reset state
+    // Start in IDLE — first tap anywhere begins calibration
     if (panel_) {
         panel_->cancel(); // Reset to IDLE
     }
-
-    // Auto-start: skip IDLE state and begin calibration immediately
-    if (auto_start_ && panel_) {
-        panel_->start();
-        lv_subject_set_int(&state_subject_, STATE_POINT_1);
-        spdlog::info("[{}] Auto-starting calibration at POINT_1", get_name());
-    } else {
-        lv_subject_set_int(&state_subject_, STATE_IDLE);
-    }
+    lv_subject_set_int(&state_subject_, STATE_IDLE);
     update_instruction_text();
     update_crosshair_position();
-    update_step_progress();
-
-    // Reset auto_start flag for next show()
-    auto_start_ = false;
 
     // Register with NavigationManager for lifecycle callbacks
     NavigationManager::instance().register_overlay_instance(overlay_root_, this);
@@ -318,10 +293,6 @@ void TouchCalibrationOverlay::show(CompletionCallback callback) {
     NavigationManager::instance().push_overlay(overlay_root_);
 
     spdlog::info("[{}] Overlay shown", get_name());
-}
-
-void TouchCalibrationOverlay::set_auto_start(bool auto_start) {
-    auto_start_ = auto_start;
 }
 
 void TouchCalibrationOverlay::hide() {
@@ -386,7 +357,6 @@ void TouchCalibrationOverlay::cleanup() {
 
     // Clear widget pointers
     crosshair_ = nullptr;
-    step_progress_ = nullptr;
 
     // Clear callback
     completion_callback_ = nullptr;
@@ -401,21 +371,6 @@ void TouchCalibrationOverlay::cleanup() {
 // ============================================================================
 // Event Handlers
 // ============================================================================
-
-void TouchCalibrationOverlay::handle_start_clicked() {
-    spdlog::info("[{}] Start calibration clicked", get_name());
-
-    if (!panel_) {
-        spdlog::error("[{}] Panel not initialized", get_name());
-        return;
-    }
-
-    panel_->start();
-    lv_subject_set_int(&state_subject_, STATE_POINT_1);
-    update_instruction_text();
-    update_crosshair_position();
-    update_step_progress();
-}
 
 void TouchCalibrationOverlay::handle_accept_clicked() {
     spdlog::info("[{}] Accept calibration clicked", get_name());
@@ -441,6 +396,7 @@ void TouchCalibrationOverlay::handle_accept_clicked() {
         config->set<double>("/input/calibration/d", static_cast<double>(cal->d));
         config->set<double>("/input/calibration/e", static_cast<double>(cal->e));
         config->set<double>("/input/calibration/f", static_cast<double>(cal->f));
+        config->set<bool>("/input/calibration/swap_axes", panel_->axes_swapped());
         config->save();
         spdlog::info("[{}] Calibration saved to config", get_name());
     }
@@ -501,7 +457,6 @@ void TouchCalibrationOverlay::handle_retry_clicked() {
     lv_subject_set_int(&state_subject_, STATE_POINT_1);
     update_instruction_text();
     update_crosshair_position();
-    update_step_progress();
 }
 
 void TouchCalibrationOverlay::handle_screen_touched(lv_event_t* e) {
@@ -511,50 +466,42 @@ void TouchCalibrationOverlay::handle_screen_touched(lv_event_t* e) {
         return;
     }
 
-    auto state = panel_->get_state();
-
     // Get click position relative to the screen
     lv_point_t point;
     lv_indev_get_point(lv_indev_active(), &point);
 
+    auto state_before = panel_->get_state();
+
     // Handle VERIFY state - show calibration accuracy visualization with ripple
-    if (state == helix::TouchCalibrationPanel::State::VERIFY) {
+    if (state_before == helix::TouchCalibrationPanel::State::VERIFY) {
         spdlog::debug("[{}] Verify touch at ({}, {})", get_name(), point.x, point.y);
 
-        // Get calibration and transform the point
-        const TouchCalibration* cal = panel_->get_calibration();
-        DisplayManager* dm = DisplayManager::instance();
-        if (cal && cal->valid && dm) {
-            // Transform through calibration to show where system thinks touch landed
-            helix::Point raw{point.x, point.y};
-            helix::Point transformed =
-                helix::transform_point(*cal, raw, dm->width() - 1, dm->height() - 1);
-
-            // Create ripple at transformed position
-            // Use overlay_root_ as parent (full screen) with screen coordinates
-            lv_obj_t* content = lv_obj_find_by_name(overlay_root_, "calibration_content");
-            if (content) {
-                create_ripple(content, transformed.x, transformed.y);
-            }
-
-            spdlog::debug("[{}] Verify: raw({},{}) -> transformed({},{})", get_name(), raw.x, raw.y,
-                          transformed.x, transformed.y);
+        lv_obj_t* content = lv_obj_find_by_name(overlay_root_, "calibration_content");
+        if (content) {
+            create_ripple(content, point.x, point.y);
         }
+
+        DisplayManager* dm = DisplayManager::instance();
+        bool on_screen =
+            dm && point.x >= 0 && point.x < dm->width() && point.y >= 0 && point.y < dm->height();
+        panel_->report_verify_touch(on_screen);
         return;
     }
 
-    // Only process touches during calibration point states
-    if (state != helix::TouchCalibrationPanel::State::POINT_1 &&
-        state != helix::TouchCalibrationPanel::State::POINT_2 &&
-        state != helix::TouchCalibrationPanel::State::POINT_3) {
-        return;
-    }
-
+    // add_sample() handles IDLE→POINT_1 auto-start and sample collection
     spdlog::info("[{}] Screen touched at ({}, {}) during state {}", get_name(), point.x, point.y,
-                 static_cast<int>(state));
+                 static_cast<int>(state_before));
+    panel_->add_sample({point.x, point.y});
 
-    // Capture the raw touch point
-    panel_->capture_point({point.x, point.y});
+    // Flash crosshair for visual tap feedback (only during calibration points,
+    // not on the initial "tap anywhere to begin" transition from IDLE)
+    auto state_after = panel_->get_state();
+    if (crosshair_ && state_before != helix::TouchCalibrationPanel::State::IDLE &&
+        (state_after == helix::TouchCalibrationPanel::State::POINT_1 ||
+         state_after == helix::TouchCalibrationPanel::State::POINT_2 ||
+         state_after == helix::TouchCalibrationPanel::State::POINT_3)) {
+        flash_object(crosshair_);
+    }
 
     // If we just entered VERIFY, temporarily apply new calibration so accept/retry buttons
     // are tappable even if the previous calibration was bad
@@ -574,7 +521,6 @@ void TouchCalibrationOverlay::handle_screen_touched(lv_event_t* e) {
     update_state_subject();
     update_instruction_text();
     update_crosshair_position();
-    update_step_progress();
 }
 
 void TouchCalibrationOverlay::handle_back_clicked() {
@@ -630,31 +576,30 @@ void TouchCalibrationOverlay::update_instruction_text() {
         return;
     }
 
-    const char* text = "";
-    auto state = panel_->get_state();
+    auto p = panel_->get_progress();
 
-    switch (state) {
+    switch (p.state) {
     case helix::TouchCalibrationPanel::State::IDLE:
-        text = "Tap Start to begin calibration";
-        break;
-    case helix::TouchCalibrationPanel::State::POINT_1:
-        text = "Tap the crosshair (point 1 of 3)";
-        break;
-    case helix::TouchCalibrationPanel::State::POINT_2:
-        text = "Tap the crosshair (point 2 of 3)";
-        break;
-    case helix::TouchCalibrationPanel::State::POINT_3:
-        text = "Tap the crosshair (point 3 of 3)";
-        break;
+        lv_subject_copy_string(&instruction_subject_, lv_tr("Tap anywhere to begin"));
+        return;
     case helix::TouchCalibrationPanel::State::VERIFY:
-        text = "Touch anywhere to verify accuracy";
-        break;
+        lv_subject_copy_string(&instruction_subject_, lv_tr("Touch anywhere to verify accuracy"));
+        return;
     case helix::TouchCalibrationPanel::State::COMPLETE:
-        text = "Calibration complete";
+        lv_subject_copy_string(&instruction_subject_, lv_tr("Calibration complete"));
+        return;
+    default:
         break;
     }
 
-    lv_subject_copy_string(&instruction_subject_, text);
+    // POINT states — show which touch is next (1-indexed)
+    // current_sample=0 → "touch 1 of 7" (waiting for first), current_sample=1 → "touch 2 of 7",
+    // etc. After the last sample (7), state advances so we never show "touch 8 of 7" TRANSLATORS:
+    // %1$d = point number (1-3), %2$d = next touch number (1-7), %3$d = total
+    snprintf(instruction_buffer_, sizeof(instruction_buffer_),
+             lv_tr("Tap the crosshair (point %1$d of 3) \xe2\x80\x94 touch %2$d of %3$d"),
+             p.point_num, p.current_sample + 1, p.total_samples);
+    lv_subject_copy_string(&instruction_subject_, instruction_buffer_);
 }
 
 void TouchCalibrationOverlay::update_crosshair_position() {
@@ -699,49 +644,6 @@ void TouchCalibrationOverlay::update_crosshair_position() {
 
     spdlog::debug("[{}] Crosshair positioned at ({}, {}) for step {}", get_name(), target.x,
                   target.y, step);
-}
-
-void TouchCalibrationOverlay::update_step_progress() {
-    if (!step_progress_ || !panel_) {
-        return;
-    }
-
-    // Get parent container (step_progress_ is inside it)
-    lv_obj_t* step_container = lv_obj_get_parent(step_progress_);
-    if (!step_container) {
-        return;
-    }
-
-    auto state = panel_->get_state();
-
-    // Only show during calibration point states (POINT_1, POINT_2, POINT_3)
-    bool is_calibrating = (state == helix::TouchCalibrationPanel::State::POINT_1 ||
-                           state == helix::TouchCalibrationPanel::State::POINT_2 ||
-                           state == helix::TouchCalibrationPanel::State::POINT_3);
-
-    if (is_calibrating) {
-        lv_obj_remove_flag(step_container, LV_OBJ_FLAG_HIDDEN);
-
-        // Map state to step index (0-based)
-        int step_index = 0;
-        switch (state) {
-        case helix::TouchCalibrationPanel::State::POINT_1:
-            step_index = 0;
-            break;
-        case helix::TouchCalibrationPanel::State::POINT_2:
-            step_index = 1;
-            break;
-        case helix::TouchCalibrationPanel::State::POINT_3:
-            step_index = 2;
-            break;
-        default:
-            break;
-        }
-
-        ui_step_progress_set_current(step_progress_, step_index);
-    } else {
-        lv_obj_add_flag(step_container, LV_OBJ_FLAG_HIDDEN);
-    }
 }
 
 void TouchCalibrationOverlay::on_calibration_complete(const TouchCalibration* cal) {

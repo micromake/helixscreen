@@ -56,30 +56,6 @@ class PrintTuneOverlay : public OverlayBase {
     void show(lv_obj_t* parent_screen, MoonrakerAPI* api, helix::PrinterState& printer_state);
 
     /**
-     * @brief Update speed display while dragging (no G-code)
-     * @param value New speed percentage (50-200)
-     */
-    void handle_speed_display(int value);
-
-    /**
-     * @brief Send speed G-code when slider released
-     * @param value Speed percentage to send
-     */
-    void handle_speed_send(int value);
-
-    /**
-     * @brief Update flow display while dragging (no G-code)
-     * @param value New flow percentage (75-125)
-     */
-    void handle_flow_display(int value);
-
-    /**
-     * @brief Send flow G-code when slider released
-     * @param value Flow percentage to send
-     */
-    void handle_flow_send(int value);
-
-    /**
      * @brief Handle reset button click - resets speed/flow to 100%
      */
     void handle_reset();
@@ -116,6 +92,18 @@ class PrintTuneOverlay : public OverlayBase {
      * @param panel The tune panel widget
      */
     void update_z_offset_icons(lv_obj_t* panel);
+
+    /**
+     * @brief Adjust speed by a delta and send G-code
+     * @param delta Speed change in percent (e.g. -10, -5, -1, +1, +5, +10)
+     */
+    void handle_speed_adjust(int delta);
+
+    /**
+     * @brief Adjust flow by a delta and send G-code
+     * @param delta Flow change in percent (e.g. -10, -5, -1, +1, +5, +10)
+     */
+    void handle_flow_adjust(int delta);
 
     /**
      * @brief Update display from current speed/flow values
@@ -192,7 +180,7 @@ class PrintTuneOverlay : public OverlayBase {
     void init_subjects_internal();
     void setup_panel();
     void update_display();
-    void sync_sliders_to_state();
+    void sync_to_state();
 
     //
     // === Dependencies ===

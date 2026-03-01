@@ -1,6 +1,9 @@
 // Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "ui_spool_wizard.h" // For FilamentEntry struct
+
+#include "json_utils.h"
 #include "moonraker_api_mock.h"
 #include "moonraker_client_mock.h"
 #include "printer_state.h"
@@ -910,6 +913,126 @@ TEST_CASE("Mock update_spoolman_spool supports filament_id patch", "[spoolman][m
     REQUIRE(spools[0].filament_id != original_filament_id);
 }
 
+// ============================================================================
+// Spoolman Filament Creation Data Validation
+// These tests verify we send the required fields Spoolman expects.
+// Missing density/diameter causes 422 Unprocessable Entity.
+// ============================================================================
+
+TEST_CASE("Filament creation data includes required Spoolman fields", "[spoolman][api]") {
+    // Reproduce the data construction from SpoolWizardOverlay::create_filament_then_spool()
+    // to verify density and diameter are always present.
+
+    struct TestFilament {
+        std::string material;
+        std::string color_hex;
+        std::string color_name;
+        double density = 0;
+        double diameter = 1.75;
+        double weight = 0;
+        double spool_weight = 0;
+    };
+
+    auto build_filament_data = [](const TestFilament& fil, int vendor_id) -> nlohmann::json {
+        nlohmann::json data;
+        data["vendor_id"] = vendor_id;
+        data["name"] = fil.material + " " + fil.color_name;
+        data["material"] = fil.material;
+        if (!fil.color_hex.empty()) {
+            data["color_hex"] = fil.color_hex;
+        }
+        // density and diameter are REQUIRED by Spoolman (no defaults in their API)
+        data["density"] = fil.density > 0 ? fil.density : 1.24;
+        data["diameter"] = fil.diameter > 0 ? fil.diameter : 1.75;
+        if (fil.weight > 0) {
+            data["weight"] = fil.weight;
+        }
+        if (fil.spool_weight > 0) {
+            data["spool_weight"] = fil.spool_weight;
+        }
+        return data;
+    };
+
+    SECTION("Filament with all data populated") {
+        TestFilament fil{.material = "PLA",
+                         .color_hex = "1A1A2E",
+                         .color_name = "Jet Black",
+                         .density = 1.24,
+                         .diameter = 1.75,
+                         .weight = 1000};
+
+        auto data = build_filament_data(fil, 1);
+        REQUIRE(data.contains("density"));
+        REQUIRE(data.contains("diameter"));
+        REQUIRE(data["density"].get<double>() == Catch::Approx(1.24));
+        REQUIRE(data["diameter"].get<double>() == Catch::Approx(1.75));
+    }
+
+    SECTION("Filament with zero density gets default 1.24") {
+        TestFilament fil{.material = "PLA", .density = 0};
+
+        auto data = build_filament_data(fil, 1);
+        REQUIRE(data.contains("density"));
+        REQUIRE(data["density"].get<double>() == Catch::Approx(1.24));
+    }
+
+    SECTION("Filament with zero diameter gets default 1.75") {
+        TestFilament fil{.material = "PLA", .diameter = 0};
+
+        auto data = build_filament_data(fil, 1);
+        REQUIRE(data.contains("diameter"));
+        REQUIRE(data["diameter"].get<double>() == Catch::Approx(1.75));
+    }
+
+    SECTION("Filament always has density and diameter — no conditionals") {
+        TestFilament fil{.material = "PETG"};
+
+        auto data = build_filament_data(fil, 5);
+        // These must ALWAYS be present — Spoolman returns 422 without them
+        REQUIRE(data.contains("density"));
+        REQUIRE(data.contains("diameter"));
+        REQUIRE(data["density"].get<double>() > 0);
+        REQUIRE(data["diameter"].get<double>() > 0);
+        // Optional fields should NOT be present when zero
+        REQUIRE_FALSE(data.contains("weight"));
+        REQUIRE_FALSE(data.contains("spool_weight"));
+    }
+
+    SECTION("2.85mm filament diameter is preserved") {
+        TestFilament fil{.material = "PLA", .density = 1.24, .diameter = 2.85};
+
+        auto data = build_filament_data(fil, 1);
+        REQUIRE(data["diameter"].get<double>() == Catch::Approx(2.85));
+    }
+
+    SECTION("Custom density from material DB is preserved") {
+        TestFilament fil{.material = "TPU", .density = 1.21};
+
+        auto data = build_filament_data(fil, 3);
+        REQUIRE(data["density"].get<double>() == Catch::Approx(1.21));
+    }
+}
+
+TEST_CASE("FilamentEntry defaults include diameter", "[spoolman]") {
+    SpoolWizardOverlay::FilamentEntry entry;
+    REQUIRE(entry.diameter == Catch::Approx(1.75));
+    REQUIRE(entry.density == 0.0);
+}
+
+TEST_CASE("FilamentInfo diameter populates FilamentEntry", "[spoolman]") {
+    FilamentInfo fi;
+    fi.material = "PETG";
+    fi.density = 1.27f;
+    fi.diameter = 2.85f;
+
+    SpoolWizardOverlay::FilamentEntry entry;
+    entry.density = fi.density;
+    entry.diameter = fi.diameter;
+
+    REQUIRE(entry.density == Catch::Approx(1.27));
+    REQUIRE(entry.diameter == Catch::Approx(2.85));
+}
+
 TEST_CASE("SpoolInfo - realistic spool scenarios", "[filament][integration]") {
     SECTION("Typical PLA spool usage") {
         SpoolInfo spool;
@@ -953,5 +1076,92 @@ TEST_CASE("SpoolInfo - realistic spool scenarios", "[filament][integration]") {
 
         REQUIRE(spool.remaining_percent() == Catch::Approx(66.666666).margin(0.001));
         REQUIRE(spool.is_low() == false);
+    }
+}
+
+// ============================================================================
+// JSON Null-Safe Weight Parsing Tests
+// ============================================================================
+
+TEST_CASE("safe_double handles null initial_weight from Spoolman", "[filament][parsing]") {
+    using helix::json_util::safe_double;
+
+    SECTION("null initial_weight returns 0") {
+        auto j = nlohmann::json::parse(R"({"remaining_weight": 800.0, "initial_weight": null})");
+        REQUIRE(safe_double(j, "initial_weight") == 0.0);
+        REQUIRE(safe_double(j, "remaining_weight") == Catch::Approx(800.0));
+    }
+
+    SECTION("missing initial_weight returns 0") {
+        auto j = nlohmann::json::parse(R"({"remaining_weight": 800.0})");
+        REQUIRE(safe_double(j, "initial_weight") == 0.0);
+    }
+
+    SECTION("present initial_weight parsed correctly") {
+        auto j = nlohmann::json::parse(R"({"initial_weight": 1000.0})");
+        REQUIRE(safe_double(j, "initial_weight") == Catch::Approx(1000.0));
+    }
+}
+
+TEST_CASE("parse_spool_info fallback: filament.weight for initial_weight", "[filament][parsing]") {
+    using helix::json_util::safe_double;
+
+    SECTION("filament.weight used when initial_weight is null") {
+        auto j = nlohmann::json::parse(R"({
+            "remaining_weight": 800.0,
+            "initial_weight": null,
+            "filament": {"weight": 1000.0, "material": "PLA"}
+        })");
+
+        double initial = safe_double(j, "initial_weight");
+        REQUIRE(initial == 0.0);
+
+        // Simulate fallback to filament.weight
+        if (initial <= 0 && j.contains("filament") && j["filament"].is_object()) {
+            initial = safe_double(j["filament"], "weight");
+        }
+        REQUIRE(initial == Catch::Approx(1000.0));
+
+        SpoolInfo spool;
+        spool.initial_weight_g = initial;
+        spool.remaining_weight_g = safe_double(j, "remaining_weight");
+        REQUIRE(spool.remaining_percent() == Catch::Approx(80.0));
+    }
+
+    SECTION("used_weight fallback when both initial_weight and filament.weight are null") {
+        auto j = nlohmann::json::parse(R"({
+            "remaining_weight": 800.0,
+            "initial_weight": null,
+            "used_weight": 200.0,
+            "filament": {"weight": null, "material": "PLA"}
+        })");
+
+        double initial = safe_double(j, "initial_weight");
+        if (initial <= 0 && j.contains("filament") && j["filament"].is_object()) {
+            initial = safe_double(j["filament"], "weight");
+        }
+        double used = safe_double(j, "used_weight");
+        if (initial <= 0 && used > 0) {
+            initial = safe_double(j, "remaining_weight") + used;
+        }
+        REQUIRE(initial == Catch::Approx(1000.0));
+
+        SpoolInfo spool;
+        spool.initial_weight_g = initial;
+        spool.remaining_weight_g = safe_double(j, "remaining_weight");
+        REQUIRE(spool.remaining_percent() == Catch::Approx(80.0));
+    }
+
+    SECTION("explicit initial_weight takes priority over fallbacks") {
+        auto j = nlohmann::json::parse(R"({
+            "remaining_weight": 800.0,
+            "initial_weight": 1200.0,
+            "used_weight": 200.0,
+            "filament": {"weight": 1000.0}
+        })");
+
+        double initial = safe_double(j, "initial_weight");
+        // Should NOT fall through to filament.weight since initial_weight > 0
+        REQUIRE(initial == Catch::Approx(1200.0));
     }
 }

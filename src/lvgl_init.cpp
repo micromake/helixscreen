@@ -7,12 +7,37 @@
 
 #include "config.h"
 #include "helix-xml/src/xml/lv_xml.h"
+#include "touch_jitter_filter.h"
 
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
+#include <cstdlib>
 #include <lvgl.h>
 
 namespace helix {
+
+namespace {
+
+/// Jitter filter wrapper context — wraps whatever read callback the backend
+/// installed and applies jitter suppression on top.  This ensures the filter
+/// works on ALL backends (DRM, FBDEV, SDL) rather than only FBDEV.
+struct JitterFilterContext {
+    TouchJitterFilter jitter;
+    lv_indev_read_cb_t original_read_cb = nullptr;
+};
+
+/// File-static — only one pointer indev exists at a time.
+JitterFilterContext s_jitter_ctx;
+
+void jitter_read_cb(lv_indev_t* indev, lv_indev_data_t* data) {
+    if (s_jitter_ctx.original_read_cb) {
+        s_jitter_ctx.original_read_cb(indev, data);
+    }
+    s_jitter_ctx.jitter.apply(data->state, data->point.x, data->point.y);
+}
+
+} // namespace
 
 bool init_lvgl(int width, int height, LvglContext& ctx) {
     lv_init();
@@ -66,16 +91,40 @@ bool init_lvgl(int width, int height, LvglContext& ctx) {
 #endif
     }
 
-    // Configure scroll behavior from config (improves touchpad/touchscreen scrolling feel)
-    // scroll_throw: momentum decay rate (1-99), higher = faster decay, default LVGL is 10
-    // scroll_limit: pixels before scrolling starts, lower = more responsive, default LVGL is 10
+    // Configure scroll behavior and jitter filtering
     if (ctx.pointer) {
         Config* cfg = Config::get_instance();
+
+        // Scroll tuning
+        // scroll_throw: momentum decay rate (1-99), higher = faster decay, default LVGL is 10
+        // scroll_limit: pixels before scrolling starts, default LVGL is 10
         int scroll_throw = cfg->get<int>("/input/scroll_throw", 25);
-        int scroll_limit = cfg->get<int>("/input/scroll_limit", 15);
+        int scroll_limit = cfg->get<int>("/input/scroll_limit", 10);
         lv_indev_set_scroll_throw(ctx.pointer, static_cast<uint8_t>(scroll_throw));
         lv_indev_set_scroll_limit(ctx.pointer, static_cast<uint8_t>(scroll_limit));
         spdlog::debug("[LVGL] Scroll config: throw={}, limit={}", scroll_throw, scroll_limit);
+
+        // Touch jitter filter — suppresses small coordinate noise during
+        // stationary taps to prevent noisy touch controllers (e.g., Goodix
+        // GT9xx) from generating enough movement to trigger LVGL's scroll
+        // detection.  Applied generically here so it works on ALL backends
+        // (DRM, FBDEV, SDL).  Set to 0 to disable.
+        int jitter_threshold = cfg->get<int>("/input/jitter_threshold", 5);
+        const char* env_jitter = std::getenv("HELIX_TOUCH_JITTER");
+        if (env_jitter) {
+            jitter_threshold = std::atoi(env_jitter);
+        }
+        jitter_threshold = std::clamp(jitter_threshold, 0, 200);
+        if (jitter_threshold > 0) {
+            spdlog::info("[LVGL] Touch jitter filter: {}px dead zone", jitter_threshold);
+            s_jitter_ctx.jitter.threshold_sq = jitter_threshold * jitter_threshold;
+            s_jitter_ctx.original_read_cb = lv_indev_get_read_cb(ctx.pointer);
+            lv_indev_set_read_cb(ctx.pointer, jitter_read_cb);
+        } else {
+            spdlog::info("[LVGL] Touch jitter filter disabled");
+            s_jitter_ctx.jitter.threshold_sq = 0;
+            s_jitter_ctx.original_read_cb = nullptr;
+        }
     }
 
     // Create keyboard input device (optional - enables physical keyboard input)

@@ -88,6 +88,8 @@ AmsSystemInfo AmsBackendHappyHare::get_system_info() const {
     info.current_slot = system_info_.current_slot;
     info.current_tool = system_info_.current_tool;
     info.pending_target_slot = system_info_.pending_target_slot;
+    info.current_toolchange = system_info_.current_toolchange;
+    info.number_of_toolchanges = system_info_.number_of_toolchanges;
     info.filament_loaded = system_info_.filament_loaded;
     info.supports_endless_spool = system_info_.supports_endless_spool;
     info.supports_tool_mapping = system_info_.supports_tool_mapping;
@@ -385,6 +387,28 @@ void AmsBackendHappyHare::parse_mmu_state(const nlohmann::json& mmu_data) {
                 spdlog::debug("[AMS HappyHare] Per-unit gate counts from num_gates string: {}",
                               ng_str);
             }
+        } else if (ng.is_number_integer()) {
+            // EMU sends plain integer (single unit)
+            int count = ng.get<int>();
+            if (count > 0) {
+                per_unit_gate_counts_ = {count};
+                spdlog::debug("[AMS HappyHare] Single-unit gate count from num_gates int: {}",
+                              count);
+            }
+        } else if (ng.is_array()) {
+            // Config format: [8] or [6, 4]
+            std::vector<int> counts;
+            for (const auto& c : ng) {
+                if (c.is_number_integer()) {
+                    int count = c.get<int>();
+                    if (count > 0)
+                        counts.push_back(count);
+                }
+            }
+            if (!counts.empty()) {
+                per_unit_gate_counts_ = counts;
+                spdlog::debug("[AMS HappyHare] Per-unit gate counts from num_gates array");
+            }
         }
     }
 
@@ -440,15 +464,49 @@ void AmsBackendHappyHare::parse_mmu_state(const nlohmann::json& mmu_data) {
         }
     }
 
-    // Parse gate_color_rgb array: printer.mmu.gate_color_rgb
-    // Values are RGB integers like 0xFF0000 for red
+    // Parse gate_color_rgb: integer array [0xRRGGBB, ...] or float array [[R,G,B], ...]
+    bool colors_parsed = false;
     if (mmu_data.contains("gate_color_rgb") && mmu_data["gate_color_rgb"].is_array()) {
         const auto& colors = mmu_data["gate_color_rgb"];
         for (size_t i = 0; i < colors.size(); ++i) {
+            auto* entry = slots_.get_mut(static_cast<int>(i));
+            if (!entry)
+                continue;
+
             if (colors[i].is_number_integer()) {
+                // Traditional format: 0xRRGGBB integer
+                entry->info.color_rgb = static_cast<uint32_t>(colors[i].get<int>());
+                colors_parsed = true;
+            } else if (colors[i].is_array() && colors[i].size() >= 3 &&
+                       colors[i][0].is_number() && colors[i][1].is_number() &&
+                       colors[i][2].is_number()) {
+                // EMU format: [R, G, B] floats 0.0-1.0
+                auto r = static_cast<uint8_t>(
+                    std::clamp(colors[i][0].get<double>(), 0.0, 1.0) * 255.0 + 0.5);
+                auto g = static_cast<uint8_t>(
+                    std::clamp(colors[i][1].get<double>(), 0.0, 1.0) * 255.0 + 0.5);
+                auto b = static_cast<uint8_t>(
+                    std::clamp(colors[i][2].get<double>(), 0.0, 1.0) * 255.0 + 0.5);
+                entry->info.color_rgb = (static_cast<uint32_t>(r) << 16) |
+                                        (static_cast<uint32_t>(g) << 8) | static_cast<uint32_t>(b);
+                colors_parsed = true;
+            }
+        }
+    }
+
+    // Fallback: parse gate_color hex strings ["ffffff", "000000", ...]
+    if (!colors_parsed && mmu_data.contains("gate_color") && mmu_data["gate_color"].is_array()) {
+        const auto& colors = mmu_data["gate_color"];
+        for (size_t i = 0; i < colors.size(); ++i) {
+            if (colors[i].is_string()) {
                 auto* entry = slots_.get_mut(static_cast<int>(i));
                 if (entry) {
-                    entry->info.color_rgb = static_cast<uint32_t>(colors[i].get<int>());
+                    try {
+                        entry->info.color_rgb = static_cast<uint32_t>(
+                            std::stoul(colors[i].get<std::string>(), nullptr, 16));
+                    } catch (...) {
+                        // Invalid hex string, leave default color
+                    }
                 }
             }
         }
@@ -513,6 +571,28 @@ void AmsBackendHappyHare::parse_mmu_state(const nlohmann::json& mmu_data) {
                       system_info_.toolchange_purge_volume);
     }
 
+    // Parse num_toolchanges: printer.mmu.num_toolchanges
+    // Count of completed tool changes (1 = first swap done). Convert to 0-based index.
+    if (mmu_data.contains("num_toolchanges") && mmu_data["num_toolchanges"].is_number_integer()) {
+        int count = mmu_data["num_toolchanges"].get<int>();
+        system_info_.current_toolchange = (count > 0) ? (count - 1) : -1;
+        spdlog::trace("[AMS HappyHare] Toolchange count: {} -> index: {}", count,
+                      system_info_.current_toolchange);
+    }
+
+    // Parse slicer_tool_map.total_toolchanges: printer.mmu.slicer_tool_map
+    // Contains total_toolchanges (int or null) from slicer metadata
+    if (mmu_data.contains("slicer_tool_map") && mmu_data["slicer_tool_map"].is_object()) {
+        const auto& stm = mmu_data["slicer_tool_map"];
+        if (stm.contains("total_toolchanges") && stm["total_toolchanges"].is_number_integer()) {
+            system_info_.number_of_toolchanges = stm["total_toolchanges"].get<int>();
+            spdlog::trace("[AMS HappyHare] Total toolchanges from slicer: {}",
+                          system_info_.number_of_toolchanges);
+        } else {
+            system_info_.number_of_toolchanges = 0;
+        }
+    }
+
     // Parse spoolman_support: printer.mmu.spoolman_support (v4)
     if (mmu_data.contains("spoolman_support") && mmu_data["spoolman_support"].is_string()) {
         system_info_.spoolman_mode =
@@ -557,6 +637,20 @@ void AmsBackendHappyHare::parse_mmu_state(const nlohmann::json& mmu_data) {
             }
         }
         spdlog::trace("[AMS HappyHare] Parsed gate_name for {} gates", gate_names.size());
+    }
+
+    // Fallback: parse gate_filament_name (EMU uses this instead of gate_name)
+    if (mmu_data.contains("gate_filament_name") && mmu_data["gate_filament_name"].is_array()) {
+        const auto& names = mmu_data["gate_filament_name"];
+        for (size_t i = 0; i < names.size(); ++i) {
+            if (names[i].is_string()) {
+                auto* entry = slots_.get_mut(static_cast<int>(i));
+                if (entry && entry->info.color_name.empty()) {
+                    entry->info.color_name = names[i].get<std::string>();
+                }
+            }
+        }
+        spdlog::trace("[AMS HappyHare] Parsed gate_filament_name for {} gates", names.size());
     }
 
     // Parse ttg_map (tool-to-gate mapping) if available
@@ -616,39 +710,82 @@ void AmsBackendHappyHare::parse_mmu_state(const nlohmann::json& mmu_data) {
                           gate_idx, entry->sensors.pre_gate_triggered);
         }
 
+        // If no per-gate sensors found, check for aggregate format (EMU)
+        // EMU reports "mmu_pre_gate" (bool) and "mmu_gear" (bool) for the active gate
+        if (!any_sensor && sensors.contains("mmu_pre_gate")) {
+            bool pre_gate_val =
+                sensors["mmu_pre_gate"].is_boolean() && sensors["mmu_pre_gate"].get<bool>();
+            // Note: mmu_gear sensor reading is available but not stored — UI only
+            // displays pre-gate sensor status. Add to SlotSensors if needed later.
+
+            // Mark all gates as having sensors, clear stale trigger readings
+            // (we only know the current gate's state from aggregate format)
+            for (int i = 0; i < slots_.slot_count(); ++i) {
+                auto* entry = slots_.get_mut(i);
+                if (entry) {
+                    entry->sensors.has_pre_gate_sensor = true;
+                    entry->sensors.pre_gate_triggered = false;
+                }
+            }
+
+            // Set the current gate's actual reading
+            if (system_info_.current_slot >= 0) {
+                auto* entry = slots_.get_mut(system_info_.current_slot);
+                if (entry) {
+                    entry->sensors.pre_gate_triggered = pre_gate_val;
+                }
+            }
+
+            any_sensor = true;
+            spdlog::trace("[AMS HappyHare] Aggregate sensors: pre_gate={}", pre_gate_val);
+        }
+
         // Update has_slot_sensors flag on units based on actual sensor data
         for (auto& unit : system_info_.units) {
             unit.has_slot_sensors = any_sensor;
         }
     }
 
-    // Parse drying_state: printer.mmu.drying_state (v4 - KMS/EMU hardware)
-    if (mmu_data.contains("drying_state") && mmu_data["drying_state"].is_object()) {
+    // Parse drying_state: object (KMS/traditional) or array of strings (EMU per-gate)
+    if (mmu_data.contains("drying_state")) {
         const auto& drying = mmu_data["drying_state"];
-        dryer_info_.supported = true;
-
-        if (drying.contains("active") && drying["active"].is_boolean()) {
-            dryer_info_.active = drying["active"].get<bool>();
+        if (drying.is_object()) {
+            // Traditional object format: {active, current_temp, target_temp, ...}
+            dryer_info_.supported = true;
+            if (drying.contains("active") && drying["active"].is_boolean()) {
+                dryer_info_.active = drying["active"].get<bool>();
+            }
+            if (drying.contains("current_temp") && drying["current_temp"].is_number()) {
+                dryer_info_.current_temp_c = drying["current_temp"].get<float>();
+            }
+            if (drying.contains("target_temp") && drying["target_temp"].is_number()) {
+                dryer_info_.target_temp_c = drying["target_temp"].get<float>();
+            }
+            if (drying.contains("remaining_min") && drying["remaining_min"].is_number_integer()) {
+                dryer_info_.remaining_min = drying["remaining_min"].get<int>();
+            }
+            if (drying.contains("duration_min") && drying["duration_min"].is_number_integer()) {
+                dryer_info_.duration_min = drying["duration_min"].get<int>();
+            }
+            if (drying.contains("fan_pct") && drying["fan_pct"].is_number_integer()) {
+                dryer_info_.fan_pct = drying["fan_pct"].get<int>();
+            }
+            spdlog::trace("[AMS HappyHare] Dryer state (object): active={}, temp={:.1f}°C",
+                          dryer_info_.active, dryer_info_.current_temp_c);
+        } else if (drying.is_array()) {
+            // EMU per-gate array format: ["", "", ...] (empty = inactive)
+            dryer_info_.supported = true;
+            bool any_active = false;
+            for (const auto& entry : drying) {
+                if (entry.is_string() && !entry.get<std::string>().empty()) {
+                    any_active = true;
+                    break;
+                }
+            }
+            dryer_info_.active = any_active;
+            spdlog::trace("[AMS HappyHare] Dryer state (array): supported=true, active={}",
+                          any_active);
         }
-        if (drying.contains("current_temp") && drying["current_temp"].is_number()) {
-            dryer_info_.current_temp_c = drying["current_temp"].get<float>();
-        }
-        if (drying.contains("target_temp") && drying["target_temp"].is_number()) {
-            dryer_info_.target_temp_c = drying["target_temp"].get<float>();
-        }
-        if (drying.contains("remaining_min") && drying["remaining_min"].is_number_integer()) {
-            dryer_info_.remaining_min = drying["remaining_min"].get<int>();
-        }
-        if (drying.contains("duration_min") && drying["duration_min"].is_number_integer()) {
-            dryer_info_.duration_min = drying["duration_min"].get<int>();
-        }
-        if (drying.contains("fan_pct") && drying["fan_pct"].is_number_integer()) {
-            dryer_info_.fan_pct = drying["fan_pct"].get<int>();
-        }
-
-        spdlog::trace("[AMS HappyHare] Dryer state: active={}, temp={:.1f}→{:.1f}°C, {}min left",
-                      dryer_info_.active, dryer_info_.current_temp_c, dryer_info_.target_temp_c,
-                      dryer_info_.remaining_min);
     }
 
     // Parse endless_spool_groups if available

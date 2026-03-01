@@ -114,7 +114,7 @@ void GCodeRenderer::render(lv_layer_t* layer, const ParsedGCodeFile& gcode,
     // Ensure colors are loaded from theme on first render
     ensure_colors_initialized();
 
-    // widget_coords parameter is for API compatibility with TinyGL renderer
+    // widget_coords parameter is for API compatibility with the 3D renderer
     // In the 2D renderer, we use LVGL layer directly and don't need widget offset
     (void)widget_coords;
     if (!layer) {

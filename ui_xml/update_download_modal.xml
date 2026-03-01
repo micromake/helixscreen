@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!-- Copyright (C) 2025-2026 356C LLC -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<!-- Update Download Modal - Multi-state: Confirming, Downloading, Verifying, Installing, Complete, Error -->
+<!-- Update Download Modal - Multi-state: Confirming, Downloading, Verifying, Installing, Complete, Error, Restarting -->
 <!-- States controlled by download_status subject (DownloadStatus enum) -->
 <!-- NOTE: Backdrop created programmatically by Modal system -->
 <component>
@@ -28,9 +28,7 @@
             style_pad_gap="#space_md" hidden="true">
       <bind_flag_if_not_eq subject="download_status" flag="hidden" ref_value="2"/>
       <text_heading text="Downloading..." translation_tag="Downloading..."/>
-      <lv_bar name="download_bar"
-              width="90%" height="12" bind_value="download_progress" min_value="0" max_value="100"
-              style_bg_color="#card_bg" style_radius="#space_xs"/>
+      <progress_bar name="download_bar" width="90%" bind_value="download_progress"/>
       <text_muted name="download_progress_text" width="100%" bind_text="download_text" style_text_align="center"/>
     </lv_obj>
 
@@ -65,7 +63,7 @@
             style_pad_gap="#space_md" hidden="true">
       <bind_flag_if_not_eq subject="download_status" flag="hidden" ref_value="5"/>
       <icon src="check_circle" size="lg" variant="success"/>
-      <text_heading text="Restarting..." translation_tag="Restarting..."/>
+      <text_heading text="Update installed!" translation_tag="Update installed!"/>
       <text_muted width="100%" bind_text="download_text" long_mode="wrap" style_text_align="center"/>
     </lv_obj>
 
@@ -78,6 +76,19 @@
       <icon src="alert_circle" size="lg" variant="danger"/>
       <text_heading text="Update Failed" translation_tag="Update Failed"/>
       <text_muted width="100%" bind_text="download_text" long_mode="wrap" style_text_align="center"/>
+    </lv_obj>
+
+    <!-- RESTARTING state (7) — static frame shown just before _exit(0) -->
+    <lv_obj name="restarting_container"
+            width="100%" height="content" style_pad_left="#space_lg" style_pad_right="#space_lg"
+            style_pad_top="#space_xl" style_pad_bottom="#space_lg" flex_flow="column" style_flex_cross_place="center"
+            style_pad_gap="#space_md" hidden="true">
+      <bind_flag_if_not_eq subject="download_status" flag="hidden" ref_value="7"/>
+      <icon src="refresh" size="lg" variant="primary"/>
+      <text_heading text="Hang on, we'll be right back!" translation_tag="Hang on, we'll be right back!"/>
+      <text_muted width="100%"
+                  text="Restarting with the new version..." translation_tag="Restarting with the new version..."
+                  style_text_align="center"/>
     </lv_obj>
 
     <!-- CONFIRMING buttons: Cancel | Install -->
@@ -112,7 +123,7 @@
       </lv_obj>
     </lv_obj>
 
-    <!-- COMPLETE state: auto-restarts via _exit(0) after 3s, no buttons needed -->
+    <!-- COMPLETE state: transitions to Restarting after 2s, then _exit(0) after 1s more -->
 
     <!-- ERROR buttons: Close | Retry -->
     <lv_obj name="error_buttons"

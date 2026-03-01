@@ -85,6 +85,10 @@ WiFiError WifiBackendMacOS::start() {
     }
 
     running_ = true;
+
+    // Resolve 5GHz support from hardware capabilities
+    resolve_5ghz_support();
+
     spdlog::info("[WiFiMacOS] CoreWLAN backend started successfully");
 
     return WiFiErrorHelper::success();
@@ -410,10 +414,41 @@ WifiBackend::ConnectionStatus WifiBackendMacOS::get_status() {
 }
 
 bool WifiBackendMacOS::supports_5ghz() const {
-    // macOS devices (MacBooks, iMacs, etc.) support 5GHz
-    // Could query CWInterface supportedWLANChannels for precise detection,
-    // but all modern Macs support 5GHz so we return true
-    return true;
+    return supports_5ghz_cached_;
+}
+
+void WifiBackendMacOS::resolve_5ghz_support() {
+    @try {
+        @autoreleasepool {
+            CWInterface* iface = [(__bridge CWWiFiClient*)wifi_client_ interface];
+            if (!iface) {
+                spdlog::warn("[WiFiMacOS] No interface for 5GHz detection, defaulting to true");
+                return;
+            }
+
+            NSSet<CWChannel*>* channels = [iface supportedWLANChannels];
+            if (!channels || [channels count] == 0) {
+                spdlog::warn("[WiFiMacOS] No supported channels reported, defaulting to true");
+                return;
+            }
+
+            bool has_5ghz = false;
+            for (CWChannel* channel in channels) {
+                if ([channel channelBand] == kCWChannelBand5GHz) {
+                    has_5ghz = true;
+                    break;
+                }
+            }
+
+            supports_5ghz_cached_ = has_5ghz;
+            spdlog::debug("[WiFiMacOS] 5GHz support: {} ({} channels queried)",
+                          has_5ghz ? "yes" : "no", [channels count]);
+        }
+    } @catch (NSException* exception) {
+        spdlog::warn("[WiFiMacOS] Exception querying 5GHz support: {}, defaulting to true",
+                     [[exception reason] UTF8String]);
+        supports_5ghz_cached_ = true;
+    }
 }
 
 // ============================================================================

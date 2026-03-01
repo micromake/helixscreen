@@ -46,7 +46,7 @@ enum class LODLevel {
 /**
  * @brief Ghost layer rendering mode (for print progress visualization)
  *
- * Note: Ghost rendering is primarily a TinyGL 3D feature. The 2D renderer
+ * Note: Ghost rendering is primarily a 3D renderer feature. The 2D renderer
  * provides these stubs for API compatibility but doesn't render ghost layers.
  */
 enum class GhostRenderMode : uint8_t {
@@ -103,7 +103,7 @@ class GCodeRenderer {
      *
      * Main rendering function. Call from LVGL draw event callback.
      * Renders according to current RenderOptions.
-     * The widget_coords parameter is for API compatibility with TinyGL renderer.
+     * The widget_coords parameter is for API compatibility with the 3D renderer.
      */
     void render(lv_layer_t* layer, const ParsedGCodeFile& gcode, const GCodeCamera& camera,
                 const lv_area_t* widget_coords = nullptr);
@@ -112,8 +112,8 @@ class GCodeRenderer {
      * @brief Set interaction mode (stub for API compatibility)
      * @param interacting true if user is dragging/interacting
      *
-     * In TinyGL renderer, this enables reduced quality during interaction.
-     * In 2D renderer, this is a no-op.
+     * In the 3D renderer, this enables reduced quality during interaction.
+     * In the 2D renderer, this is a no-op.
      */
     void set_interaction_mode(bool interacting) {
         (void)interacting; // No-op in 2D renderer
@@ -202,8 +202,8 @@ class GCodeRenderer {
      * @brief Set current print progress layer (stub)
      * @param layer Current layer being printed
      *
-     * In TinyGL renderer, this enables ghost rendering of unprinted layers.
-     * In 2D renderer, this is a no-op (ghost rendering not supported).
+     * In the 3D renderer, this enables ghost rendering of unprinted layers.
+     * In the 2D renderer, this is a no-op (ghost rendering not supported).
      */
     void set_print_progress_layer(int layer) {
         (void)layer; // No-op in 2D renderer
@@ -213,19 +213,30 @@ class GCodeRenderer {
      * @brief Set ghost layer opacity (stub)
      * @param opacity Opacity for ghost layers (0-255)
      *
-     * In TinyGL renderer, this controls ghost layer visibility.
-     * In 2D renderer, this is a no-op.
+     * In the 3D renderer, this controls ghost layer visibility.
+     * In the 2D renderer, this is a no-op.
      */
     void set_ghost_opacity(lv_opa_t opacity) {
         (void)opacity; // No-op in 2D renderer
     }
 
     /**
+     * @brief Set vertical content offset (stub)
+     * @param offset_percent Offset as percentage of canvas height (-1.0 to 1.0)
+     *
+     * In the 3D renderer, this shifts the projection vertically.
+     * In the 2D renderer, this is handled by GCodeLayerRenderer directly.
+     */
+    void set_content_offset_y(float offset_percent) {
+        (void)offset_percent; // No-op in base renderer
+    }
+
+    /**
      * @brief Set ghost layer render mode (stub)
      * @param mode Ghost rendering style
      *
-     * In TinyGL renderer, this selects dimmed vs stipple rendering.
-     * In 2D renderer, this is a no-op.
+     * In the 3D renderer, this selects dimmed vs stipple rendering.
+     * In the 2D renderer, this is a no-op.
      */
     void set_ghost_render_mode(GhostRenderMode mode) {
         (void)mode; // No-op in 2D renderer

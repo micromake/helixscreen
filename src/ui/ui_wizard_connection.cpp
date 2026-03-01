@@ -17,6 +17,7 @@
 #include "config.h"
 #include "filament_sensor_manager.h"
 #include "lvgl/lvgl.h"
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "moonraker_client.h"
 #include "printer_discovery.h"
@@ -75,6 +76,9 @@ WizardConnectionStep::WizardConnectionStep() {
 }
 
 WizardConnectionStep::~WizardConnectionStep() {
+    // Signal async callbacks to abort — must be first! (prestonbrown/helixscreen#193)
+    m_alive->store(false);
+
     // NOTE: Do NOT call LVGL functions here - LVGL may be destroyed first
     // NOTE: Do NOT log here - spdlog may be destroyed first
     screen_root_ = nullptr;
@@ -953,7 +957,11 @@ lv_obj_t* WizardConnectionStep::create(lv_obj_t* parent) {
         mdns_discovery_ = std::make_unique<MdnsDiscovery>();
     }
     spdlog::debug("[{}] Starting mDNS discovery", get_name());
-    mdns_discovery_->start_discovery([this](const std::vector<DiscoveredPrinter>& printers) {
+    auto alive = m_alive;
+    mdns_discovery_->start_discovery([this, alive](const std::vector<DiscoveredPrinter>& printers) {
+        if (!alive->load()) {
+            return;
+        }
         on_printers_discovered(printers);
     });
 
@@ -1029,7 +1037,7 @@ void WizardConnectionStep::on_printers_discovered(const std::vector<DiscoveredPr
     if (printers.empty()) {
         lv_subject_copy_string(&mdns_status_, lv_tr("No printers found"));
     } else if (printers.size() == 1) {
-        lv_subject_copy_string(&mdns_status_, "Found 1 printer");
+        lv_subject_copy_string(&mdns_status_, lv_tr("Found 1 printer"));
     } else {
         char buf[32];
         snprintf(buf, sizeof(buf), "Found %zu printers", printers.size());

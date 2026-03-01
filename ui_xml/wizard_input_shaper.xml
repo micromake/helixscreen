@@ -39,11 +39,10 @@
         <text_body width="100%" bind_text="wizard_input_shaper_status" style_text_align="center"/>
 
         <!-- Progress bar (visible during calibration, centered) -->
-        <lv_bar name="calibration_progress_bar"
-                width="80%" height="16" bind_value="wizard_input_shaper_progress" min_value="0" max_value="100"
-                style_bg_color="#card_bg" style_radius="#border_radius">
+        <progress_bar name="calibration_progress_bar"
+                width="80%" bind_value="wizard_input_shaper_progress">
           <bind_flag_if_eq subject="wizard_input_shaper_progress" flag="hidden" ref_value="0"/>
-        </lv_bar>
+        </progress_bar>
 
         <!-- Completion help text (shown only when calibration finishes, progress==100) -->
         <text_small width="100%"

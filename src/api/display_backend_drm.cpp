@@ -8,6 +8,7 @@
 #include "display_backend_drm.h"
 
 #include "config.h"
+#include "drm_rotation_strategy.h"
 
 #include <spdlog/spdlog.h>
 
@@ -15,6 +16,7 @@
 
 // System includes for device access checks and DRM capability detection
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <dirent.h>
 #include <fcntl.h>
@@ -87,6 +89,23 @@ bool drm_device_supports_display(const std::string& device_path) {
 }
 
 /**
+ * @brief Check if a path points to a valid DRM device (exists and responds to DRM ioctls)
+ */
+bool is_valid_drm_device(const std::string& path) {
+    int fd = open(path.c_str(), O_RDWR | O_CLOEXEC);
+    if (fd < 0) {
+        return false;
+    }
+    drmVersionPtr version = drmGetVersion(fd);
+    close(fd);
+    if (!version) {
+        return false;
+    }
+    drmFreeVersion(version);
+    return true;
+}
+
+/**
  * @brief Auto-detect the best DRM device
  *
  * Priority order for device selection:
@@ -100,16 +119,26 @@ std::string auto_detect_drm_device() {
     // Priority 1: Environment variable override (for debugging/testing)
     const char* env_device = std::getenv("HELIX_DRM_DEVICE");
     if (env_device && env_device[0] != '\0') {
-        spdlog::info("[DRM Backend] Using DRM device from HELIX_DRM_DEVICE: {}", env_device);
-        return env_device;
+        if (is_valid_drm_device(env_device)) {
+            spdlog::info("[DRM Backend] Using DRM device from HELIX_DRM_DEVICE: {}", env_device);
+            return env_device;
+        }
+        spdlog::warn("[DRM Backend] HELIX_DRM_DEVICE='{}' is not a valid DRM device, "
+                     "falling back to auto-detection",
+                     env_device);
     }
 
     // Priority 2: Config file override
     helix::Config* cfg = helix::Config::get_instance();
     std::string config_device = cfg->get<std::string>("/display/drm_device", "");
     if (!config_device.empty()) {
-        spdlog::info("[DRM Backend] Using DRM device from config: {}", config_device);
-        return config_device;
+        if (is_valid_drm_device(config_device)) {
+            spdlog::info("[DRM Backend] Using DRM device from config: {}", config_device);
+            return config_device;
+        }
+        spdlog::warn("[DRM Backend] Config drm_device '{}' is not a valid DRM device, "
+                     "falling back to auto-detection",
+                     config_device);
     }
 
     // Priority 3: Auto-detection
@@ -118,8 +147,8 @@ std::string auto_detect_drm_device() {
     // Scan /dev/dri/card* in order
     DIR* dir = opendir("/dev/dri");
     if (!dir) {
-        spdlog::warn("[DRM Backend] Cannot open /dev/dri, falling back to card0");
-        return "/dev/dri/card0";
+        spdlog::info("[DRM Backend] /dev/dri not found, DRM not available");
+        return {};
     }
 
     std::vector<std::string> candidates;
@@ -142,8 +171,8 @@ std::string auto_detect_drm_device() {
         }
     }
 
-    spdlog::warn("[DRM Backend] No suitable DRM device found, falling back to card0");
-    return "/dev/dri/card0";
+    spdlog::info("[DRM Backend] No suitable DRM device found");
+    return {};
 }
 
 } // namespace
@@ -152,7 +181,14 @@ DisplayBackendDRM::DisplayBackendDRM() : drm_device_(auto_detect_drm_device()) {
 
 DisplayBackendDRM::DisplayBackendDRM(const std::string& drm_device) : drm_device_(drm_device) {}
 
+DisplayBackendDRM::~DisplayBackendDRM() = default;
+
 bool DisplayBackendDRM::is_available() const {
+    if (drm_device_.empty()) {
+        spdlog::debug("[DRM Backend] No DRM device configured");
+        return false;
+    }
+
     struct stat st;
 
     // Check if DRM device exists
@@ -230,20 +266,32 @@ DetectedResolution DisplayBackendDRM::detect_resolution() const {
 }
 
 lv_display_t* DisplayBackendDRM::create_display(int width, int height) {
+    LV_UNUSED(width);
+    LV_UNUSED(height);
+
     spdlog::info("[DRM Backend] Creating DRM display on {}", drm_device_);
 
-    // LVGL's DRM driver
     display_ = lv_linux_drm_create();
-
     if (display_ == nullptr) {
         spdlog::error("[DRM Backend] Failed to create DRM display");
         return nullptr;
     }
 
-    // Set the DRM device path
-    lv_linux_drm_set_file(display_, drm_device_.c_str(), -1);
+    lv_result_t result = lv_linux_drm_set_file(display_, drm_device_.c_str(), -1);
+    if (result != LV_RESULT_OK) {
+        spdlog::error("[DRM Backend] Failed to initialize DRM on {}", drm_device_);
+        lv_display_delete(display_); // NOLINT(helix-shutdown) init error path, not shutdown
+        display_ = nullptr;
+        return nullptr;
+    }
 
-    spdlog::info("[DRM Backend] DRM display created: {}x{} on {}", width, height, drm_device_);
+#ifdef HELIX_ENABLE_OPENGLES
+    using_egl_ = true;
+    spdlog::info("[DRM Backend] GPU-accelerated display active (EGL/OpenGL ES)");
+#else
+    spdlog::info("[DRM Backend] DRM display active (dumb buffers, CPU rendering)");
+#endif
+
     return display_;
 }
 
@@ -288,15 +336,33 @@ lv_indev_t* DisplayBackendDRM::create_input_pointer() {
     spdlog::info("[DRM Backend] Auto-detecting touch/pointer device via libinput...");
 
     // Try to find a touch device first (for touchscreens like DSI displays)
+    // Use evdev driver for touch devices — it supports multi-touch gesture
+    // recognition (pinch-to-zoom) while the libinput driver does not.
     char* touch_path = lv_libinput_find_dev(LV_LIBINPUT_CAPABILITY_TOUCH, true);
     if (touch_path) {
         spdlog::info("[DRM Backend] Found touch device: {}", touch_path);
+        pointer_ = lv_evdev_create(LV_INDEV_TYPE_POINTER, touch_path);
+        if (pointer_ != nullptr) {
+            spdlog::info("[DRM Backend] Evdev touch device created on {} (multi-touch enabled)",
+                         touch_path);
+#if LV_USE_GESTURE_RECOGNITION
+            // Lower pinch thresholds so PINCH recognizes quickly, and disable
+            // ROTATE by setting an unreachable threshold.  Without this, ROTATE
+            // (default 0.2 rad) wins the race, resets PINCH's cumulative scale
+            // to 1.0, and causes visible zoom jumps.
+            lv_indev_set_pinch_up_threshold(pointer_, 1.15f);
+            lv_indev_set_pinch_down_threshold(pointer_, 0.85f);
+            lv_indev_set_rotation_rad_threshold(pointer_, 3.14f);
+#endif
+            return pointer_;
+        }
+        // Fall back to libinput if evdev fails
         pointer_ = lv_libinput_create(LV_INDEV_TYPE_POINTER, touch_path);
         if (pointer_ != nullptr) {
             spdlog::info("[DRM Backend] Libinput touch device created on {}", touch_path);
             return pointer_;
         }
-        spdlog::warn("[DRM Backend] Failed to create libinput device for: {}", touch_path);
+        spdlog::warn("[DRM Backend] Failed to create input device for: {}", touch_path);
     }
 
     // Try pointer devices (mouse, trackpad)
@@ -326,6 +392,73 @@ lv_indev_t* DisplayBackendDRM::create_input_pointer() {
 
     spdlog::error("[DRM Backend] Failed to create any input device");
     return nullptr;
+}
+
+void DisplayBackendDRM::set_display_rotation(lv_display_rotation_t rot, int phys_w, int phys_h) {
+    (void)phys_w;
+    (void)phys_h;
+
+    if (display_ == nullptr) {
+        spdlog::warn("[DRM Backend] Cannot set rotation — display not created");
+        return;
+    }
+
+    // Map LVGL rotation enum to DRM plane rotation constants
+    uint64_t drm_rot = DRM_MODE_ROTATE_0;
+    switch (rot) {
+    case LV_DISPLAY_ROTATION_0:
+        drm_rot = DRM_MODE_ROTATE_0;
+        break;
+    case LV_DISPLAY_ROTATION_90:
+        drm_rot = DRM_MODE_ROTATE_90;
+        break;
+    case LV_DISPLAY_ROTATION_180:
+        drm_rot = DRM_MODE_ROTATE_180;
+        break;
+    case LV_DISPLAY_ROTATION_270:
+        drm_rot = DRM_MODE_ROTATE_270;
+        break;
+    }
+
+    // Query hardware capabilities and choose strategy.
+    // On EGL builds, lv_linux_drm_get_plane_rotation_mask() and
+    // lv_linux_drm_set_rotation() do not exist (only in the dumb-buffer
+    // driver), so force SOFTWARE fallback.
+#ifdef HELIX_ENABLE_OPENGLES
+    uint64_t supported_mask = 0;
+#else
+    uint64_t supported_mask = lv_linux_drm_get_plane_rotation_mask(display_);
+#endif
+    auto strategy = choose_drm_rotation_strategy(drm_rot, supported_mask);
+
+    switch (strategy) {
+    case DrmRotationStrategy::HARDWARE:
+#ifndef HELIX_ENABLE_OPENGLES
+        lv_linux_drm_set_rotation(display_, drm_rot);
+        spdlog::info("[DRM Backend] Hardware plane rotation set to {}°",
+                     static_cast<int>(rot) * 90);
+#endif
+        break;
+
+    case DrmRotationStrategy::SOFTWARE:
+        // CPU in-place 180° pixel reversal in drm_flush (lv_linux_drm.c patch).
+        // The dumb-buffer flush callback checks lv_display_get_rotation() and
+        // reverses the pixel array before the page flip. FULL render mode
+        // ensures the entire buffer is redrawn each frame.
+        lv_display_set_render_mode(display_, LV_DISPLAY_RENDER_MODE_FULL);
+        lv_display_set_rotation(display_, rot);
+
+        spdlog::info("[DRM Backend] Software rotation set to {}° "
+                     "(CPU in-place reversal, plane supports 0x{:X})",
+                     static_cast<int>(rot) * 90, supported_mask);
+        break;
+
+    case DrmRotationStrategy::NONE:
+        lv_display_set_rotation(display_, LV_DISPLAY_ROTATION_0);
+        lv_display_set_matrix_rotation(display_, false);
+        spdlog::debug("[DRM Backend] No rotation needed");
+        break;
+    }
 }
 
 bool DisplayBackendDRM::clear_framebuffer(uint32_t color) {

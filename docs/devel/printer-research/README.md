@@ -10,7 +10,7 @@ This directory contains research documentation on various 3D printers for HelixS
 | **AnyCubic Kobra S1** | ARM (Cortex-A7) | 480x320 FB | Rinkhals | ACE Pro | **ValgACE ready** |
 | **Creality K2 Plus** | ARM (Allwinner A133?) | 480x800 FB | Stock | CFS (16 colors) | **Build target ready** (untested) |
 | **Creality K1C/K1 Max** | MIPS (X2000E) | 480x400 FB | After root | Single | Needs MIPS port |
-| **FlashForge AD5X** | MIPS | 720x480 FB | ZMOD | IFS (4 colors) | Needs MIPS port |
+| **FlashForge AD5X** | MIPS | 800x480 FB | ZMOD | IFS (4 colors) | **Active testing** |
 | **Snapmaker U1** | Unknown | Unknown | Modified | 4-toolhead | Blocked (closed source) |
 
 ## Key Insights
@@ -21,7 +21,9 @@ This directory contains research documentation on various 3D printers for HelixS
 
 ### Needs MIPS Toolchain
 - **Creality K1 series**: Ingenic X2000E (MIPS32r2) - GuppyScreen proves LVGL works
-- **FlashForge AD5X**: Also MIPS (unlike AD5M which is ARM)
+
+### Active Testing
+- **FlashForge AD5X**: MIPS (Ingenic X2600) — dedicated build target with own toolchain, binaries in releases
 
 ### Needs ARM Port (Different from AD5M)
 - **Creality K2 series**: Allwinner ARM (Tina Linux) - stock Moonraker, easier to build for

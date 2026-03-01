@@ -2638,6 +2638,162 @@ TEST_CASE("PrinterDetector: Filtered list is smaller than unfiltered",
 }
 
 // ============================================================================
+// tool_count Heuristic Tests
+// ============================================================================
+
+TEST_CASE_METHOD(PrinterDetectorFixture,
+                 "PrinterDetector: tool_count heuristic matches 4 extruders for AD5X",
+                 "[printer][heuristics][tool_count]") {
+    PrinterHardwareData hardware{
+        .heaters = {"extruder", "extruder1", "extruder2", "extruder3", "heater_bed"},
+        .sensors = {},
+        .fans = {},
+        .leds = {},
+        .hostname = "ad5x-printer",
+        .printer_objects = {},
+        .steppers = {},
+        .kinematics = "corexy"};
+
+    auto result = PrinterDetector::detect(hardware);
+
+    REQUIRE(result.detected());
+    REQUIRE(result.type_name == "FlashForge Adventurer 5X");
+    // ad5x hostname (96) + tool_count_4 (85) + corexy (30) = very high confidence
+    REQUIRE(result.confidence >= 90);
+}
+
+TEST_CASE_METHOD(PrinterDetectorFixture,
+                 "PrinterDetector: tool_count heuristic does not match wrong extruder count",
+                 "[printer][heuristics][tool_count]") {
+    // Only 1 extruder - should NOT match tool_count_4
+    PrinterHardwareData hardware{.heaters = {"extruder", "heater_bed"},
+                                 .sensors = {},
+                                 .fans = {},
+                                 .leds = {},
+                                 .hostname = "generic-printer",
+                                 .printer_objects = {},
+                                 .steppers = {},
+                                 .kinematics = "cartesian"};
+
+    auto result = PrinterDetector::detect(hardware);
+
+    // Should not detect as AD5X (no tool_count match, no hostname match)
+    if (result.detected()) {
+        REQUIRE(result.type_name != "FlashForge Adventurer 5X");
+    }
+}
+
+TEST_CASE_METHOD(PrinterDetectorFixture,
+                 "PrinterDetector: tool_count excludes extruder_stepper from count",
+                 "[printer][heuristics][tool_count]") {
+    // 4 extruders + extruder_stepper should still count as 4 (not 5)
+    PrinterHardwareData hardware{
+        .heaters = {"extruder", "extruder1", "extruder2", "extruder3", "heater_bed"},
+        .sensors = {},
+        .fans = {},
+        .leds = {},
+        .hostname = "ad5x-test",
+        .printer_objects = {},
+        .steppers = {},
+        .kinematics = "corexy"};
+    // extruder_stepper would be in printer_objects, not heaters, but verify the logic works
+    // by confirming the 4-extruder case still matches
+
+    auto result = PrinterDetector::detect(hardware);
+
+    REQUIRE(result.detected());
+    REQUIRE(result.type_name == "FlashForge Adventurer 5X");
+}
+
+// ============================================================================
+// cpu_arch_match Heuristic Tests
+// ============================================================================
+
+TEST_CASE_METHOD(PrinterDetectorFixture,
+                 "PrinterDetector: cpu_arch_match heuristic matches MIPS architecture",
+                 "[printer][heuristics][cpu_arch_match]") {
+    PrinterHardwareData hardware{
+        .heaters = {"extruder", "extruder1", "extruder2", "extruder3", "heater_bed"},
+        .sensors = {},
+        .fans = {},
+        .leds = {},
+        .hostname = "ad5x-printer",
+        .printer_objects = {},
+        .steppers = {},
+        .kinematics = "corexy",
+        .cpu_arch = "MIPS Ingenic X2600"};
+
+    auto result = PrinterDetector::detect(hardware);
+
+    REQUIRE(result.detected());
+    REQUIRE(result.type_name == "FlashForge Adventurer 5X");
+    // hostname (96) + tool_count_4 (85) + cpu_arch mips (70) + corexy (30) = very high
+    REQUIRE(result.confidence >= 90);
+}
+
+TEST_CASE_METHOD(PrinterDetectorFixture, "PrinterDetector: cpu_arch_match is case-insensitive",
+                 "[printer][heuristics][cpu_arch_match]") {
+    PrinterHardwareData hardware{
+        .heaters = {"extruder", "extruder1", "extruder2", "extruder3", "heater_bed"},
+        .sensors = {},
+        .fans = {},
+        .leds = {},
+        .hostname = "ad5x-test",
+        .printer_objects = {},
+        .steppers = {},
+        .kinematics = "corexy",
+        .cpu_arch = "mips ingenic x2600"}; // All lowercase
+
+    auto result = PrinterDetector::detect(hardware);
+
+    REQUIRE(result.detected());
+    REQUIRE(result.type_name == "FlashForge Adventurer 5X");
+}
+
+TEST_CASE_METHOD(PrinterDetectorFixture,
+                 "PrinterDetector: cpu_arch_match does not match wrong architecture",
+                 "[printer][heuristics][cpu_arch_match]") {
+    // ARM architecture should NOT match "mips" pattern
+    PrinterHardwareData hardware{.heaters = {"extruder", "heater_bed"},
+                                 .sensors = {},
+                                 .fans = {},
+                                 .leds = {},
+                                 .hostname = "generic-printer",
+                                 .printer_objects = {},
+                                 .steppers = {},
+                                 .kinematics = "cartesian",
+                                 .cpu_arch = "ARMv7 Processor rev 5 (v7l)"};
+
+    auto result = PrinterDetector::detect(hardware);
+
+    // Should not detect as AD5X (ARM doesn't match MIPS pattern)
+    if (result.detected()) {
+        REQUIRE(result.type_name != "FlashForge Adventurer 5X");
+    }
+}
+
+TEST_CASE_METHOD(PrinterDetectorFixture,
+                 "PrinterDetector: cpu_arch_match with empty cpu_arch does not match",
+                 "[printer][heuristics][cpu_arch_match]") {
+    PrinterHardwareData hardware{.heaters = {"extruder", "heater_bed"},
+                                 .sensors = {},
+                                 .fans = {},
+                                 .leds = {},
+                                 .hostname = "generic-printer",
+                                 .printer_objects = {},
+                                 .steppers = {},
+                                 .kinematics = "cartesian",
+                                 .cpu_arch = ""}; // Empty
+
+    auto result = PrinterDetector::detect(hardware);
+
+    // Empty cpu_arch should not trigger any cpu_arch_match
+    if (result.detected()) {
+        REQUIRE(result.type_name != "FlashForge Adventurer 5X");
+    }
+}
+
+// ============================================================================
 // Z-Offset Calibration Strategy Lookup
 // ============================================================================
 

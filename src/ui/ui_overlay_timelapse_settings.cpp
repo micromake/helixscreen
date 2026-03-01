@@ -13,6 +13,7 @@
 #include "ui_update_queue.h"
 
 #include "helix-xml/src/xml/lv_xml.h"
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "runtime_config.h"
 #include "static_panel_registry.h"
 #include "theme_manager.h"
@@ -27,9 +28,6 @@ using helix::ui::format_file_size;
 // Global instance and panel
 static std::unique_ptr<TimelapseSettingsOverlay> g_timelapse_settings;
 static lv_obj_t* g_timelapse_settings_panel = nullptr;
-
-// Forward declaration for row click callback
-static void on_timelapse_row_clicked(lv_event_t* e);
 
 TimelapseSettingsOverlay& get_global_timelapse_settings() {
     if (!g_timelapse_settings) {
@@ -132,7 +130,6 @@ lv_obj_t* TimelapseSettingsOverlay::create(lv_obj_t* parent) {
 
     // Register event callbacks via XML system
     register_xml_callbacks({
-        {"on_timelapse_row_clicked", on_timelapse_row_clicked},
         {"on_timelapse_enabled_changed", on_enabled_changed},
         {"on_timelapse_mode_changed", on_mode_changed},
         {"on_timelapse_framerate_changed", on_framerate_changed},
@@ -471,7 +468,7 @@ void TimelapseSettingsOverlay::populate_video_list(const std::vector<FileInfo>& 
 
                 g_timelapse_settings->delete_confirmation_dialog_ =
                     helix::ui::modal_show_confirmation(
-                        "Delete Video?", filename, ModalSeverity::Warning, "Delete",
+                        lv_tr("Delete Video?"), filename, ModalSeverity::Warning, lv_tr("Delete"),
                         on_delete_video_confirmed, on_delete_video_cancelled, nullptr);
             },
             LV_EVENT_CLICKED, nullptr);
@@ -543,8 +540,7 @@ void TimelapseSettingsOverlay::on_delete_video_cancelled(lv_event_t* e) {
 // Row Click Callback (opens this overlay from Advanced panel)
 // ============================================================================
 
-static void on_timelapse_row_clicked(lv_event_t* e) {
-    (void)e;
+void open_timelapse_settings() {
     spdlog::debug("[Timelapse Settings] Timelapse row clicked");
 
     if (!g_timelapse_settings) {

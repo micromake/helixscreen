@@ -35,6 +35,9 @@ void PrinterCompositeVisibilityState::init_subjects(bool register_xml) {
     INIT_SUBJECT_INT(can_show_nozzle_clean, 0, subjects_, register_xml);
     INIT_SUBJECT_INT(can_show_purge_line, 0, subjects_, register_xml);
 
+    // Aggregate: 1 if ANY preprint option is visible (used to hide empty options card)
+    INIT_SUBJECT_INT(has_any_preprint_options, 0, subjects_, register_xml);
+
     subjects_initialized_ = true;
     spdlog::trace("[PrinterCompositeVisibilityState] Subjects initialized successfully");
 }
@@ -91,12 +94,21 @@ void PrinterCompositeVisibilityState::update_visibility(
             ? 1
             : 0);
 
+    // Aggregate: any preprint option visible (includes timelapse which doesn't need plugin)
+    bool any_visible =
+        lv_subject_get_int(&can_show_bed_mesh_) || lv_subject_get_int(&can_show_qgl_) ||
+        lv_subject_get_int(&can_show_z_tilt_) || lv_subject_get_int(&can_show_nozzle_clean_) ||
+        lv_subject_get_int(&can_show_purge_line_) ||
+        lv_subject_get_int(capabilities.get_printer_has_timelapse_subject());
+    update_if_changed(&has_any_preprint_options_, any_visible ? 1 : 0);
+
     spdlog::debug("[PrinterCompositeVisibilityState] Visibility updated: bed_mesh={}, qgl={}, "
-                  "z_tilt={}, nozzle_clean={}, purge_line={} (plugin={})",
+                  "z_tilt={}, nozzle_clean={}, purge_line={}, any={} (plugin={})",
                   lv_subject_get_int(&can_show_bed_mesh_), lv_subject_get_int(&can_show_qgl_),
                   lv_subject_get_int(&can_show_z_tilt_),
                   lv_subject_get_int(&can_show_nozzle_clean_),
-                  lv_subject_get_int(&can_show_purge_line_), plugin_installed);
+                  lv_subject_get_int(&can_show_purge_line_),
+                  lv_subject_get_int(&has_any_preprint_options_), plugin_installed);
 }
 
 } // namespace helix

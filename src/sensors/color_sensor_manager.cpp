@@ -139,7 +139,10 @@ void ColorSensorManager::discover_from_moonraker(const nlohmann::json& moonraker
 
     // Update sensor count subject
     if (subjects_initialized_) {
-        lv_subject_set_int(&sensor_count_, static_cast<int>(sensors_.size()));
+        int new_count = static_cast<int>(sensors_.size());
+        if (lv_subject_get_int(&sensor_count_) != new_count) {
+            lv_subject_set_int(&sensor_count_, new_count);
+        }
     }
 
     spdlog::info("[ColorSensorManager] Discovered {} color sensors", sensors_.size());
@@ -531,9 +534,14 @@ void ColorSensorManager::update_subjects() {
     std::string color_hex = get_color_hex_value();
     std::strncpy(color_hex_buf_.data(), color_hex.c_str(), color_hex_buf_.size() - 1);
     color_hex_buf_[color_hex_buf_.size() - 1] = '\0';
-    lv_subject_copy_string(&color_hex_, color_hex_buf_.data());
+    if (strcmp(lv_subject_get_string(&color_hex_), color_hex_buf_.data()) != 0) {
+        lv_subject_copy_string(&color_hex_, color_hex_buf_.data());
+    }
 
-    lv_subject_set_int(&td_value_, get_td_value());
+    int td = get_td_value();
+    if (lv_subject_get_int(&td_value_) != td) {
+        lv_subject_set_int(&td_value_, td);
+    }
 
     spdlog::trace("[ColorSensorManager] Subjects updated: color_hex={}, td_value={}",
                   lv_subject_get_string(&color_hex_), lv_subject_get_int(&td_value_));

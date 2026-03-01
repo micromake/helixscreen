@@ -20,9 +20,9 @@ class PrinterDiscovery;
  */
 struct PrinterDetectionResult {
     std::string type_name; ///< Printer type name (e.g., "FlashForge AD5M Pro", "Voron 2.4")
-    int confidence;        ///< Confidence score 0-100 (≥70 = high confidence, <70 = low confidence)
-    std::string reason;    ///< Human-readable detection reasoning
-    int match_count = 1;   ///< Number of matching heuristics (for combined scoring)
+    int confidence;      ///< Confidence score 0-100 (≥70 = high confidence, <70 = low confidence)
+    std::string reason;  ///< Human-readable detection reasoning
+    int match_count = 1; ///< Number of matching heuristics (for combined scoring)
     int best_single_confidence = 0; ///< Highest individual heuristic confidence (tiebreaker)
 
     /**
@@ -99,6 +99,7 @@ struct PrinterHardwareData {
     std::string mcu{};                   ///< Primary MCU chip type (e.g., "stm32h723xx", "rp2040")
     std::vector<std::string> mcu_list{}; ///< All MCU chips (primary + secondary, CAN toolheads)
     BuildVolume build_volume{};          ///< Build volume dimensions from bed_mesh
+    std::string cpu_arch{};              ///< Host CPU architecture (e.g., "ARMv7", "MIPS")
 };
 
 /**

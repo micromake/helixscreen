@@ -3,6 +3,7 @@ translations:
   ' elapsed · ': ' истёк · '
   ' frames captured': ' кадров захвачено'
   ' left': ' осталось'
+  '%u layers': '%u слоёв'
   + Add: + Добавить
   + Add Preset: + Добавить пресет
   + New: + Новый
@@ -12,22 +13,39 @@ translations:
   --°C: --°C
   0 slots: '{0} Слотов'
   0.4-2mm direct drive, 4-6mm bowden: 0.4-2мм для директа, 4-6мм для боудена
+  1 event queued: 1 событие в очереди
+  1 layer: 1 слой
+  1 minute: 1 минута
   1 more tap to {} beta features: 1 нажатие до {} бета-функций
   1. Printer homes and probes the bed: 1. Принтер паркуется и зондирует стол
   1. Printer will home and probe each screw: 1. Принтер запаркуется и проверит каждый винт
+  10 minutes: 10 минут
+  12 Hour: 12 часов
+  120 seconds: 120 секунд
+  15 seconds: 15 секунд
+  2 minutes: 2 минуты
   2. Place paper between nozzle and bed: 2. Положите бумагу между соплом и столом
   2. Results show how much to turn each screw: 2. Результаты покажут, насколько повернуть каждый винт
+  24 Hour: 24 часа
+  2D Heatmap: 2D тепловая карта
+  2D Layers: 2D слои
   3. Adjust screws, then re-probe to verify: 3. Отрегулируйте винты, затем перепроверьте
   3. Lower nozzle until paper drags slightly: 3. Опустите сопло, пока бумага не начнёт слегка цепляться
+  30 minutes: 30 минут
+  30 seconds: 30 секунд
   3D Preview: 3D-просмотр
+  3D View: 3D вид
   4. Paper should move but with resistance: 4. Бумага должна двигаться, но с сопротивлением
   4. Repeat until bed is level: 4. Повторяйте, пока стол не выровняется
+  5 minutes: 5 минут
   5V: 5V
+  60 seconds: 60 секунд
   = Loosen: = Ослабить
   = Tighten: = Затянуть
   ABOUT: О ПРОГРАММЕ
   ABS: ABS
   ADXL: ADXL
+  AFC Version Warning: Предупреждение о версии AFC
   AFC failure reset complete: Сброс ошибки AFC завершён
   AFC failure reset failed: Ошибка сброса ошибки AFC
   AFC recovery complete: Восстановление AFC завершено
@@ -44,7 +62,6 @@ translations:
   Abort: Прервать
   Abort failed: Ошибка прерывания
   Aborting AFC operation...: Прерывание операции AFC...
-  About HelixScreen: О HelixScreen
   Accel to Decel: Ускорение к торможению
   Acceleration to deceleration limit (mm/s²): Предел ускорения к торможению (мм/с²)
   Accelerometers: Акселерометры
@@ -63,6 +80,7 @@ translations:
   Adjusts individual characteristics of your heaters for optimal control: Настраивает индивидуальные характеристики нагревателей для оптимального контроля
   Advanced Setting: Расширенные настройки
   After running the commands, tap Check Again below.: После выполнения команд нажмите «Проверить снова» ниже.
+  Alert: Оповещение
   All: Все
   All screws are within tolerance.: Все винты в пределах допуска.
   Allow display to sleep during active prints: Разрешить спящий режим дисплея во время печати
@@ -81,6 +99,7 @@ translations:
   Apply Changes: Применить изменения
   Applying...: Применение...
   Are you sure you want to cancel this print? All progress will be lost.: Вы уверены, что хотите отменить печать? Весь прогресс будет потерян.
+  Are you sure? This will power off or restart the printer host.: Вы уверены? Это выключит или перезагрузит хост принтера.
   Assign Klipper macros to control LEDs via on/off, toggle, or presets: Назначьте макросы Klipper для управления LED через вкл/выкл, переключение или пресеты
   Assign a role to enable sensor monitoring: Назначьте роль для мониторинга датчика
   Auto: Авто
@@ -104,13 +123,14 @@ translations:
   Bed Leveling: Выравнивание стола
   Bed Mesh: Сетка стола
   Bed Mesh Render: Рендер сетки стола
+  Bed Moves: Стол движется
   Bed Screw Adjustment: Регулировка винтов стола
   Bed Screws: Винты стола
   Bed Temp: Темп. стола
   Bed is Level!: Стол выровнен!
   Bed °C: Стол °C
   'Bed:': 'Стол:'
-  Beta features are enabled: Beta-функции включены
+  Beta: Бета
   'Beta features: OFF': 'Beta-функции: ВЫКЛ'
   'Beta features: ON': 'Beta-функции: ВКЛ'
   Black: Чёрный
@@ -143,7 +163,12 @@ translations:
   Calibration & Tools: Калибровка и инструменты
   Calibration Complete!: Калибровка завершена!
   Calibration Failed: Ошибка калибровки
+  Calibration complete: Калибровка завершена
+  Calibration complete!: Калибровка завершена!
+  Calibration complete! Press 'Next' to continue.: "Калибровка завершена! Нажмите «Далее» для продолжения."
+  Calibration failed - touch targets more precisely.: Калибровка не удалась – нажимайте на цели точнее.
   Calibration saved but cannot apply on SDL display: Калибровка сохранена, но не может быть применена на SDL дисплее
+  Calibration timed out. Please try again.: Время истекло. Попробуйте снова.
   Cancel: Отмена
   Cancel Escalation: Отменить эскалацию
   Cancel Print: Отменить печать
@@ -160,6 +185,7 @@ translations:
   Check Again: Проверить снова
   Check for Updates: Проверить обновления
   Check the filament path and try again.: Проверьте путь филамента и попробуйте снова.
+  Checking accelerometer...: Проверка акселерометра...
   Checking for plugin...: Поиск плагина...
   Checking slots...: Проверка слотов...
   Checking timelapse plugin...: Проверка плагина таймлапса...
@@ -171,7 +197,7 @@ translations:
   Choose rendering mode for bed mesh visualization: Выберите режим рендеринга для визуализации сетки стола
   Choose sound style: Выберите стиль звука
   Clean Nozzle: Очистить сопло
-  Chm: Кам
+  Cleaning Nozzle...: Очистка сопла...
   Clear: Очистить
   Clear All: Очистить всё
   Clear All Events: Очистить все события
@@ -186,8 +212,11 @@ translations:
   Color Mismatch: Несоответствие цвета
   Color Sensors: Датчики цвета
   Complete: Завершено
+  Complete!: Готово!
   Completed: Завершено
   Completed in 3 probes: Завершено за 3 замера
+  Completed prints will appear here: Завершённые печати появятся здесь
+  Computing calibration...: Вычисление калибровки...
   Config-defined (read-only): Определено в конфигурации (только чтение)
   Configuration added successfully.: Конфигурация успешно добавлена.
   Configuration already present.: Конфигурация уже присутствует.
@@ -217,6 +246,7 @@ translations:
   Connection successful!: Соединение успешно!
   Console: Консоль
   Control optional print start features: Управление дополнительными функциями начала печати
+  Control power relays and smart outlets: Управление реле и умными розетками
   Control power switches and relays: Управление выключателями и реле
   Controlled by hardware sensor: Управляется аппаратным датчиком
   Cool Down: Охладить
@@ -240,6 +270,12 @@ translations:
   Current Version: Текущая версия
   Current Z Position: Текущая позиция Z
   'Current name:': 'Текущее имя:'
+  'Current: %s · Slot %d': 'Текущий: %s · Слот %d'
+  'Current: %s Â· Slot %d': 'Текущий: %s Â· Слот %d'
+  'Current: Bypass': 'Текущий: Обход'
+  'Current: Slot %d': 'Текущий: Слот %d'
+  'Current: Tool %d': 'Текущий: Инструмент %d'
+  Currently Loaded: Загружено
   Currently printing: Сейчас печатается
   Custom: Свой
   Custom...: Настроить...
@@ -250,6 +286,8 @@ translations:
   Danger: Опасность
   Dark Mode: Тёмный режим
   Database: База данных
+  Date (newest): Дата (новые)
+  Date (oldest): Дата (старые)
   Day: День
   Default border thickness: Толщина границы по умолчанию
   Define macros in your printer.cfg: Определите макросы в вашем printer.cfg
@@ -257,14 +295,17 @@ translations:
   Delete File?: Удалить файл?
   Delete Profile?: Удалить профиль?
   Delete Spool?: Удалить катушку?
+  Delete Video?: Удалить видео?
   'Delta:': 'Дельта:'
   Deploy: Развернуть
+  Dev: Разработка
   Dev channel requires dev_url in config: Dev-канал требует dev_url в конфиге
   Device name is required: Требуется название устройства
   Disable: Отключить
   Disable Motors?: Отключить моторы?
   Discard: Отменить
   Discard Changes?: Отменить изменения?
+  Disconnected: Отключено
   Discord Community: Сообщество Discord
   Discovered Printers: Обнаруженные принтеры
   Dismiss: Отклонить
@@ -332,6 +373,7 @@ translations:
   Exhaust Fan: Вытяжной вентилятор
   Explore how the selected palette shapes text, controls, and status colors.: Изучите, как выбранная палитра влияет на текст, элементы управления и цвета статуса.
   Explore palette and preview: Изучить палитру и предпросмотр
+  External: Внешний
   External Spool: Внешняя катушка
   Extra prime to compensate ooze: Дополнительная подача для компенсации вытекания
   Extrude: Экструзия
@@ -388,6 +430,7 @@ translations:
   Flat Concentric Rings (existing ams_slot): Плоские концентрические кольца (существующий ams_slot)
   Flow Rate: Множитель потока
   Forming tip...: Формирование кончика...
+  Found 1 printer: Найден 1 принтер
   Framerate: Частота кадров
   Front: Спереди
   G-code Console: Консоль G-code
@@ -401,7 +444,6 @@ translations:
   H: Х
   HELP & SUPPORT: ПОМОЩЬ И ПОДДЕРЖКА
   Happy Hare MMU: Happy Hare MMU
-  HE: ХЭ
   Hardware: Оборудование
   Hardware Health: Состояние оборудования
   Hardware Issues: Проблемы оборудования
@@ -418,9 +460,15 @@ translations:
   Heatbed Temperature: Температура стола
   Heated Bed: Подогреваемый стол
   Heater: Нагреватель
+  Heating (%d°C below minimum): "Нагрев (%d°C ниже минимума)"
+  Heating Bed...: Нагрев стола...
+  Heating Nozzle...: Нагрев сопла...
+  Heating to %d°C...: "Нагрев до %d°C..."
+  Heating to target...: Нагрев до целевой температуры...
   Heating...: Нагрев...
   HelixScreen: HelixScreen
   HelixScreen Crashed: HelixScreen аварийно завершился
+  HelixScreen is detecting your display orientation: HelixScreen определяет ориентацию дисплея
   HelixScreen will integrate with your filament changer for multi-spool/color print operations.: HelixScreen интегрируется с вашим сменщиком филамента для многокатушечной/многоцветной печати.
   Help improve HelixScreen?: Помочь улучшить HelixScreen?
   Higher = faster: Выше = быстрее
@@ -428,6 +476,7 @@ translations:
   Home Widgets: Виджеты главного экрана
   Home failed: Парковка не удалась
   Homing AFC system...: Парковка системы AFC...
+  Homing...: Парковка...
   Horizontal Progress (Leveling Wizard): Горизонтальный прогресс (мастер выравнивания)
   Host: Хост
   Hotend: Хотенд
@@ -437,6 +486,7 @@ translations:
   How often to check Spoolman for weight updates: Как часто проверять Spoolman на обновления веса
   Humidity: Влажность
   Humidity Sensors: Датчики влажности
+  Hyperlapse: Гиперлапс
   IMPORT FROM USB: ИМПОРТ С USB
   'IP:': 'IP:'
   Idle: Ожидание
@@ -448,6 +498,7 @@ translations:
   Initializing...: Инициализация...
   Input: Ввод
   Input Shaper: Input Shaper
+  Input Shaper Help: Справка по Input Shaper
   Input Shaping: Компенсация вибраций
   Input shaper calibration sensors: Датчики калибровки Input Shaper'а
   Input shaper settings applied!: Настройки компенсатора вибраций применены!
@@ -474,6 +525,7 @@ translations:
   Keyboard Test (Gboard-style): Тест клавиатуры (стиль Gboard)
   Klipper: Klipper
   'Klipper firmware has disconnected from the host. ': 'Прошивка Klipper отключилась от хоста. '
+  'Klipper has entered an error state. This is typically caused by an MCU ': 'Klipper перешёл в состояние ошибки. Обычно это вызвано MCU '
   'Klipper has entered shutdown state. This may be due to an emergency stop, ': 'Klipper перешёл в состояние остановки. Это может быть вызвано аварийной остановкой, '
   Klipper will restart to apply changes: Klipper перезапустится для применения изменений
   Klipper will restart to apply changes.: Klipper перезапустится для применения изменений.
@@ -492,17 +544,20 @@ translations:
   Last print cancelled: Последняя печать отменена
   Last print failed: Последняя печать не удалась
   Later: Позже
+  Layer: Слой
   Layer Height: Высота слоя
   Layer mode captures one frame per layer change. Best for most prints.: Послойный режим захватывает один кадр на каждую смену слоя. Лучший выбор для большинства печатей.
   'Layer:': 'Слой:'
   Layers: Слои
   Learn More: Подробнее
   'Length:': 'Длина:'
+  Leveling Gantry...: Выравнивание портала...
   Light: Подсветка
   Link to Spoolman: Привязать к Spoolman
   Load: Загрузить
   Load Filament: Загрузить филамент
   Loaded: Загружен
+  Loading Bed Mesh...: Загрузка сетки стола...
   Loading Error: Ошибка загрузки
   Loading G-code...: Загрузка G-code...
   Loading filament...: Загрузка филамента...
@@ -548,6 +603,7 @@ translations:
   Match your typical print fan speed: Настройте типичную скорость вентилятора печати
   Material: Материал
   Material Design Spinner: Индикатор загрузки Material Design
+  Max: Макс
   Max Accel: Макс. ускор.
   Max Acceleration: Макс. ускорение
   Max Velocity: Макс. скорость
@@ -560,6 +616,7 @@ translations:
   Measured: Измерено
   Memory (MB): Память (МБ)
   Mesh Complete: Сетка завершена
+  Min: Мин
   Mode: Режим
   Modified: Изменён
   Month: Месяц
@@ -574,6 +631,7 @@ translations:
   : Перемещает печатающую головку для измерения частот вибрации по каждой оси. Занимает 2-3 минуты. Принтер будет шуметь — это нормально.
   Multi Filament System Overview: Обзор мульти-филаментной системы
   Multi-Filament: Мульти-филамент
+  'Multi-Filament:': 'Мульти-филамент:'
   Multi-Material: Мульти-материал
   My Custom Theme: Моя тема
   My Panel: Моя панель
@@ -588,6 +646,7 @@ translations:
   Network Name (SSID): Название сети (SSID)
   Network Settings: Сетевые настройки
   Network Test: Тест сети
+  Never: Никогда
   'New Spool: Step ': 'Новая катушка: Шаг '
   'New Spool: Step 1 of 3': 'Новая катушка: Шаг 1 из 3'
   New Version Available: Доступна новая версия
@@ -610,7 +669,10 @@ translations:
   No filaments found: Филаменты не найдены
   No file loaded: Файл не загружен
   No files available for printing: Нет файлов для печати
+  No images found on USB drive: Изображения на USB-накопителе не найдены
   No macros available: Нет доступных макросов
+  No matching prints: Нет совпадающих печатей
+  No mesh data: Нет данных сетки
   No mesh loaded: Сетка не загружена
   No network. Scan QR code to report on your phone.: Нет сети. Отсканируйте QR-код, чтобы отправить отчёт с телефона.
   No networks found: Сети не найдены
@@ -618,11 +680,13 @@ translations:
   No plugins found: Плагины не найдены
   No presets: Нет пресетов
   No preview: Нет предпросмотра
+  No print history found: История печати не найдена
   No print history yet: Истории печати пока нет
   No print start macro found: Макрос старта печати не найден
   No printers found: Принтеры не найдены
   No profiles available: Профили недоступны
   No sensors detected: Датчики не обнаружены
+  No spool assigned: Катушка не назначена
   No spools found in Spoolman: Катушки не найдены в Spoolman
   No timelapse videos found: Таймлапс-видео не найдены
   No vendors found: Производители не найдены
@@ -634,11 +698,13 @@ translations:
   Not yet calibrated: Ещё не откалибровано
   Notes: Заметки
   Notes (optional): Заметки (необязательно)
+  Notification: Уведомление
   Notifications: Уведомления
   Notify when print finishes: Уведомить о завершении печати
   Nozzle: Сопло
   'Nozzle ': 'Сопло '
   Nozzle Clean: Очистка сопла
+  Nozzle Moves: Сопло движется
   Nozzle Priming: Подготовка сопла
   Nozzle Temp: Темп. сопла
   Nozzle Temperature: Температура сопла
@@ -668,7 +734,6 @@ translations:
   Paper Test Calibration: Калибровка бумажным тестом
   Part Cooling Fan: Вентилятор охлаждения детали
   Part Fan: Вент. детали
-  Part: Дет
   Password: Пароль
   Password cannot be empty: Пароль не может быть пустым
   Pause: Пауза
@@ -683,6 +748,7 @@ translations:
   Pick: Выбрать
   Pick Color: Выбрать цвет
   Place PNG or JPEG files in config/custom_images/ to add custom images: Поместите PNG или JPEG файлы в config/custom_images/ для добавления изображений
+  'Place image files (PNG, JPEG, BMP, GIF) in config/custom_images/. Max size: 2048×2048 pixels.': 'Поместите файлы изображений (PNG, JPEG, BMP, GIF) в config/custom_images/. Макс. размер: 2048×2048 пикселей.'
   Place plugins in the plugins directory to extend HelixScreen: Поместите плагины в директорию plugins для расширения HelixScreen
   Play a test beep: Воспроизвести тестовый сигнал
   Please enter a theme name: Введите название темы
@@ -701,7 +767,10 @@ translations:
   Power: Питание
   Power Control: Управление питанием
   Power Devices: Устройства питания
+  Preparing: Подготовка
   Preparing Print: Подготовка печати
+  Preparing Print...: Подготовка печати...
+  Preparing...: Подготовка...
   Preset: Пресет
   Presets: Пресеты
   Previous: Назад
@@ -754,6 +823,7 @@ translations:
   Progress Bar Tests: Тесты прогресс-бара
   Purge: Продуть
   Purging nozzle: Продувка сопла
+  Purging...: Продувка...
   QGL: QGL
   QUEUED EVENTS: ОЧЕРЕДЬ СОБЫТИЙ
   QUICK BUTTONS: БЫСТРЫЕ КНОПКИ
@@ -765,6 +835,8 @@ translations:
   'RSS:': 'RSS:'
   Re-probe: Перепроверить
   Ready: Готов
+  Reboot: Перезагрузка
+  Rebooting...: Перезагрузка...
   Recalibrate or view detailed results anytime in Settings.: Перекалибруйте или просмотрите подробные результаты в любое время в Настройках.
   Record Timelapse: Записать таймлапс
   Record timelapses of your prints: Записывайте таймлапсы ваших печатей
@@ -806,6 +878,7 @@ translations:
   Restarting HelixScreen...: Перезапуск HelixScreen...
   Restarting Klipper...: Перезапуск Klipper...
   Restarting Moonraker...: Перезапуск Moonraker...
+  Restarting...: Перезапуск...
   Resume: Продолжить
   Resume Print: Продолжить печать
   Retract: Ретракция
@@ -817,6 +890,7 @@ translations:
   Review detected hardware validation issues: Просмотр обнаруженных проблем валидации оборудования
   Review your changes: Просмотр ваших изменений
   'Role:': 'Тип:'
+  'Rotation: %d\xc2\xb0 - %ds remaining (or wait to retry)': 'Поворот: %d\xc2\xb0 - осталось %ds (или подождите для повтора)'
   Run: Запуск
   Run Macro: Запустить макрос
   Runout Sensor: Датчик окончания
@@ -844,6 +918,7 @@ translations:
   Saving config... Klipper will restart.: Сохранение конфигурации... Klipper перезапустится.
   Saving will restart Klipper and CANCEL any active print!: Сохранение перезапустит Klipper и ОТМЕНИТ любую активную печать!
   Scanning for networks...: Поиск сетей...
+  'Score: 0': 'Счёт: 0'
   Screen Dim: Затемнение экрана
   Screen dims to lower brightness after period of inactivity: Экран затемняется после периода простоя
   Screen will dim after the selected period of inactivity: Экран затемнится после выбранного периода простоя
@@ -881,7 +956,6 @@ translations:
   'Set ': 'Установить '
   Set Active: Сделать активной
   Settings: Настройки
-  Settings reset to defaults: Настройки сброшены к значениям по умолчанию
   Settings reset to defaults. Restarting...: Настройки сброшены к значениям по умолчанию. Перезапуск...
   Setup Timelapse: Настроить таймлапс
   Shadow Intensity: Интенсивность тени
@@ -889,6 +963,9 @@ translations:
   'Share this code in Discord or support:': 'Поделитесь этим кодом в Discord или с поддержкой:'
   'Shininess:': 'Блеск:'
   Show detailed print preparation status: Показывать детальный статус подготовки к печати
+  Shutdown: Выключение
+  Shutdown / Reboot: Выключение / Перезагрузка
+  Shutting down...: Выключение...
   Side: Сбоку
   Single toggle macro. State is not tracked.: Один макрос переключения. Состояние не отслеживается.
   Size: Размер
@@ -915,7 +992,9 @@ translations:
   Spool wt (g): Вес катушки (г)
   Spoolman: Spoolman
   Spoolman has no spools configured: В Spoolman нет настроенных катушек
+  Spoolman unavailable — filament weights may be stale: Spoolman недоступен — вес филамента может быть устаревшим
   Square Corner Velocity: Square Corner Velocity
+  Stable: Стабильная
   Standby: Режим ожидания
   Start: Старт
   Start Anyway: Начать всё равно
@@ -923,6 +1002,8 @@ translations:
   Start Print: Начать печать
   Start Probing: Начать зондирование
   Started: Начато
+  Starting Print...: Запуск печати...
+  Starting...: Запуск...
   Startup, auto-control, and macro devices: Запуск, автоуправление и макро-устройства
   Status: Статус
   Status icons: Иконки статуса
@@ -947,6 +1028,12 @@ translations:
   THEME COLORS: ЦВЕТА ТЕМЫ
   TPU: TPU
   Takes 3-5 min. Do not interrupt.: Занимает 3-5 мин. Не прерывайте.
+  Tap again to confirm this orientation: Нажмите ещё раз для подтверждения ориентации
+  Tap anywhere if this text is right-side up: Нажмите в любом месте, если текст расположен правильно
+  Tap anywhere to begin: Нажмите в любом месте для начала
+  Tap anywhere to begin calibration: Нажмите в любом месте для начала калибровки
+  Tap the crosshair (point %1$d of 3) \xe2\x80\x94 touch %2$d of %3$d: Нажмите на перекрестие (точка %1$d из 3) \xe2\x80\x94 касание %2$d из %3$d
+  Tap to assign: Нажмите для назначения
   Tap to show keyboard...: Нажмите для показа клавиатуры...
   Target Temperature: Целевая температура
   Telemetry Data: Данные телеметрии
@@ -960,6 +1047,7 @@ translations:
   Test Network: Тест сети
   Test Sound: Тестовый звук
   Test probe repeatability: Тест повторяемости датчика
+  'Testing rotation: %d\xc2\xb0 (%d/%d) - %ds remaining': 'Тест поворота: %d\xc2\xb0 (%d/%d) - осталось %ds'
   Thanks! Anonymous usage data helps improve HelixScreen.: Спасибо! Анонимные данные использования помогают улучшить HelixScreen.
   Thanks! TOTALLY anonymous usage data helps improve HelixScreen.: Спасибо! ПОЛНОСТЬЮ анонимные данные использования помогают улучшить HelixScreen.
   ? The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints.
@@ -990,6 +1078,7 @@ translations:
   This will reset all settings to defaults. This action cannot be undone.: Это сбросит все настройки к значениям по умолчанию. Это действие нельзя отменить.
   This will restart Klipper firmware. Any active operations will be interrupted.: Прошивка Klipper будет перезапущена. Активные операции будут прерваны.
   This will restart Klipper.: Это перезапустит Klipper.
+  Thumbnail Only: Только миниатюра
   Time: Время
   Time Format: Формат времени
   Time to wait before escalating to emergency stop: Время ожидания перед эскалацией до аварийной остановки
@@ -1011,10 +1100,13 @@ translations:
   Top: Сверху
   Total Prints: Всего печатей
   Touch Calibration: Калибровка касания
-  Touch anywhere to test calibration: Коснитесь экрана для проверки калибровки
+  Touch anywhere to test calibration: Коснитесь в любом месте для проверки калибровки
+  Touch anywhere to verify accuracy: Коснитесь в любом месте для проверки точности
   Touch screen to wake from sleep: Коснитесь экрана для выхода из сна
+  Touch the target (point %1$d of 3) \xe2\x80\x94 touch %2$d of %3$d: Коснитесь цели (точка %1$d из 3) \xe2\x80\x94 касание %2$d из %3$d
   Travels: Перемещения
   'Troubleshooting:': 'Устранение неполадок:'
+  Try adjusting your search or filters: Попробуйте изменить поиск или фильтры
   Tune: Настройка
   Tune at the temperature you print most often.: Настраивайте при температуре, при которой вы печатаете чаще всего.
   Tuning tower enabled - start a print to test: Башня настройки включена — начните печать для теста
@@ -1041,7 +1133,6 @@ translations:
   Update Available: Доступно обновление
   Update Channel: Канал обновлений
   Update Failed: Ошибка обновления
-  Update Installed: Обновление установлено
   Upload: Отправить
   Upload Debug Bundle: Отправить пакет диагностики
   Upload Failed: Ошибка отправки
@@ -1109,6 +1200,7 @@ translations:
   Z Movement: Движение Z
   Z Offset: Z Offset
   Z Range: Диапазон Z
+  Z Tilt Adjust...: Регулировка наклона Z...
   Z probes for bed leveling and mesh generation: Z-зонды для выравнивания стола и создания сетки
   Z-Offset: Z-Offset
   Z-Offset Calibration: Калибровка Z-смещения
@@ -1133,6 +1225,7 @@ translations:
   of: из
   set to: установлено на
   started: запущено
+  tall: высотой
   used: использ.
   v{} is available. Tap to update.: v{} доступна. Нажмите для обновления.
   '{} more taps to {} beta features': '{} нажатий до {} бета-функций'

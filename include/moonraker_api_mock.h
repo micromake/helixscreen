@@ -189,6 +189,13 @@ class MoonrakerSpoolmanAPIMock : public MoonrakerSpoolmanAPI {
      */
     void consume_filament(float grams, int slot_index = -1);
 
+    // Test inspection
+    struct FilamentUpdateRecord {
+        int filament_id = 0;
+        nlohmann::json data;
+    };
+    std::vector<FilamentUpdateRecord> filament_updates;
+
     /**
      * @brief Get mutable reference to mock spools for testing
      */

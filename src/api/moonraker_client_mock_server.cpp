@@ -113,11 +113,17 @@ void register_server_handlers(std::unordered_map<std::string, MethodHandler>& re
 
         spdlog::debug("[MoonrakerClientMock] printer.info: state={}", state_str);
 
+        // Detect HELIX_MOCK_KALICO env var for Kalico firmware simulation
+        const char* kalico_env = std::getenv("HELIX_MOCK_KALICO");
+        bool mock_kalico = kalico_env && std::string(kalico_env) == "1";
+        std::string app_name = mock_kalico ? "Kalico" : "Klipper";
+
         json response = {{"jsonrpc", "2.0"},
                          {"result",
                           {{"state", state_str},
                            {"state_message", state_message},
                            {"hostname", "mock-printer"},
+                           {"app", app_name},
                            {"software_version", "v0.12.0-mock"},
                            {"klipper_path", "/home/pi/klipper"},
                            {"python_path", "/home/pi/klippy-env/bin/python"},
@@ -141,7 +147,11 @@ void register_server_handlers(std::unordered_map<std::string, MethodHandler>& re
             {"jsonrpc", "2.0"},
             {"result",
              {{"system_info",
-               {{"cpu_info", {{"cpu_count", 4}, {"total_memory", 3906644}, {"memory_units", "kB"}}},
+               {{"cpu_info",
+                 {{"cpu_count", 4},
+                  {"total_memory", 3906644},
+                  {"memory_units", "kB"},
+                  {"processor", "ARMv7 Processor rev 5 (v7l)"}}},
                 {"distribution",
                  {{"name", "Ubuntu 22.04 LTS (mock)"},
                   {"id", "ubuntu"},

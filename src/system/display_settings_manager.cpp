@@ -31,7 +31,7 @@ static const char* SLEEP_OPTIONS_TEXT = "Never\n1 minute\n5 minutes\n10 minutes\
 
 // Bed mesh render mode options (Auto=0, 3D=1, 2D=2)
 static const char* BED_MESH_RENDER_MODE_OPTIONS_TEXT = "Auto\n3D View\n2D Heatmap";
-static const char* GCODE_RENDER_MODE_OPTIONS_TEXT = "Auto\n3D View\n2D Layers";
+static const char* GCODE_RENDER_MODE_OPTIONS_TEXT = "Auto\n3D View\n2D Layers\nThumbnail Only";
 
 // Time format options (12H=0, 24H=1)
 static const char* TIME_FORMAT_OPTIONS_TEXT = "12 Hour\n24 Hour";
@@ -150,7 +150,7 @@ void DisplaySettingsManager::init_subjects() {
 
     // G-code render mode (default: 0 = Auto)
     int gcode_mode = config->get<int>("/display/gcode_render_mode", 0);
-    gcode_mode = std::clamp(gcode_mode, 0, 2);
+    gcode_mode = std::clamp(gcode_mode, 0, 3);
     UI_MANAGED_SUBJECT_INT(gcode_render_mode_subject_, gcode_mode, "settings_gcode_render_mode",
                            subjects_);
 
@@ -158,6 +158,13 @@ void DisplaySettingsManager::init_subjects() {
     int time_format = config->get<int>("/display/time_format", 0);
     time_format = std::clamp(time_format, 0, 1);
     UI_MANAGED_SUBJECT_INT(time_format_subject_, time_format, "settings_time_format", subjects_);
+
+#ifdef HELIX_ENABLE_SCREENSAVER
+    // Screensaver enabled (default: true)
+    bool screensaver = config->get<bool>("/display/screensaver_enabled", true);
+    UI_MANAGED_SUBJECT_INT(screensaver_enabled_subject_, screensaver ? 1 : 0,
+                           "settings_screensaver_enabled", subjects_);
+#endif
 
     subjects_initialized_ = true;
 
@@ -203,10 +210,8 @@ void DisplaySettingsManager::set_dark_mode(bool enabled) {
         return;
     }
 
-    // 1. Update subject (UI reacts immediately via binding)
     lv_subject_set_int(&dark_mode_subject_, enabled ? 1 : 0);
 
-    // 2. Persist to config (theme change requires restart to take effect)
     Config* config = Config::get_instance();
     config->set<bool>("/dark_mode", enabled);
     config->save();
@@ -320,30 +325,25 @@ int DisplaySettingsManager::get_display_dim_sec() const {
 void DisplaySettingsManager::set_display_dim_sec(int seconds) {
     spdlog::info("[DisplaySettingsManager] set_display_dim_sec({})", seconds);
 
-    // 1. Update subject
     lv_subject_set_int(&display_dim_subject_, seconds);
 
-    // 2. Persist
     Config* config = Config::get_instance();
     config->set<int>("/display/dim_sec", seconds);
     config->save();
 
-    // 3. Notify DisplayManager to reload dim setting
-    DisplayManager* dm = DisplayManager::instance();
-    if (dm) {
+    // Notify DisplayManager to reload dim setting
+    if (auto* dm = DisplayManager::instance()) {
         dm->set_dim_timeout(seconds);
     }
 
-    // 4. If dim is now > sleep, bump sleep up to match (unless sleep is disabled)
+    // If dim is now > sleep, bump sleep up to match (unless sleep is disabled)
     int sleep_sec = get_display_sleep_sec();
     if (seconds > 0 && sleep_sec > 0 && sleep_sec < seconds) {
         spdlog::info("[DisplaySettingsManager] Bumping sleep {}s up to match dim {}s", sleep_sec,
                      seconds);
-        // Update directly to avoid recursion through set_display_sleep_sec
         lv_subject_set_int(&display_sleep_subject_, seconds);
-        Config* cfg = Config::get_instance();
-        cfg->set<int>("/display/sleep_sec", seconds);
-        cfg->save();
+        config->set<int>("/display/sleep_sec", seconds);
+        config->save();
         ToastManager::instance().show(ToastSeverity::INFO, lv_tr("Sleep timeout adjusted"), 2000);
     }
 
@@ -370,15 +370,11 @@ void DisplaySettingsManager::set_display_sleep_sec(int seconds) {
         }
     }
 
-    // 1. Update subject
     lv_subject_set_int(&display_sleep_subject_, seconds);
 
-    // 2. Persist
     Config* config = Config::get_instance();
     config->set<int>("/display/sleep_sec", seconds);
     config->save();
-
-    // Note: Actual display sleep is handled by the display driver reading this value
     spdlog::debug("[DisplaySettingsManager] Display sleep set to {}s", seconds);
 }
 
@@ -391,15 +387,12 @@ void DisplaySettingsManager::set_brightness(int percent) {
     int clamped = std::clamp(percent, 10, 100);
     spdlog::info("[DisplaySettingsManager] set_brightness({})", clamped);
 
-    // 1. Update subject (UI reflects change immediately)
     lv_subject_set_int(&brightness_subject_, clamped);
 
-    // 2. Apply to hardware via DisplayManager
     if (auto* dm = DisplayManager::instance()) {
         dm->set_backlight_brightness(clamped);
     }
 
-    // 3. Persist to config
     Config* config = Config::get_instance();
     config->set<int>("/brightness", clamped);
     config->save();
@@ -419,10 +412,8 @@ bool DisplaySettingsManager::get_sleep_while_printing() const {
 void DisplaySettingsManager::set_sleep_while_printing(bool enabled) {
     spdlog::info("[DisplaySettingsManager] set_sleep_while_printing({})", enabled);
 
-    // 1. Update subject (UI reacts)
     lv_subject_set_int(&sleep_while_printing_subject_, enabled ? 1 : 0);
 
-    // 2. Persist to config
     Config* config = Config::get_instance();
     config->set<bool>("/display/sleep_while_printing", enabled);
     config->save();
@@ -439,10 +430,8 @@ bool DisplaySettingsManager::get_animations_enabled() const {
 void DisplaySettingsManager::set_animations_enabled(bool enabled) {
     spdlog::info("[DisplaySettingsManager] set_animations_enabled({})", enabled);
 
-    // 1. Update subject (UI reacts, animations check this dynamically)
     lv_subject_set_int(&animations_enabled_subject_, enabled ? 1 : 0);
 
-    // 2. Persist to config
     Config* config = Config::get_instance();
     config->set<bool>("/display/animations_enabled", enabled);
     config->save();
@@ -455,10 +444,8 @@ bool DisplaySettingsManager::get_gcode_3d_enabled() const {
 void DisplaySettingsManager::set_gcode_3d_enabled(bool enabled) {
     spdlog::info("[DisplaySettingsManager] set_gcode_3d_enabled({})", enabled);
 
-    // 1. Update subject (UI reacts)
     lv_subject_set_int(&gcode_3d_enabled_subject_, enabled ? 1 : 0);
 
-    // 2. Persist to config
     Config* config = Config::get_instance();
     config->set<bool>("/display/gcode_3d_enabled", enabled);
     config->save();
@@ -473,10 +460,8 @@ void DisplaySettingsManager::set_bed_mesh_render_mode(int mode) {
     int clamped = std::clamp(mode, 0, 2);
     spdlog::info("[DisplaySettingsManager] set_bed_mesh_render_mode({})", clamped);
 
-    // 1. Update subject (UI reacts)
     lv_subject_set_int(&bed_mesh_render_mode_subject_, clamped);
 
-    // 2. Persist to config
     Config* config = Config::get_instance();
     config->set<int>("/display/bed_mesh_render_mode", clamped);
     config->save();
@@ -494,20 +479,19 @@ int DisplaySettingsManager::get_gcode_render_mode() const {
 }
 
 void DisplaySettingsManager::set_gcode_render_mode(int mode) {
-    // Clamp to valid range (0=Auto, 1=3D, 2=2D)
-    int clamped = std::clamp(mode, 0, 2);
+    // Clamp to valid range (0=Auto, 1=3D, 2=2D, 3=Thumbnail Only)
+    int clamped = std::clamp(mode, 0, 3);
     spdlog::info("[DisplaySettingsManager] set_gcode_render_mode({})", clamped);
 
-    // 1. Update subject (UI reacts)
     lv_subject_set_int(&gcode_render_mode_subject_, clamped);
 
-    // 2. Persist to config
     Config* config = Config::get_instance();
     config->set<int>("/display/gcode_render_mode", clamped);
     config->save();
 
+    static const char* MODE_NAMES[] = {"Auto", "3D", "2D", "Thumbnail Only"};
     spdlog::debug("[DisplaySettingsManager] G-code render mode set to {} ({})", clamped,
-                  clamped == 0 ? "Auto" : (clamped == 1 ? "3D" : "2D"));
+                  MODE_NAMES[clamped]);
 }
 
 const char* DisplaySettingsManager::get_gcode_render_mode_options() {
@@ -523,10 +507,8 @@ void DisplaySettingsManager::set_time_format(TimeFormat format) {
     int val = static_cast<int>(format);
     spdlog::info("[DisplaySettingsManager] set_time_format({})", val == 0 ? "12H" : "24H");
 
-    // 1. Update subject (UI reacts)
     lv_subject_set_int(&time_format_subject_, val);
 
-    // 2. Persist to config
     Config* config = Config::get_instance();
     config->set<int>("/display/time_format", val);
     config->save();
@@ -535,6 +517,26 @@ void DisplaySettingsManager::set_time_format(TimeFormat format) {
 const char* DisplaySettingsManager::get_time_format_options() {
     return TIME_FORMAT_OPTIONS_TEXT;
 }
+
+// =============================================================================
+// SCREENSAVER
+// =============================================================================
+
+#ifdef HELIX_ENABLE_SCREENSAVER
+bool DisplaySettingsManager::get_screensaver_enabled() const {
+    return lv_subject_get_int(const_cast<lv_subject_t*>(&screensaver_enabled_subject_)) != 0;
+}
+
+void DisplaySettingsManager::set_screensaver_enabled(bool enabled) {
+    spdlog::info("[DisplaySettingsManager] set_screensaver_enabled({})", enabled);
+
+    lv_subject_set_int(&screensaver_enabled_subject_, enabled ? 1 : 0);
+
+    Config* config = Config::get_instance();
+    config->set<bool>("/display/screensaver_enabled", enabled);
+    config->save();
+}
+#endif
 
 // =============================================================================
 // CONFIG-ONLY SETTINGS (no subjects)

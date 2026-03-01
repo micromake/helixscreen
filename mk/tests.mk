@@ -71,6 +71,9 @@ TEST_PLATFORM_DEPS := $(WPA_DEPS)
 # Tool objects needed by tests (src/tools/ is excluded from APP_OBJS)
 TEST_TOOL_OBJS := $(OBJ_DIR)/tools/xml_attribute_validator.o
 
+# libhv dns_resolv C source needed by test_dns_resolver (not in libhv.a)
+DNS_RESOLV_OBJ := $(OBJ_DIR)/tests/dns_resolv.o
+
 # ============================================================================
 # AUTOMATIC APP OBJECT DISCOVERY
 # ============================================================================
@@ -126,15 +129,9 @@ clean-tests:
 	$(Q)rm -f $(TEST_BIN) $(TEST_MAIN_OBJ) $(CATCH2_OBJ) $(UI_TEST_UTILS_OBJ) $(LVGL_TEST_FIXTURE_OBJ) $(TEST_FIXTURES_OBJ) $(LVGL_UI_TEST_FIXTURE_OBJ) $(TEST_OBJS)
 	$(ECHO) "$(GREEN)✓ Test artifacts cleaned$(RESET)"
 
-# Build tests in parallel (auto-detects core count like main build target)
-test-build:
-	$(ECHO) "$(CYAN)$(BOLD)Building tests with parallel compilation...$(RESET)"
-	@START_TIME=$$(date +%s); \
-	NPROC=$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4); \
-	$(MAKE) -j$$NPROC $(TEST_BIN) || exit $$?; \
-	END_TIME=$$(date +%s); \
-	DURATION=$$((END_TIME - START_TIME)); \
-	echo "$(GREEN)✓ Tests built in $${DURATION}s$(RESET)"
+# Build tests — delegates to $(TEST_BIN) which handles -j detection via Phase 1
+test-build: $(TEST_BIN)
+	@true
 
 # ============================================================================
 # Main Test Targets
@@ -481,22 +478,25 @@ test-assets: test-build
 # Two-phase build for $(TEST_BIN) to handle unlimited -j detection
 # Phase 1: No deps - check for unlimited -j and re-invoke if needed
 # Phase 2: Normal deps and linking (when _PARALLEL_GUARD is set)
+#
+# IMPORTANT: Phase 1 always passes explicit -j to Phase 2. Without it,
+# `exec $(MAKE)` loses the parent's jobserver (exec replaces the process)
+# and Phase 2 falls back to -j1, compiling hundreds of files serially.
 ifndef _PARALLEL_GUARD
 $(TEST_BIN): FORCE
-	@if echo "$(MAKEFLAGS)" | grep -q 'j' && ! echo "$(MAKEFLAGS)" | grep -q 'jobserver'; then \
-		NPROC=$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4); \
+	@NPROC=$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4); \
+	if echo "$(MAKEFLAGS)" | grep -q 'j' && ! echo "$(MAKEFLAGS)" | grep -q 'jobserver'; then \
 		echo ""; \
 		printf '\033[1;33m⚠️  make -j (unlimited) detected - auto-fixing to -j%s\033[0m\n' "$$NPROC"; \
 		echo ""; \
-		exec $(MAKE) _PARALLEL_GUARD=1 -j$$NPROC $@; \
-	else \
-		exec $(MAKE) _PARALLEL_GUARD=1 $@; \
-	fi
+	fi; \
+	exec $(MAKE) _PARALLEL_GUARD=1 --no-print-directory -j$$NPROC $@
 else
 $(TEST_BIN): $(TEST_CORE_DEPS) \
              $(TEST_LVGL_DEPS) \
              $(TEST_APP_OBJS) \
              $(TEST_TOOL_OBJS) \
+             $(DNS_RESOLV_OBJ) \
              $(MOCK_OBJS) \
              $(LV_MARKDOWN_OBJS) \
              $(FONT_OBJS) \
@@ -598,6 +598,12 @@ $(OBJ_DIR)/tests/application/%.o: $(TEST_UNIT_DIR)/application/%.cpp
 	$(Q)$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(PCH_FLAGS) -I$(TEST_DIR) -I$(TEST_UNIT_DIR)/application $(INCLUDES) -c $< -o $@
 	$(call emit-compile-command,$(CXX),$(CXXFLAGS) $(PCH_FLAGS) -I$(TEST_DIR) -I$(TEST_UNIT_DIR)/application $(INCLUDES),$<,$@)
 
+# Compile libhv dns_resolv.c for test_dns_resolver
+$(DNS_RESOLV_OBJ): $(LIBHV_DIR)/base/dns_resolv.c
+	$(Q)mkdir -p $(dir $@)
+	$(ECHO) "$(BLUE)[TEST-C]$(RESET) $<"
+	$(Q)$(CC) $(CFLAGS) $(LIBHV_INC) -c $< -o $@
+
 # Compile mock sources
 # Uses DEPFLAGS to track header dependencies
 # Emits .ccj fragment for incremental compile_commands.json generation
@@ -666,31 +672,9 @@ $(TEST_RESPONSIVE_THEME_OBJ): $(SRC_DIR)/test_responsive_theme.cpp
 	$(Q)$(CXX) $(CXXFLAGS) $(INCLUDES) $(LV_CONF) -c $< -o $@
 
 # ============================================================================
-# TinyGL 3D Rendering Tests
+# G-Code Geometry & SDF Tests
 # ============================================================================
-
-# TinyGL Hello Triangle test (only if ENABLE_TINYGL_3D=yes)
-ifeq ($(ENABLE_TINYGL_3D),yes)
-TEST_TINYGL_TRIANGLE_BIN := $(BIN_DIR)/test_tinygl_triangle
-TEST_TINYGL_TRIANGLE_OBJ := $(OBJ_DIR)/test_tinygl_triangle.o
-
-test-tinygl-triangle: $(TEST_TINYGL_TRIANGLE_BIN)
-	$(ECHO) "$(CYAN)Running TinyGL triangle test...$(RESET)"
-	$(Q)$(TEST_TINYGL_TRIANGLE_BIN)
-	$(ECHO) ""
-
-$(TEST_TINYGL_TRIANGLE_BIN): $(TEST_TINYGL_TRIANGLE_OBJ) $(TINYGL_LIB)
-	$(Q)mkdir -p $(BIN_DIR)
-	$(ECHO) "$(MAGENTA)[LD]$(RESET) test_tinygl_triangle"
-	$(Q)$(CXX) $(CXXFLAGS) $< -o $@ $(TINYGL_LIB) -lm
-	$(ECHO) "$(GREEN)✓ TinyGL triangle test binary ready$(RESET)"
-
-$(TEST_TINYGL_TRIANGLE_OBJ): $(SRC_DIR)/test_tinygl_triangle.cpp $(TINYGL_LIB)
-	$(Q)mkdir -p $(dir $@)
-	$(ECHO) "$(BLUE)[TEST]$(RESET) $<"
-	$(Q)$(CXX) $(CXXFLAGS) $(TINYGL_INC) -c $< -o $@
-
-# G-Code Geometry Builder test (only if ENABLE_TINYGL_3D=yes)
+# G-Code Geometry Builder test
 TEST_GCODE_GEOMETRY_BIN := $(BIN_DIR)/test_gcode_geometry
 TEST_GCODE_GEOMETRY_OBJ := $(OBJ_DIR)/test_gcode_geometry.o
 
@@ -699,18 +683,18 @@ test-gcode-geometry: $(TEST_GCODE_GEOMETRY_BIN)
 	$(Q)$(TEST_GCODE_GEOMETRY_BIN)
 	$(ECHO) ""
 
-$(TEST_GCODE_GEOMETRY_BIN): $(TEST_GCODE_GEOMETRY_OBJ) $(OBJ_DIR)/gcode_parser.o $(OBJ_DIR)/gcode_geometry_builder.o $(TINYGL_LIB)
+$(TEST_GCODE_GEOMETRY_BIN): $(TEST_GCODE_GEOMETRY_OBJ) $(OBJ_DIR)/gcode_parser.o $(OBJ_DIR)/gcode_geometry_builder.o
 	$(Q)mkdir -p $(BIN_DIR)
 	$(ECHO) "$(MAGENTA)[LD]$(RESET) test_gcode_geometry"
-	$(Q)$(CXX) $(CXXFLAGS) $^ -o $@ $(TINYGL_LIB) -lm $(LDFLAGS)
+	$(Q)$(CXX) $(CXXFLAGS) $^ -o $@ -lm $(LDFLAGS)
 	$(ECHO) "$(GREEN)✓ G-code geometry test binary ready$(RESET)"
 
-$(TEST_GCODE_GEOMETRY_OBJ): $(SRC_DIR)/test_gcode_geometry.cpp $(TINYGL_LIB)
+$(TEST_GCODE_GEOMETRY_OBJ): $(SRC_DIR)/test_gcode_geometry.cpp
 	$(Q)mkdir -p $(dir $@)
 	$(ECHO) "$(BLUE)[TEST]$(RESET) $<"
-	$(Q)$(CXX) $(CXXFLAGS) $(INCLUDES) $(TINYGL_INC) -c $< -o $@
+	$(Q)$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
-# G-Code SDF Reconstruction test (only if ENABLE_TINYGL_3D=yes)
+# G-Code SDF Reconstruction test
 TEST_SDF_RECONSTRUCTION_BIN := $(BIN_DIR)/test_sdf_reconstruction
 TEST_SDF_RECONSTRUCTION_OBJ := $(OBJ_DIR)/test_sdf_reconstruction.o
 
@@ -719,16 +703,16 @@ test-sdf-reconstruction: $(TEST_SDF_RECONSTRUCTION_BIN)
 	$(Q)$(TEST_SDF_RECONSTRUCTION_BIN)
 	$(ECHO) ""
 
-$(TEST_SDF_RECONSTRUCTION_BIN): $(TEST_SDF_RECONSTRUCTION_OBJ) $(OBJ_DIR)/gcode_parser.o $(OBJ_DIR)/gcode_sdf_builder.o $(TINYGL_LIB)
+$(TEST_SDF_RECONSTRUCTION_BIN): $(TEST_SDF_RECONSTRUCTION_OBJ) $(OBJ_DIR)/gcode_parser.o $(OBJ_DIR)/gcode_sdf_builder.o
 	$(Q)mkdir -p $(BIN_DIR)
 	$(ECHO) "$(MAGENTA)[LD]$(RESET) test_sdf_reconstruction"
-	$(Q)$(CXX) $(CXXFLAGS) $^ -o $@ $(TINYGL_LIB) -lm $(LDFLAGS)
+	$(Q)$(CXX) $(CXXFLAGS) $^ -o $@ -lm $(LDFLAGS)
 	$(ECHO) "$(GREEN)✓ SDF reconstruction test binary ready$(RESET)"
 
-$(TEST_SDF_RECONSTRUCTION_OBJ): $(SRC_DIR)/test_sdf_reconstruction.cpp $(TINYGL_LIB)
+$(TEST_SDF_RECONSTRUCTION_OBJ): $(SRC_DIR)/test_sdf_reconstruction.cpp
 	$(Q)mkdir -p $(dir $@)
 	$(ECHO) "$(BLUE)[TEST]$(RESET) $<"
-	$(Q)$(CXX) $(CXXFLAGS) $(INCLUDES) $(TINYGL_INC) -c $< -o $@
+	$(Q)$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 # Sparse Grid test (validates NanoVDB integration)
 TEST_SPARSE_GRID_BIN := $(BIN_DIR)/test_sparse_grid
@@ -770,83 +754,9 @@ $(TEST_PARTIAL_EXTRACTION_OBJ): $(SRC_DIR)/test_partial_extraction.cpp
 	$(ECHO) "$(BLUE)[TEST]$(RESET) $<"
 	$(Q)$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
-else
-test-tinygl-triangle:
-	$(ECHO) "$(YELLOW)⚠ TinyGL test skipped (ENABLE_TINYGL_3D=no)$(RESET)"
-	$(ECHO) "  Rebuild with: make ENABLE_TINYGL_3D=yes test-tinygl-triangle"
 
-test-gcode-geometry:
-	$(ECHO) "$(YELLOW)⚠ G-code geometry test skipped (ENABLE_TINYGL_3D=no)$(RESET)"
-	$(ECHO) "  Rebuild with: make ENABLE_TINYGL_3D=yes test-gcode-geometry"
 
-test-sdf-reconstruction:
-	$(ECHO) "$(YELLOW)⚠ SDF reconstruction test skipped (ENABLE_TINYGL_3D=no)$(RESET)"
-	$(ECHO) "  Rebuild with: make ENABLE_TINYGL_3D=yes test-sdf-reconstruction"
-endif
 
-# ============================================================================
-# TinyGL Test Framework - Comprehensive quality and performance testing
-# ============================================================================
-
-TINYGL_TEST_DIR := tests/tinygl
-TINYGL_TEST_FRAMEWORK_BIN := $(BIN_DIR)/tinygl_test_runner
-TINYGL_TEST_FRAMEWORK_OBJS := \
-	$(OBJ_DIR)/tinygl_test_framework.o \
-	$(OBJ_DIR)/tinygl_test_runner.o
-
-# TinyGL test framework targets
-test-tinygl-framework: $(TINYGL_TEST_FRAMEWORK_BIN)
-	$(ECHO) "$(CYAN)$(BOLD)Running TinyGL comprehensive test framework...$(RESET)"
-	$(Q)$(TINYGL_TEST_FRAMEWORK_BIN) all
-
-test-tinygl-quality: $(TINYGL_TEST_FRAMEWORK_BIN)
-	$(ECHO) "$(CYAN)Testing TinyGL rendering quality...$(RESET)"
-	$(Q)$(TINYGL_TEST_FRAMEWORK_BIN) gouraud
-	$(Q)$(TINYGL_TEST_FRAMEWORK_BIN) banding
-	$(ECHO) "$(GREEN)✓ Quality tests complete$(RESET)"
-
-test-tinygl-performance: $(TINYGL_TEST_FRAMEWORK_BIN)
-	$(ECHO) "$(CYAN)Benchmarking TinyGL performance...$(RESET)"
-	$(Q)$(TINYGL_TEST_FRAMEWORK_BIN) performance
-	$(ECHO) "$(GREEN)✓ Performance benchmarks complete$(RESET)"
-
-test-tinygl-reference: $(TINYGL_TEST_FRAMEWORK_BIN)
-	$(ECHO) "$(CYAN)Generating TinyGL reference images...$(RESET)"
-	$(Q)$(TINYGL_TEST_FRAMEWORK_BIN) reference
-	$(ECHO) "$(GREEN)✓ Reference images generated$(RESET)"
-
-test-tinygl-verify: $(TINYGL_TEST_FRAMEWORK_BIN)
-	$(ECHO) "$(CYAN)$(BOLD)Verifying TinyGL rendering against references...$(RESET)"
-	$(Q)$(TINYGL_TEST_FRAMEWORK_BIN) --verify || { \
-		echo "$(RED)$(BOLD)✗ Verification failed!$(RESET)"; \
-		exit 1; \
-	}
-	$(ECHO) "$(GREEN)$(BOLD)✓ All verification tests passed!$(RESET)"
-
-# Build TinyGL test framework
-$(TINYGL_TEST_FRAMEWORK_BIN): $(TINYGL_TEST_FRAMEWORK_OBJS) $(TINYGL_LIB)
-	$(Q)mkdir -p $(BIN_DIR)
-	$(ECHO) "$(MAGENTA)[LD]$(RESET) tinygl_test_runner"
-	$(Q)$(CXX) $(CXXFLAGS) $(TINYGL_TEST_FRAMEWORK_OBJS) -o $@ $(TINYGL_LIB) $(LDFLAGS) -lm
-	$(ECHO) "$(GREEN)✓ TinyGL test framework ready$(RESET)"
-
-# Compile test framework
-$(OBJ_DIR)/tinygl_test_framework.o: $(TINYGL_TEST_DIR)/tinygl_test_framework.cpp $(TINYGL_TEST_DIR)/tinygl_test_framework.h
-	$(Q)mkdir -p $(dir $@)
-	$(ECHO) "$(BLUE)[TEST]$(RESET) tinygl_test_framework.cpp"
-	$(Q)$(CXX) $(CXXFLAGS) $(INCLUDES) $(TINYGL_INC) -I$(TINYGL_TEST_DIR) -c $< -o $@
-
-$(OBJ_DIR)/tinygl_test_runner.o: $(TINYGL_TEST_DIR)/test_runner.cpp $(TINYGL_TEST_DIR)/tinygl_test_framework.h
-	$(Q)mkdir -p $(dir $@)
-	$(ECHO) "$(BLUE)[TEST]$(RESET) test_runner.cpp"
-	$(Q)$(CXX) $(CXXFLAGS) $(INCLUDES) $(TINYGL_INC) -I$(TINYGL_TEST_DIR) -c $< -o $@
-
-# Clean TinyGL test artifacts
-clean-tinygl-tests:
-	$(ECHO) "$(YELLOW)Cleaning TinyGL test artifacts...$(RESET)"
-	$(Q)rm -f $(TINYGL_TEST_FRAMEWORK_BIN) $(TINYGL_TEST_FRAMEWORK_OBJS)
-	$(Q)rm -rf $(TINYGL_TEST_DIR)/output $(TINYGL_TEST_DIR)/reference
-	$(ECHO) "$(GREEN)✓ TinyGL test artifacts cleaned$(RESET)"
 
 # ============================================================================
 # Sanitizer Targets (Memory Safety Testing)
@@ -936,12 +846,8 @@ help-test:
 	echo "  $${G}test-config$${X}          - Configuration tests"; \
 	echo "  $${G}test-integration$${X}     - Integration tests (with mocks)"; \
 	echo ""; \
-	echo "$${C}TinyGL 3D Tests:$${X}"; \
-	echo "  $${G}test-tinygl-triangle$${X} - Basic TinyGL rendering test"; \
+	echo "$${C}Geometry Tests:$${X}"; \
 	echo "  $${G}test-gcode-geometry$${X}  - G-code to 3D geometry test"; \
-	echo "  $${G}test-tinygl-framework$${X} - Comprehensive TinyGL test suite"; \
-	echo "  $${G}test-tinygl-quality$${X}  - Rendering quality tests"; \
-	echo "  $${G}test-tinygl-performance$${X} - Performance benchmarks"; \
 	echo ""; \
 	echo "$${C}Discovery:$${X}"; \
 	echo "  $${G}test-list$${X}            - List all test cases"; \
@@ -957,5 +863,4 @@ help-test:
 	echo ""; \
 	echo "$${C}Cleanup:$${X}"; \
 	echo "  $${G}clean-tests$${X}          - Remove test build artifacts"; \
-	echo "  $${G}clean-tinygl-tests$${X}   - Remove TinyGL test artifacts"; \
 	echo "  $${G}clean-sanitizers$${X}     - Remove sanitizer test binaries"

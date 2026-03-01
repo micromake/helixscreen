@@ -22,6 +22,14 @@ _has_no_new_privs() {
     [ -r /proc/self/status ] && grep -q '^NoNewPrivs:[[:space:]]*1' /proc/self/status 2>/dev/null
 }
 
+# Returns true when install.sh was spawned by helix-screen's in-app update.
+# On SysV systems (AD5M, K1), stop_service/start_service are skipped because
+# the watchdog handles the restart via _exit(0) — same as the NoNewPrivileges
+# path on systemd.  Set by update_checker.cpp before execv().
+_is_self_update() {
+    [ "${HELIX_SELF_UPDATE:-}" = "1" ]
+}
+
 # Install service (dispatcher)
 # Calls install_service_systemd or install_service_sysv based on INIT_SYSTEM
 install_service() {
@@ -191,6 +199,13 @@ start_service_systemd() {
 
 # Start service (SysV init)
 start_service_sysv() {
+    # During in-app self-update, the watchdog handles the restart via _exit(0).
+    # Starting a second instance here would race with the still-running process.
+    if _is_self_update; then
+        log_info "Skipping service start (self-update; restart via watchdog)"
+        return 0
+    fi
+
     log_info "Starting HelixScreen (SysV init)..."
 
     if [ ! -x "$INIT_SCRIPT_DEST" ]; then
@@ -269,20 +284,27 @@ stop_service() {
             $SUDO systemctl stop "$SERVICE_NAME" || true
         fi
     else
-        # Try the configured init script location first
-        if [ -n "$INIT_SCRIPT_DEST" ] && [ -x "$INIT_SCRIPT_DEST" ]; then
-            log_info "Stopping existing HelixScreen service (SysV)..."
-            $SUDO "$INIT_SCRIPT_DEST" stop 2>/dev/null || true
-        fi
-        # Also check all possible locations (for updates/uninstalls)
-        for init_script in $HELIX_INIT_SCRIPTS; do
-            if [ -x "$init_script" ]; then
-                log_info "Stopping HelixScreen at $init_script..."
-                $SUDO "$init_script" stop 2>/dev/null || true
+        # During in-app self-update, the app must stay running so the user sees
+        # the update progress screen.  The watchdog restarts via _exit(0) after
+        # install.sh exits — killing the process here would black-screen the display.
+        if _is_self_update; then
+            log_info "Skipping service stop (self-update; restart via watchdog)"
+        else
+            # Try the configured init script location first
+            if [ -n "$INIT_SCRIPT_DEST" ] && [ -x "$INIT_SCRIPT_DEST" ]; then
+                log_info "Stopping existing HelixScreen service (SysV)..."
+                $SUDO "$INIT_SCRIPT_DEST" stop 2>/dev/null || true
             fi
-        done
-        # Also try to kill by name (watchdog first to prevent crash dialog flash)
-        # shellcheck disable=SC2086
-        kill_process_by_name $HELIX_PROCESSES
+            # Also check all possible locations (for updates/uninstalls)
+            for init_script in $HELIX_INIT_SCRIPTS; do
+                if [ -x "$init_script" ]; then
+                    log_info "Stopping HelixScreen at $init_script..."
+                    $SUDO "$init_script" stop 2>/dev/null || true
+                fi
+            done
+            # Also try to kill by name (watchdog first to prevent crash dialog flash)
+            # shellcheck disable=SC2086
+            kill_process_by_name $HELIX_PROCESSES
+        fi
     fi
 }

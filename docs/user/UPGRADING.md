@@ -26,7 +26,7 @@ scp -O helixscreen-ad5m-${VERSION}.tar.gz root@<printer-ip>:/data/
 /root/printer_software/helixscreen/install.sh --local /data/helixscreen-ad5m-*.tar.gz --update
 ```
 
-This preserves your settings and updates to the latest version.
+Your settings (`helixconfig.json`), environment overrides (`helixscreen.env`), and custom files (custom printer images, etc.) are automatically preserved across updates.
 
 ---
 
@@ -40,25 +40,25 @@ The easiest solution is to delete your config file and let the wizard create a n
 
 **MainsailOS (Pi):**
 ```bash
-sudo rm /opt/helixscreen/helixconfig.json
+sudo rm /opt/helixscreen/config/helixconfig.json
 sudo systemctl restart helixscreen
 ```
 
 **Adventurer 5M (Forge-X):**
 ```bash
-rm /opt/helixscreen/helixconfig.json
+rm /opt/helixscreen/config/helixconfig.json
 /etc/init.d/S90helixscreen restart
 ```
 
 **Adventurer 5M (Klipper Mod):**
 ```bash
-rm /root/printer_software/helixscreen/helixconfig.json
+rm /root/printer_software/helixscreen/config/helixconfig.json
 /etc/init.d/S80helixscreen restart
 ```
 
 **Creality K1 (Simple AF):**
 ```bash
-rm /usr/data/helixscreen/helixconfig.json
+rm /usr/data/helixscreen/config/helixconfig.json
 /etc/init.d/S99helixscreen restart
 ```
 
@@ -76,9 +76,21 @@ This clears all HelixScreen settings and restarts the wizard.
 
 ---
 
-## What Settings Are Affected
+## What's Preserved During Upgrades
 
-When you reset, you'll need to reconfigure:
+The installer automatically preserves:
+
+- **`helixconfig.json`** — All your settings (printer connection, display preferences, sound, safety, etc.)
+- **`helixscreen.env`** — Any environment variable overrides you've set
+- **Custom files** — Custom printer images, user-added printer database entries, and other files in the `config/` directory
+
+You should not need to reconfigure anything after a normal upgrade. If something does go wrong, see the troubleshooting sections below.
+
+---
+
+## What Settings Are Affected by a Reset
+
+If you perform a factory reset or delete your config, you'll need to reconfigure:
 
 - WiFi connection (if not using Ethernet)
 - Moonraker connection (usually auto-detected)

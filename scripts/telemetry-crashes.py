@@ -137,7 +137,9 @@ class SymbolCache:
             url = f"{R2_BASE_URL}/v{version}/{platform}.sym"
             try:
                 print(f"  Downloading symbols for v{version}/{platform}...", file=sys.stderr)
-                urllib.request.urlretrieve(url, sym_path)
+                req = urllib.request.Request(url, headers={"User-Agent": "helixscreen-crashes/1.0"})
+                with urllib.request.urlopen(req) as resp, open(sym_path, "wb") as out:
+                    out.write(resp.read())
             except urllib.error.HTTPError as e:
                 self._warnings.append(f"v{version}/{platform}: symbols not available (HTTP {e.code})")
                 self._tables[key] = None

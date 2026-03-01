@@ -5,13 +5,11 @@
 
 #include "ui_event_safety.h"
 #include "ui_icon.h"
-#include "ui_nav_manager.h"
 #include "ui_utils.h"
 
 #include "app_globals.h"
 #include "display_settings_manager.h"
 #include "led/led_controller.h"
-#include "led/ui_led_control_overlay.h"
 #include "moonraker_api.h"
 #include "observer_factory.h"
 #include "panel_widget_manager.h"
@@ -24,18 +22,18 @@
 
 #include <algorithm>
 
-namespace {
-const bool s_registered = [] {
-    helix::register_widget_factory("led", []() {
-        auto& ps = get_printer_state();
-        auto* api = helix::PanelWidgetManager::instance().shared_resource<MoonrakerAPI>();
-        return std::make_unique<helix::LedWidget>(ps, api);
-    });
-    return true;
-}();
-} // namespace
-
 namespace helix {
+
+void register_led_widget() {
+    register_widget_factory("led", []() {
+        auto& ps = get_printer_state();
+        auto* api = PanelWidgetManager::instance().shared_resource<MoonrakerAPI>();
+        return std::make_unique<LedWidget>(ps, api);
+    });
+
+    // Register XML event callbacks at startup (before any XML is parsed)
+    lv_xml_register_event_cb(nullptr, "light_toggle_cb", LedWidget::light_toggle_cb);
+}
 
 LedWidget::LedWidget(PrinterState& printer_state, MoonrakerAPI* api)
     : printer_state_(printer_state), api_(api) {}
@@ -47,12 +45,20 @@ LedWidget::~LedWidget() {
 void LedWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     widget_obj_ = widget_obj;
     parent_screen_ = parent_screen;
+    *alive_ = true;
 
     if (!widget_obj_) {
         return;
     }
 
     lv_obj_set_user_data(widget_obj_, this);
+
+    // Set user_data on the light_button (where event_cb is registered in XML)
+    // so the callback can recover this widget instance via lv_obj_get_user_data()
+    auto* light_button = lv_obj_find_by_name(widget_obj_, "light_button");
+    if (light_button) {
+        lv_obj_set_user_data(light_button, this);
+    }
 
     // Find light icon for dynamic brightness/color updates
     light_icon_ = lv_obj_find_by_name(widget_obj_, "light_icon");
@@ -61,40 +67,79 @@ void LedWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
         update_light_icon();
     }
 
-    // Set up LED observers if strips are already available
+    // Observe led_config_version to rebind when LED discovery or settings change.
+    // This fires immediately on add (triggering bind_led), so no separate init call needed.
+    std::weak_ptr<bool> weak_alive = alive_;
     auto& led_ctrl = helix::led::LedController::instance();
-    if (!led_ctrl.selected_strips().empty()) {
-        ensure_led_observers();
-    }
+    led_version_observer_ =
+        helix::ui::observe_int_sync<LedWidget>(led_ctrl.get_led_config_version_subject(), this,
+                                               [weak_alive](LedWidget* self, int /*version*/) {
+                                                   if (weak_alive.expired())
+                                                       return;
+                                                   self->bind_led();
+                                               });
 
     spdlog::debug("[LedWidget] Attached");
 }
 
 void LedWidget::detach() {
-    // Reset observers before nulling pointers
-    led_state_observer_.reset();
-    led_brightness_observer_.reset();
+    *alive_ = false;
 
+    // Nullify widget pointers BEFORE resetting observers
     if (widget_obj_) {
+        auto* light_button = lv_obj_find_by_name(widget_obj_, "light_button");
+        if (light_button) {
+            lv_obj_set_user_data(light_button, nullptr);
+        }
         lv_obj_set_user_data(widget_obj_, nullptr);
     }
-
     widget_obj_ = nullptr;
     parent_screen_ = nullptr;
     light_icon_ = nullptr;
-    led_control_panel_ = nullptr;
+
+    led_version_observer_.reset();
+    led_state_observer_.reset();
+    led_brightness_observer_.reset();
 
     spdlog::debug("[LedWidget] Detached");
 }
 
-void LedWidget::handle_light_toggle() {
-    // Suppress click that follows a long-press gesture
-    if (light_long_pressed_) {
-        light_long_pressed_ = false;
-        spdlog::debug("[LedWidget] Light click suppressed (follows long-press)");
-        return;
+void LedWidget::bind_led() {
+    // Reset existing per-LED observers before rebinding
+    led_state_observer_.reset();
+    led_brightness_observer_.reset();
+
+    auto& led_ctrl = helix::led::LedController::instance();
+    const auto& strips = led_ctrl.selected_strips();
+    if (!strips.empty()) {
+        printer_state_.set_tracked_led(strips.front());
+
+        // Create state/brightness observers
+        std::weak_ptr<bool> weak_alive = alive_;
+        led_state_observer_ = helix::ui::observe_int_sync<LedWidget>(
+            printer_state_.get_led_state_subject(), this, [weak_alive](LedWidget* self, int state) {
+                if (weak_alive.expired())
+                    return;
+                self->on_led_state_changed(state);
+            });
+        led_brightness_observer_ = helix::ui::observe_int_sync<LedWidget>(
+            printer_state_.get_led_brightness_subject(), this,
+            [weak_alive](LedWidget* self, int /*brightness*/) {
+                if (weak_alive.expired())
+                    return;
+                self->update_light_icon();
+            });
+
+        spdlog::info("[LedWidget] Bound to LED: {}", strips.front());
+    } else {
+        printer_state_.set_tracked_led("");
+        spdlog::debug("[LedWidget] LED binding cleared (no strips selected)");
     }
 
+    update_light_icon();
+}
+
+void LedWidget::handle_light_toggle() {
     spdlog::info("[LedWidget] Light button clicked");
 
     auto& led_ctrl = helix::led::LedController::instance();
@@ -104,8 +149,6 @@ void LedWidget::handle_light_toggle() {
         return;
     }
 
-    ensure_led_observers();
-
     led_ctrl.light_toggle();
 
     if (led_ctrl.light_state_trackable()) {
@@ -113,35 +156,6 @@ void LedWidget::handle_light_toggle() {
         update_light_icon();
     } else {
         flash_light_icon();
-    }
-}
-
-void LedWidget::handle_light_long_press() {
-    spdlog::info("[LedWidget] Light long-press: opening LED control overlay");
-
-    // Lazy-create overlay on first access
-    if (!led_control_panel_ && parent_screen_) {
-        auto& overlay = get_led_control_overlay();
-
-        if (!overlay.are_subjects_initialized()) {
-            overlay.init_subjects();
-        }
-        overlay.register_callbacks();
-        overlay.set_api(api_);
-
-        led_control_panel_ = overlay.create(parent_screen_);
-        if (!led_control_panel_) {
-            spdlog::error("[LedWidget] Failed to load LED control overlay");
-            return;
-        }
-
-        NavigationManager::instance().register_overlay_instance(led_control_panel_, &overlay);
-    }
-
-    if (led_control_panel_) {
-        light_long_pressed_ = true; // Suppress the click that follows long-press
-        get_led_control_overlay().set_api(api_);
-        NavigationManager::instance().push_overlay(led_control_panel_);
     }
 }
 
@@ -225,25 +239,11 @@ void LedWidget::flash_light_icon() {
     spdlog::debug("[LedWidget] Flash light icon (TOGGLE macro, state unknown)");
 }
 
-void LedWidget::ensure_led_observers() {
-    using helix::ui::observe_int_sync;
-
-    if (!led_state_observer_) {
-        led_state_observer_ = observe_int_sync<LedWidget>(
-            printer_state_.get_led_state_subject(), this,
-            [](LedWidget* self, int state) { self->on_led_state_changed(state); });
-    }
-    if (!led_brightness_observer_) {
-        led_brightness_observer_ = observe_int_sync<LedWidget>(
-            printer_state_.get_led_brightness_subject(), this,
-            [](LedWidget* self, int /*brightness*/) { self->update_light_icon(); });
-    }
-}
-
 void LedWidget::on_led_state_changed(int state) {
     auto& led_ctrl = helix::led::LedController::instance();
     if (led_ctrl.light_state_trackable()) {
         light_on_ = (state != 0);
+        led_ctrl.sync_light_state(light_on_);
         spdlog::debug("[LedWidget] LED state changed: {} (from PrinterState)",
                       light_on_ ? "ON" : "OFF");
         update_light_icon();
@@ -254,38 +254,12 @@ void LedWidget::on_led_state_changed(int state) {
 
 void LedWidget::light_toggle_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[LedWidget] light_toggle_cb");
-    auto* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
     auto* self = static_cast<LedWidget*>(lv_obj_get_user_data(target));
-    if (!self) {
-        lv_obj_t* parent = lv_obj_get_parent(target);
-        while (parent && !self) {
-            self = static_cast<LedWidget*>(lv_obj_get_user_data(parent));
-            parent = lv_obj_get_parent(parent);
-        }
-    }
     if (self) {
         self->handle_light_toggle();
     } else {
         spdlog::warn("[LedWidget] light_toggle_cb: could not recover widget instance");
-    }
-    LVGL_SAFE_EVENT_CB_END();
-}
-
-void LedWidget::light_long_press_cb(lv_event_t* e) {
-    LVGL_SAFE_EVENT_CB_BEGIN("[LedWidget] light_long_press_cb");
-    auto* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    auto* self = static_cast<LedWidget*>(lv_obj_get_user_data(target));
-    if (!self) {
-        lv_obj_t* parent = lv_obj_get_parent(target);
-        while (parent && !self) {
-            self = static_cast<LedWidget*>(lv_obj_get_user_data(parent));
-            parent = lv_obj_get_parent(parent);
-        }
-    }
-    if (self) {
-        self->handle_light_long_press();
-    } else {
-        spdlog::warn("[LedWidget] light_long_press_cb: could not recover widget instance");
     }
     LVGL_SAFE_EVENT_CB_END();
 }

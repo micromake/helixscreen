@@ -3,6 +3,8 @@
 
 #include "touch_calibration.h"
 
+#include <spdlog/spdlog.h>
+
 #include <algorithm>
 #include <cmath>
 #include <initializer_list>
@@ -116,6 +118,102 @@ bool is_calibration_valid(const TouchCalibration& cal) {
     }
 
     return true;
+}
+
+bool validate_calibration_result(const TouchCalibration& cal, const Point screen_points[3],
+                                 const Point touch_points[3], int screen_width, int screen_height,
+                                 float max_residual) {
+    if (!cal.valid) {
+        return false;
+    }
+
+    // Check 1: Coefficient sanity — scaling factors beyond 10x indicate bad input
+    // (e.g., touch points clustered in a tiny area). The c/f offsets can be larger
+    // (up to screen dimensions), so use the general MAX_CALIBRATION_COEFFICIENT for those.
+    constexpr float MAX_SCALE_COEFFICIENT = 10.0f;
+    if (std::abs(cal.a) > MAX_SCALE_COEFFICIENT || std::abs(cal.b) > MAX_SCALE_COEFFICIENT ||
+        std::abs(cal.d) > MAX_SCALE_COEFFICIENT || std::abs(cal.e) > MAX_SCALE_COEFFICIENT) {
+        spdlog::warn("[TouchCalibration] Calibration coefficients out of range "
+                     "(a={:.2f}, b={:.2f}, d={:.2f}, e={:.2f})",
+                     cal.a, cal.b, cal.d, cal.e);
+        return false;
+    }
+    if (std::abs(cal.c) > MAX_CALIBRATION_COEFFICIENT ||
+        std::abs(cal.f) > MAX_CALIBRATION_COEFFICIENT) {
+        spdlog::warn("[TouchCalibration] Calibration offset out of range "
+                     "(c={:.2f}, f={:.2f})",
+                     cal.c, cal.f);
+        return false;
+    }
+
+    // Check 2: Back-transform residuals (numerical stability guard)
+    // A 3-point affine is solved exactly, so residuals at calibration points are
+    // mathematically ~0. This check catches NaN/Inf propagation or floating-point
+    // corruption rather than geometric errors.
+    for (int i = 0; i < 3; i++) {
+        Point transformed = transform_point(cal, touch_points[i]);
+        float dx = static_cast<float>(transformed.x - screen_points[i].x);
+        float dy = static_cast<float>(transformed.y - screen_points[i].y);
+        float residual = std::sqrt(dx * dx + dy * dy);
+
+        if (residual > max_residual) {
+            spdlog::warn("[TouchCalibration] Back-transform residual {:.1f}px at point {} "
+                         "(expected ({},{}), got ({},{}))",
+                         residual, i, screen_points[i].x, screen_points[i].y, transformed.x,
+                         transformed.y);
+            return false;
+        }
+    }
+
+    // Check 3: Center of touch range should map to somewhere near the screen
+    int center_x = (touch_points[0].x + touch_points[1].x + touch_points[2].x) / 3;
+    int center_y = (touch_points[0].y + touch_points[1].y + touch_points[2].y) / 3;
+    Point center_transformed = transform_point(cal, {center_x, center_y});
+
+    int margin_x = screen_width / 2;
+    int margin_y = screen_height / 2;
+    if (center_transformed.x < -margin_x || center_transformed.x > screen_width + margin_x ||
+        center_transformed.y < -margin_y || center_transformed.y > screen_height + margin_y) {
+        spdlog::warn("[TouchCalibration] Center of touch range ({},{}) maps to ({},{}), "
+                     "which is far off-screen ({}x{})",
+                     center_x, center_y, center_transformed.x, center_transformed.y, screen_width,
+                     screen_height);
+        return false;
+    }
+
+    return true;
+}
+
+bool calibration_suggests_axis_swap(const Point screen_points[3], const Point touch_points[3],
+                                    const TouchCalibration& original_cal) {
+    if (!original_cal.valid) {
+        return false;
+    }
+
+    constexpr float EPSILON = 0.001f;
+    float orig_cross = std::abs(original_cal.b) + std::abs(original_cal.d);
+    float orig_diag = std::abs(original_cal.a) + std::abs(original_cal.e) + EPSILON;
+    float orig_ratio = orig_cross / orig_diag;
+
+    // Swap X/Y in touch points and recompute
+    Point swapped_touch[3];
+    for (int i = 0; i < 3; i++) {
+        swapped_touch[i] = {touch_points[i].y, touch_points[i].x};
+    }
+
+    TouchCalibration swapped_cal;
+    if (!compute_calibration(screen_points, swapped_touch, swapped_cal)) {
+        return false;
+    }
+
+    float swap_cross = std::abs(swapped_cal.b) + std::abs(swapped_cal.d);
+    float swap_diag = std::abs(swapped_cal.a) + std::abs(swapped_cal.e) + EPSILON;
+    float swap_ratio = swap_cross / swap_diag;
+
+    spdlog::debug("[TouchCalibration] Axis swap check: orig_ratio={:.4f}, swap_ratio={:.4f}",
+                  orig_ratio, swap_ratio);
+
+    return swap_ratio < orig_ratio * 0.5f;
 }
 
 } // namespace helix

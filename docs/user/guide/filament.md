@@ -73,10 +73,12 @@ When multiple backends are detected:
 
 | System | Description |
 |--------|-------------|
-| **Happy Hare** | MMU2, ERCF, 3MS, Tradrack |
-| **AFC** | Box Turtle with per-lane control |
+| **Happy Hare** | MMU2, ERCF, 3MS, Tradrack, EMU |
+| **AFC** | Box Turtle, OpenAMS, ViViD |
 | **ValgACE** | ValgACE filament changer |
 | **Tool Changer** | Toolchanger-based filament routing |
+
+Each system displays its own logo in the AMS panel header. Happy Hare and AFC show their firmware logos; specific hardware variants (ERCF, Box Turtle, ViViD, etc.) show hardware-specific logos when detected.
 
 Single-backend setups are unaffected — the panel works exactly as before with no selector shown.
 

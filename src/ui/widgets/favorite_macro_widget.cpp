@@ -4,6 +4,7 @@
 #include "favorite_macro_widget.h"
 
 #include "ui_event_safety.h"
+#include "ui_fonts.h"
 #include "ui_icon.h"
 #include "ui_icon_codepoints.h"
 #include "ui_update_queue.h"
@@ -12,10 +13,12 @@
 #include "app_globals.h"
 #include "config.h"
 #include "device_display_name.h"
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "macro_param_modal.h"
 #include "moonraker_api.h"
 #include "panel_widget_config.h"
 #include "panel_widget_registry.h"
+#include "theme_manager.h"
 
 #include <spdlog/spdlog.h>
 
@@ -24,17 +27,18 @@
 #include <regex>
 #include <set>
 
-namespace {
-const bool s_registered = [] {
-    helix::register_widget_factory("favorite_macro_1", []() {
-        return std::make_unique<helix::FavoriteMacroWidget>("favorite_macro_1");
+namespace helix {
+void register_favorite_macro_widgets() {
+    register_widget_factory("favorite_macro_1", []() {
+        return std::make_unique<FavoriteMacroWidget>("favorite_macro_1");
     });
-    helix::register_widget_factory("favorite_macro_2", []() {
-        return std::make_unique<helix::FavoriteMacroWidget>("favorite_macro_2");
+    register_widget_factory("favorite_macro_2", []() {
+        return std::make_unique<FavoriteMacroWidget>("favorite_macro_2");
     });
-    return true;
-}();
+}
+} // namespace helix
 
+namespace {
 // File-local helper: get the shared PanelWidgetConfig instance
 helix::PanelWidgetConfig& get_widget_config_ref() {
     static helix::PanelWidgetConfig config("home", *helix::Config::get_instance());
@@ -138,6 +142,11 @@ void FavoriteMacroWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) 
         lv_obj_set_user_data(widget_obj_, this);
     }
 
+    // Register XML event callbacks
+    lv_xml_register_event_cb(nullptr, "favorite_macro_1_clicked_cb", clicked_1_cb);
+    lv_xml_register_event_cb(nullptr, "favorite_macro_2_clicked_cb", clicked_2_cb);
+    lv_xml_register_event_cb(nullptr, "fav_macro_picker_backdrop_cb", picker_backdrop_cb);
+
     // Cache label pointers from XML
     icon_label_ = lv_obj_find_by_name(widget_obj_, "fav_macro_icon");
     name_label_ = lv_obj_find_by_name(widget_obj_, "fav_macro_name");
@@ -165,6 +174,29 @@ void FavoriteMacroWidget::detach() {
     spdlog::debug("[FavoriteMacroWidget] Detached");
 }
 
+void FavoriteMacroWidget::on_size_changed(int colspan, int rowspan, int /*width_px*/,
+                                          int /*height_px*/) {
+    if (!widget_obj_)
+        return;
+
+    bool tall = (rowspan >= 2);
+    bool wide = (colspan >= 2);
+
+    // Scale icon: md (32px) at 1×1, lg (48px) when tall or 2×2
+    if (icon_label_) {
+        const lv_font_t* icon_font = tall ? &mdi_icons_48 : &mdi_icons_32;
+        lv_obj_set_style_text_font(icon_label_, icon_font, 0);
+    }
+
+    // Scale text: font_xs at 1×1, font_small when tall or wide
+    if (name_label_) {
+        const char* font_token = (tall || wide) ? "font_small" : "font_xs";
+        const lv_font_t* text_font = theme_manager_get_font(font_token);
+        if (text_font)
+            lv_obj_set_style_text_font(name_label_, text_font, 0);
+    }
+}
+
 void FavoriteMacroWidget::handle_clicked() {
     if (macro_name_.empty()) {
         // No macro assigned — open picker to configure
@@ -178,11 +210,6 @@ void FavoriteMacroWidget::handle_clicked() {
     }
 }
 
-void FavoriteMacroWidget::handle_long_press() {
-    spdlog::info("[FavoriteMacroWidget] {} long-pressed - showing picker", widget_id_);
-    show_macro_picker();
-}
-
 MoonrakerAPI* FavoriteMacroWidget::get_api() const {
     return get_moonraker_api();
 }
@@ -190,7 +217,7 @@ MoonrakerAPI* FavoriteMacroWidget::get_api() const {
 void FavoriteMacroWidget::update_display() {
     if (name_label_) {
         if (macro_name_.empty()) {
-            lv_label_set_text(name_label_, "Configure");
+            lv_label_set_text(name_label_, lv_tr("Configure"));
         } else {
             std::string display = helix::get_display_name(macro_name_, helix::DeviceType::MACRO);
             lv_label_set_text(name_label_, display.c_str());
@@ -552,29 +579,11 @@ void FavoriteMacroWidget::clicked_1_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
-void FavoriteMacroWidget::long_press_1_cb(lv_event_t* e) {
-    LVGL_SAFE_EVENT_CB_BEGIN("[FavoriteMacroWidget] long_press_1_cb");
-    auto* widget = panel_widget_from_event<FavoriteMacroWidget>(e);
-    if (widget) {
-        widget->handle_long_press();
-    }
-    LVGL_SAFE_EVENT_CB_END();
-}
-
 void FavoriteMacroWidget::clicked_2_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[FavoriteMacroWidget] clicked_2_cb");
     auto* widget = panel_widget_from_event<FavoriteMacroWidget>(e);
     if (widget) {
         widget->handle_clicked();
-    }
-    LVGL_SAFE_EVENT_CB_END();
-}
-
-void FavoriteMacroWidget::long_press_2_cb(lv_event_t* e) {
-    LVGL_SAFE_EVENT_CB_BEGIN("[FavoriteMacroWidget] long_press_2_cb");
-    auto* widget = panel_widget_from_event<FavoriteMacroWidget>(e);
-    if (widget) {
-        widget->handle_long_press();
     }
     LVGL_SAFE_EVENT_CB_END();
 }

@@ -9,6 +9,6 @@
     <!-- Hidden when no sensor -->
     <bind_flag_if_eq subject="humidity_sensor_count" flag="hidden" ref_value="0"/>
     <icon src="water" size="sm" variant="secondary"/>
-    <text_tiny bind_text="chamber_humidity_text"/>
+    <text_tiny name="humidity_value" bind_text="chamber_humidity_text"/>
   </view>
 </component>

@@ -119,5 +119,49 @@ void draw_axis_tick_label(lv_layer_t* layer, lv_draw_label_dsc_t* label_dsc, int
                           int screen_y, int offset_x, int offset_y, double value, int canvas_width,
                           int canvas_height, bool use_decimals = false);
 
+// ========== Buffer-targeted overloads (no LVGL calls) ==========
+// These replace lv_draw_line() with PixelBuffer::draw_line().
+// Safe to call from background threads.
+// Note: axis labels and tick labels are NOT rendered to buffer
+// (text rendering requires LVGL font engine).
+
+class PixelBuffer;
+
+/**
+ * @brief Render grid lines on mesh surface into a pixel buffer
+ *
+ * @param buf Target pixel buffer
+ * @param renderer Renderer instance with valid mesh data and projection cache
+ * @param canvas_width Canvas width in pixels
+ * @param canvas_height Canvas height in pixels
+ * @param line_r, line_g, line_b Grid line color (pre-fetched from theme)
+ */
+void render_grid_lines(PixelBuffer& buf, const bed_mesh_renderer_t* renderer, int canvas_width,
+                       int canvas_height, uint8_t line_r, uint8_t line_g, uint8_t line_b);
+
+/**
+ * @brief Render reference grids (floor and walls) into a pixel buffer
+ *
+ * @param buf Target pixel buffer
+ * @param renderer Renderer instance with valid mesh data
+ * @param canvas_width Canvas width in pixels
+ * @param canvas_height Canvas height in pixels
+ * @param line_r, line_g, line_b Grid line color (pre-fetched from theme)
+ */
+void render_reference_grids(PixelBuffer& buf, const bed_mesh_renderer_t* renderer, int canvas_width,
+                            int canvas_height, uint8_t line_r, uint8_t line_g, uint8_t line_b);
+
+/**
+ * @brief Render reference floor into a pixel buffer (delegates to render_reference_grids)
+ */
+void render_reference_floor(PixelBuffer& buf, const bed_mesh_renderer_t* renderer, int canvas_width,
+                            int canvas_height, uint8_t line_r, uint8_t line_g, uint8_t line_b);
+
+/**
+ * @brief Render reference walls into a pixel buffer (stub, merged into render_reference_grids)
+ */
+void render_reference_walls(PixelBuffer& buf, const bed_mesh_renderer_t* renderer, int canvas_width,
+                            int canvas_height, uint8_t line_r, uint8_t line_g, uint8_t line_b);
+
 } // namespace mesh
 } // namespace helix

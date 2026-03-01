@@ -9,10 +9,108 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <string>
 
 // Platform-specific includes for availability checks
 #include <sys/stat.h>
 #include <unistd.h>
+
+#ifdef HELIX_DISPLAY_DRM
+#include <fcntl.h>
+#include <xf86drm.h>
+#include <xf86drmMode.h>
+#endif
+
+int DisplayBackend::detect_panel_orientation() {
+#ifdef __linux__
+    // Method 1: Parse /proc/cmdline for video=*:panel_orientation=*
+    // Works on any Linux regardless of DRM linkage
+    {
+        int cmdline_orientation = detect_panel_orientation_from_cmdline();
+        if (cmdline_orientation >= 0) {
+            spdlog::info("[DisplayBackend] Panel orientation from cmdline: {}°",
+                         cmdline_orientation);
+            return cmdline_orientation;
+        }
+    }
+
+#ifdef HELIX_DISPLAY_DRM
+    // Method 2: Query DRM connector "panel orientation" property directly
+    // More reliable but requires libdrm
+    {
+        const char* devices[] = {"/dev/dri/card0", "/dev/dri/card1", "/dev/dri/card2"};
+        for (const char* dev : devices) {
+            int fd = open(dev, O_RDONLY | O_CLOEXEC);
+            if (fd < 0)
+                continue;
+
+            drmModeRes* resources = drmModeGetResources(fd);
+            if (!resources) {
+                close(fd);
+                continue;
+            }
+
+            for (int i = 0; i < resources->count_connectors; i++) {
+                drmModeConnector* conn = drmModeGetConnector(fd, resources->connectors[i]);
+                if (!conn || conn->connection != DRM_MODE_CONNECTED) {
+                    if (conn)
+                        drmModeFreeConnector(conn);
+                    continue;
+                }
+
+                // Search connector properties for "panel orientation"
+                drmModeObjectProperties* props =
+                    drmModeObjectGetProperties(fd, conn->connector_id, DRM_MODE_OBJECT_CONNECTOR);
+                if (props) {
+                    for (uint32_t p = 0; p < props->count_props; p++) {
+                        drmModePropertyRes* prop = drmModeGetProperty(fd, props->props[p]);
+                        if (!prop)
+                            continue;
+
+                        if (strcmp(prop->name, "panel orientation") == 0) {
+                            uint64_t val = props->prop_values[p];
+                            // Values: Normal=0, Upside Down=1, Left Side Up=2, Right Side Up=3
+                            int degrees = -1;
+                            switch (val) {
+                            case 0:
+                                degrees = 0;
+                                break;
+                            case 1:
+                                degrees = 180;
+                                break;
+                            case 2:
+                                degrees = 90;
+                                break;
+                            case 3:
+                                degrees = 270;
+                                break;
+                            }
+                            spdlog::info("[DisplayBackend] Panel orientation from DRM: {} ({}°)",
+                                         val, degrees);
+                            drmModeFreeProperty(prop);
+                            drmModeFreeObjectProperties(props);
+                            drmModeFreeConnector(conn);
+                            drmModeFreeResources(resources);
+                            close(fd);
+                            return degrees;
+                        }
+                        drmModeFreeProperty(prop);
+                    }
+                    drmModeFreeObjectProperties(props);
+                }
+                drmModeFreeConnector(conn);
+            }
+            drmModeFreeResources(resources);
+            close(fd);
+        }
+    }
+#endif // HELIX_DISPLAY_DRM
+#endif // __linux__
+
+    spdlog::debug("[DisplayBackend] No panel orientation detected");
+    return -1;
+}
 
 std::unique_ptr<DisplayBackend> DisplayBackend::create(DisplayBackendType type) {
     switch (type) {

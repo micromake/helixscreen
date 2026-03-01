@@ -21,23 +21,37 @@ ActionPromptModal::ActionPromptModal() {
 }
 
 ActionPromptModal::~ActionPromptModal() {
+    // Signal destruction to any pending button event callbacks
+    alive_->store(false);
     // Modal destructor will call hide() if visible
     // Note: No spdlog here - logger may be destroyed before us during shutdown [L010]
 }
 
 ActionPromptModal::ActionPromptModal(ActionPromptModal&& other) noexcept
     : Modal(std::move(other)), prompt_data_(std::move(other.prompt_data_)),
-      gcode_callback_(std::move(other.gcode_callback_)),
+      gcode_callback_(std::move(other.gcode_callback_)), alive_(std::move(other.alive_)),
       created_buttons_(std::move(other.created_buttons_)),
-      created_text_labels_(std::move(other.created_text_labels_)) {}
+      created_text_labels_(std::move(other.created_text_labels_)),
+      button_callback_data_(std::move(other.button_callback_data_)) {
+    // Update callback data to point to this instance (moved-to)
+    for (auto& cbd : button_callback_data_) {
+        cbd->modal = this;
+    }
+}
 
 ActionPromptModal& ActionPromptModal::operator=(ActionPromptModal&& other) noexcept {
     if (this != &other) {
         Modal::operator=(std::move(other));
         prompt_data_ = std::move(other.prompt_data_);
         gcode_callback_ = std::move(other.gcode_callback_);
+        alive_ = std::move(other.alive_);
         created_buttons_ = std::move(other.created_buttons_);
         created_text_labels_ = std::move(other.created_text_labels_);
+        button_callback_data_ = std::move(other.button_callback_data_);
+        // Update callback data to point to this instance (moved-to)
+        for (auto& cbd : button_callback_data_) {
+            cbd->modal = this;
+        }
     }
     return *this;
 }
@@ -211,22 +225,17 @@ void ActionPromptModal::create_button(const PromptButton& btn, lv_obj_t* contain
     lv_obj_set_style_text_font(label, theme_manager_get_font("font_body"), LV_PART_MAIN);
     lv_obj_set_style_text_color(label, theme_manager_get_color("text"), LV_PART_MAIN);
 
-    // Store the gcode in user_data for callback
-    // We store a pointer to the string in prompt_data_.buttons, so it remains valid
-    const std::string* gcode_ptr = nullptr;
-    for (size_t i = 0; i < prompt_data_.buttons.size(); ++i) {
-        if (prompt_data_.buttons[i].label == btn.label &&
-            prompt_data_.buttons[i].gcode == btn.gcode) {
-            gcode_ptr = prompt_data_.buttons[i].gcode.empty() ? &prompt_data_.buttons[i].label
-                                                              : &prompt_data_.buttons[i].gcode;
-            break;
-        }
-    }
+    // Create callback data with owned copy of gcode string and alive flag
+    auto cbd = std::make_unique<ButtonCallbackData>();
+    cbd->modal = this;
+    cbd->alive = alive_;
+    cbd->gcode = btn.gcode.empty() ? btn.label : btn.gcode;
 
-    lv_obj_set_user_data(button, const_cast<std::string*>(gcode_ptr));
+    // Add click callback with ButtonCallbackData as user_data
+    lv_obj_add_event_cb(button, on_button_cb, LV_EVENT_CLICKED, cbd.get());
 
-    // Add click callback
-    lv_obj_add_event_cb(button, on_button_cb, LV_EVENT_CLICKED, this);
+    // Transfer ownership to the vector (pointer remains stable)
+    button_callback_data_.push_back(std::move(cbd));
 
     created_buttons_.push_back(button);
 
@@ -259,6 +268,7 @@ void ActionPromptModal::clear_dynamic_content() {
     // but we clear our tracking vectors)
     created_buttons_.clear();
     created_text_labels_.clear();
+    button_callback_data_.clear();
 }
 
 // ============================================================================
@@ -297,28 +307,21 @@ void ActionPromptModal::register_callbacks() {
 // Static Callbacks
 // ============================================================================
 
-ActionPromptModal* ActionPromptModal::get_instance_from_event(lv_event_t* e) {
-    // For dynamically created buttons, we pass 'this' as user_data to the event
-    return static_cast<ActionPromptModal*>(lv_event_get_user_data(e));
-}
-
 void ActionPromptModal::on_button_cb(lv_event_t* e) {
-    auto* self = get_instance_from_event(e);
-    if (!self) {
-        spdlog::warn("[ActionPromptModal] Could not find instance from button event");
+    auto* cbd = static_cast<ButtonCallbackData*>(lv_event_get_user_data(e));
+    if (!cbd) {
+        spdlog::warn("[ActionPromptModal] Button callback data is null");
         return;
     }
 
-    // Get the gcode from the button's user_data
-    auto* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    auto* gcode_ptr = static_cast<std::string*>(lv_obj_get_user_data(target));
-
-    if (gcode_ptr) {
-        self->handle_button_click(*gcode_ptr);
-    } else {
-        spdlog::warn("[ActionPromptModal] Button has no gcode attached");
-        self->hide();
+    // Check if the modal is still alive (guards against use-after-free)
+    auto alive = cbd->alive.lock();
+    if (!alive || !alive->load()) {
+        spdlog::debug("[ActionPromptModal] Modal destroyed before button callback fired");
+        return;
     }
+
+    cbd->modal->handle_button_click(cbd->gcode);
 }
 
 } // namespace helix::ui

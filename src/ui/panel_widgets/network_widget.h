@@ -26,9 +26,12 @@ class NetworkWidget : public PanelWidget {
     }
 
     /// Called when panel activates — re-detects network and starts polling
-    void on_activate();
+    void on_activate() override;
     /// Called when panel deactivates — stops polling
-    void on_deactivate();
+    void on_deactivate() override;
+
+    // XML event callback (public for early registration in register_network_widget)
+    static void network_clicked_cb(lv_event_t* e);
 
   private:
     lv_obj_t* widget_obj_ = nullptr;
@@ -51,7 +54,6 @@ class NetworkWidget : public PanelWidget {
     void handle_network_clicked();
 
     static void signal_poll_timer_cb(lv_timer_t* timer);
-    static void network_clicked_cb(lv_event_t* e);
 };
 
 } // namespace helix

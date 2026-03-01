@@ -568,6 +568,8 @@ nlohmann::json crash_handler::read_crash_file(const std::string& crash_file_path
                 result["reg_bp"] = value;
             } else if (key == "load_base") {
                 result["load_base"] = value;
+            } else if (key == "exception") {
+                result["exception"] = value;
             } else if (key == "bt") {
                 backtrace_arr.push_back(value);
             } else if (key == "map") {

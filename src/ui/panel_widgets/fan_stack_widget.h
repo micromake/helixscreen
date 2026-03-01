@@ -9,12 +9,12 @@
 
 #include <memory>
 #include <string>
+#include <vector>
+
+class FanDial;
 
 namespace helix {
 class PrinterState;
-}
-
-namespace helix {
 
 /// Home widget displaying part, hotend, and auxiliary fan speeds in a compact stack.
 /// Fan icons spin proportionally to fan speed when animations are enabled.
@@ -24,9 +24,11 @@ class FanStackWidget : public PanelWidget {
     explicit FanStackWidget(PrinterState& printer_state);
     ~FanStackWidget() override;
 
+    void set_config(const nlohmann::json& config) override;
+    std::string get_component_name() const override;
     void attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) override;
     void detach() override;
-    void set_row_density(size_t widgets_in_row) override;
+    void on_size_changed(int colspan, int rowspan, int width_px, int height_px) override;
     const char* id() const override {
         return "fan_stack";
     }
@@ -36,12 +38,13 @@ class FanStackWidget : public PanelWidget {
 
   private:
     PrinterState& printer_state_;
+    nlohmann::json config_;
 
     lv_obj_t* widget_obj_ = nullptr;
     lv_obj_t* parent_screen_ = nullptr;
     lv_obj_t* fan_control_panel_ = nullptr;
 
-    // Labels, names, and icons for each fan row
+    // Labels, names, and icons for each fan row (stack mode)
     lv_obj_t* part_label_ = nullptr;
     lv_obj_t* hotend_label_ = nullptr;
     lv_obj_t* aux_label_ = nullptr;
@@ -75,8 +78,19 @@ class FanStackWidget : public PanelWidget {
 
     bool animations_enabled_ = false;
 
+    // Carousel mode: one observer per fan dial (not limited to 3 slots)
+    std::vector<ObserverGuard> carousel_observers_;
+
+    // Carousel mode: owned FanDial instances
+    std::vector<std::unique_ptr<FanDial>> fan_dials_;
+
+    bool is_carousel_mode() const;
+    void attach_stack(lv_obj_t* widget_obj);
+    void attach_carousel(lv_obj_t* widget_obj);
+
     void handle_clicked();
     void bind_fans();
+    void bind_carousel_fans();
     void update_label(lv_obj_t* label, int speed_pct);
     void update_fan_animation(lv_obj_t* icon, int speed_pct);
     void refresh_all_animations();

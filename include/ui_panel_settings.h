@@ -106,9 +106,6 @@ class SettingsPanel : public PanelBase {
     // Restart prompt dialog
     lv_obj_t* restart_prompt_dialog_ = nullptr;
 
-    // Update download modal
-    lv_obj_t* update_download_modal_ = nullptr;
-
     // Action rows (clickable)
     lv_obj_t* display_settings_row_ = nullptr;
     lv_obj_t* filament_sensors_row_ = nullptr;
@@ -117,12 +114,6 @@ class SettingsPanel : public PanelBase {
 
     // Change host modal (lazy-created)
     std::unique_ptr<ChangeHostModal> change_host_modal_;
-
-    // History dashboard overlay (lazy-created)
-    lv_obj_t* history_dashboard_panel_ = nullptr;
-
-    // Info rows (for dynamic updates)
-    lv_obj_t* printer_value_ = nullptr;
 
     // LED state observer (syncs toggle with printer LED state)
     ObserverGuard led_state_observer_;
@@ -134,15 +125,8 @@ class SettingsPanel : public PanelBase {
     /// RAII manager for automatic subject cleanup
     SubjectManager subjects_;
 
-    // Note: brightness_value_subject_ is now managed by DisplaySettingsOverlay
-
     // Info row subjects
-    lv_subject_t version_value_subject_;
-    lv_subject_t about_version_description_subject_;
-    lv_subject_t printer_value_subject_;
     lv_subject_t printer_host_value_subject_;
-    lv_subject_t print_hours_value_subject_;
-    lv_subject_t update_current_version_subject_;
 
     // Visibility subjects (controls which settings are shown)
     lv_subject_t show_touch_calibration_subject_;
@@ -156,27 +140,8 @@ class SettingsPanel : public PanelBase {
     lv_subject_t touch_cal_status_subject_;
     char touch_cal_status_buf_[48]; // e.g., "Calibrated" or "Not calibrated"
 
-    // Static buffers for string subjects (required for lv_subject_init_string)
-    // Note: brightness_value_buf_ is now managed by DisplaySettingsOverlay
-    char version_value_buf_[32];             // e.g., "1.2.3"
-    char about_version_description_buf_[48]; // e.g., "Current Version: 1.2.3"
-    char printer_value_buf_[64];             // e.g., "Voron 2.4"
+    // Static buffers for string subjects
     char printer_host_value_buf_[96];        // e.g., "192.168.1.100:7125"
-    char print_hours_value_buf_[32];         // e.g., "142h 30m"
-    char update_current_version_buf_[32];    // e.g., "1.2.3"
-
-    // Note: Display Settings overlay is now managed by DisplaySettingsOverlay class
-    // See ui_settings_display.h
-    // Note: Sensors overlay is now managed by SensorSettingsOverlay class
-    // See ui_settings_sensors.h
-    // Note: Macro Buttons overlay is now managed by MacroButtonsOverlay class
-    // See ui_settings_macro_buttons.h
-    // Note: Hardware Health overlay is now managed by HardwareHealthOverlay class
-    // See ui_settings_hardware_health.h
-    // Note: Bed mesh panel managed by get_global_bed_mesh_panel()
-    // Note: Z-Offset calibration panel managed by get_global_zoffset_cal_panel()
-    // Note: PID calibration panel managed by get_global_pid_cal_panel()
-    // Note: factory_reset_dialog_ is public (for static callbacks)
 
     // Note: Machine Limits overlay is now managed by MachineLimitsOverlay class
     // See ui_settings_machine_limits.h
@@ -192,14 +157,6 @@ class SettingsPanel : public PanelBase {
     void show_restart_prompt();
 
   public:
-    /**
-     * @brief Fetch print hours from Moonraker history totals
-     *
-     * Called after discovery completes (connection is live) and on
-     * notify_history_changed events. Updates print_hours_value_subject_.
-     */
-    void fetch_print_hours();
-
     /**
      * @brief Populate LED chips from discovered hardware
      *
@@ -234,12 +191,14 @@ class SettingsPanel : public PanelBase {
     void handle_spoolman_settings_clicked();
     void handle_macro_buttons_clicked();
     void handle_machine_limits_clicked();
+    void handle_material_temps_clicked();
     void handle_change_host_clicked();
     void handle_network_clicked();
+    void handle_power_devices_clicked();
     void handle_touch_calibration_clicked();
     void handle_restart_helix_clicked();
     void handle_factory_reset_clicked();
-    void handle_print_hours_clicked();
+    void handle_about_clicked();
     // Note: populate_sensor_list() moved to SensorSettingsOverlay
     // Note: populate_macro_dropdowns() moved to MacroButtonsOverlay
     // Note: populate_hardware_issues() moved to HardwareHealthOverlay
@@ -256,10 +215,6 @@ class SettingsPanel : public PanelBase {
 
     // Note: handle_hardware_action() moved to HardwareHealthOverlay
     // See ui_settings_hardware_health.h
-
-    // Update download modal (lazy-created, show/hide programmatically)
-    void show_update_download_modal();
-    void hide_update_download_modal();
 
     // Dialog pointers accessible to static callbacks
     lv_obj_t* factory_reset_dialog_ = nullptr;
@@ -287,15 +242,17 @@ class SettingsPanel : public PanelBase {
     static void on_spoolman_settings_clicked(lv_event_t* e);
     static void on_macro_buttons_clicked(lv_event_t* e);
     static void on_machine_limits_clicked(lv_event_t* e);
+    static void on_material_temps_clicked(lv_event_t* e);
     static void on_change_host_clicked(lv_event_t* e);
     static void on_network_clicked(lv_event_t* e);
+    static void on_power_devices_clicked(lv_event_t* e);
     static void on_touch_calibration_clicked(lv_event_t* e);
     static void on_factory_reset_clicked(lv_event_t* e);
     static void on_hardware_health_clicked(lv_event_t* e);
     static void on_plugins_clicked(lv_event_t* e);
     static void on_telemetry_view_data(lv_event_t* e);
     static void on_restart_helix_settings_clicked(lv_event_t* e);
-    static void on_print_hours_clicked(lv_event_t* e);
+    static void on_about_clicked(lv_event_t* e);
 
   private:
     //

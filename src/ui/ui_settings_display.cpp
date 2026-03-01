@@ -89,6 +89,10 @@ void DisplaySettingsOverlay::register_callbacks() {
         {"on_brightness_changed", on_brightness_changed},
         // Sleep while printing toggle
         {"on_sleep_while_printing_changed", on_sleep_while_printing_changed},
+#ifdef HELIX_ENABLE_SCREENSAVER
+        // Screensaver toggle
+        {"on_screensaver_changed", on_screensaver_changed},
+#endif
         // Theme explorer callbacks (primary panel)
         {"on_theme_preset_changed", on_theme_preset_changed},
         {"on_theme_settings_clicked", on_theme_settings_clicked},
@@ -172,6 +176,14 @@ void DisplaySettingsOverlay::on_activate() {
     init_bed_mesh_dropdown();
     init_gcode_dropdown();
     init_time_format_dropdown();
+
+#ifndef HELIX_ENABLE_SCREENSAVER
+    // Hide screensaver toggle row (feature not compiled in)
+    lv_obj_t* ss_row = lv_obj_find_by_name(overlay_root_, "row_screensaver");
+    if (ss_row) {
+        lv_obj_add_flag(ss_row, LV_OBJ_FLAG_HIDDEN);
+    }
+#endif
 }
 
 void DisplaySettingsOverlay::on_deactivate() {
@@ -250,7 +262,7 @@ void DisplaySettingsOverlay::init_sleep_while_printing_toggle() {
         } else {
             lv_obj_remove_state(toggle, LV_STATE_CHECKED);
         }
-        spdlog::trace("[{}]   ✓ Sleep while printing toggle", get_name());
+        spdlog::trace("[{}] Sleep while printing toggle initialized", get_name());
     }
 }
 
@@ -275,11 +287,22 @@ void DisplaySettingsOverlay::init_gcode_dropdown() {
     if (!overlay_root_)
         return;
 
-    // G-code mode row is hidden by default, but we still initialize it
     lv_obj_t* gcode_row = lv_obj_find_by_name(overlay_root_, "row_gcode_mode");
-    lv_obj_t* gcode_dropdown = gcode_row ? lv_obj_find_by_name(gcode_row, "dropdown") : nullptr;
+    if (!gcode_row)
+        return;
+
+        // The row's parent container is hidden by default in XML.
+        // Show it only when 3D rendering is compiled in.
+#ifdef ENABLE_GLES_3D
+    lv_obj_t* container = lv_obj_get_parent(gcode_row);
+    if (container) {
+        lv_obj_remove_flag(container, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_height(container, LV_SIZE_CONTENT);
+    }
+#endif
+
+    lv_obj_t* gcode_dropdown = lv_obj_find_by_name(gcode_row, "dropdown");
     if (gcode_dropdown) {
-        // Set initial selection based on current setting (options set in XML)
         int current_mode = DisplaySettingsManager::instance().get_gcode_render_mode();
         lv_dropdown_set_selected(gcode_dropdown, current_mode);
 
@@ -608,21 +631,21 @@ void DisplaySettingsOverlay::on_theme_preset_changed(lv_event_t* e) {
 
 void DisplaySettingsOverlay::on_theme_settings_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[DisplaySettingsOverlay] on_theme_settings_clicked");
-    static_cast<void>(lv_event_get_current_target(e));
+    LV_UNUSED(e);
     get_display_settings_overlay().handle_theme_settings_clicked();
     LVGL_SAFE_EVENT_CB_END();
 }
 
 void DisplaySettingsOverlay::on_apply_theme_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[DisplaySettingsOverlay] on_apply_theme_clicked");
-    static_cast<void>(lv_event_get_current_target(e));
+    LV_UNUSED(e);
     get_display_settings_overlay().handle_apply_theme_clicked();
     LVGL_SAFE_EVENT_CB_END();
 }
 
 void DisplaySettingsOverlay::on_edit_colors_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[DisplaySettingsOverlay] on_edit_colors_clicked");
-    static_cast<void>(lv_event_get_current_target(e));
+    LV_UNUSED(e);
     get_display_settings_overlay().handle_edit_colors_clicked();
     LVGL_SAFE_EVENT_CB_END();
 }
@@ -647,6 +670,17 @@ void DisplaySettingsOverlay::on_preview_open_modal(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
+#ifdef HELIX_ENABLE_SCREENSAVER
+void DisplaySettingsOverlay::on_screensaver_changed(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[DisplaySettingsOverlay] on_screensaver_changed");
+    auto* toggle = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    bool enabled = lv_obj_has_state(toggle, LV_STATE_CHECKED);
+    spdlog::info("[DisplaySettingsOverlay] Screensaver toggled: {}", enabled ? "ON" : "OFF");
+    DisplaySettingsManager::instance().set_screensaver_enabled(enabled);
+    LVGL_SAFE_EVENT_CB_END();
+}
+#endif
+
 void DisplaySettingsOverlay::on_preview_dark_mode_toggled(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[DisplaySettingsOverlay] on_preview_dark_mode_toggled");
     auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
@@ -669,14 +703,10 @@ void DisplaySettingsOverlay::handle_preview_dark_mode_toggled(bool is_dark) {
     }
 
     int selected_index = lv_dropdown_get_selected(dropdown);
-    std::string themes_dir = helix::get_themes_directory();
-    auto themes = helix::discover_themes(themes_dir);
-
-    if (selected_index < 0 || selected_index >= static_cast<int>(themes.size())) {
+    if (selected_index < 0 || selected_index >= static_cast<int>(cached_themes_.size())) {
         return;
     }
 
-    // Pass just the theme name - load_theme_from_file() handles path resolution
     helix::ThemeData theme = helix::load_theme_from_file(cached_themes_[selected_index].filename);
 
     if (!theme.is_valid()) {

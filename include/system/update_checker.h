@@ -89,7 +89,8 @@ class UpdateChecker {
         Verifying = 3,   ///< Verifying tarball integrity
         Installing = 4,  ///< Running install.sh
         Complete = 5,    ///< Install succeeded
-        Error = 6        ///< Download/install failed
+        Error = 6,       ///< Download/install failed
+        Restarting = 7   ///< Static "restarting" screen before _exit(0)
     };
 
     /**

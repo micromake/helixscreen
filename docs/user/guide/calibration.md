@@ -2,6 +2,8 @@
 
 HelixScreen provides built-in tools for the most common Klipper calibration tasks.
 
+> **Looking for touchscreen calibration?** See the [Touch Calibration Guide](touch-calibration.md).
+
 ---
 
 ## Bed Mesh
@@ -85,13 +87,18 @@ Dedicated panel for dialing in your Z-offset when not printing:
 
 ---
 
-## PID Tuning
+## Heater Calibration (PID / MPC)
 
-![PID Tuning Panel](../../images/user/controls-pid.png)
+![Heater Calibration Panel](../../images/user/controls-pid.png)
 
-Calibrate temperature controllers for stable heating:
+Calibrate temperature controllers for stable heating. HelixScreen supports two calibration methods:
 
-1. Navigate to **Advanced > PID**
+- **PID** — Classic proportional-integral-derivative tuning. Works on all Klipper firmware.
+- **MPC** *(Beta)* — Model Predictive Control. A physics-based thermal model that can provide more stable temperatures. Requires [Kalico](https://github.com/Luro02/klipper) firmware (a Klipper fork with MPC support).
+
+### PID Calibration
+
+1. Navigate to **Advanced > Heater Calibration**
 2. Select **Nozzle** or **Bed**
 3. Choose a **material preset** (PLA, PETG, ABS, etc.) or enter a custom target temperature
 4. Optionally set **fan speed** — calibrating with the fan on gives more accurate results for printing conditions
@@ -104,10 +111,28 @@ Calibrate temperature controllers for stable heating:
 - A **15-minute timeout** acts as a safety net for stuck calibrations
 
 **When complete:**
-- View new PID values with **old-to-new deltas** so you can see what changed
+- View new PID values (Kp, Ki, Kd) with **old-to-new deltas** so you can see what changed
 - Tap **Save Config** to persist the new values to your Klipper configuration
 
 > **Tip:** Run PID tuning after any hardware change (new heater, thermistor, or hotend) and with the fan speed you typically use while printing.
+
+### MPC Calibration (Beta — Kalico Only)
+
+If you are running Kalico firmware and have [beta features enabled](beta-features.md), a **Method** selector appears with MPC and PID options. HelixScreen auto-detects Kalico — the selector only appears when it is detected.
+
+1. Navigate to **Advanced > Heater Calibration**
+2. Select **MPC** in the Method selector (marked with a BETA badge)
+3. Select **Nozzle** or **Bed**
+4. Choose a target temperature preset
+5. For nozzle calibration, select a **fan calibration level**: Quick (3 points), Detailed (5 points), or Thorough (7 points) — more points improve accuracy but take longer
+6. If switching from PID to MPC for the first time, enter your **heater wattage** (check your heater's rating — typically 40–60W for hotends)
+7. Tap **Start**
+
+**First-time MPC switch:** If your heater is currently configured for PID, HelixScreen will automatically update your Klipper configuration to MPC mode and restart Klipper before beginning calibration. A progress screen shows "Updating Configuration..." during this step.
+
+**When complete:**
+- View MPC model parameters: Heat Capacity, Sensor Response, Ambient Transfer, and Fan Transfer (nozzle only)
+- Results are automatically saved to your Klipper configuration
 
 ---
 

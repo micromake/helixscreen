@@ -10,6 +10,7 @@
 #include "static_subject_registry.h"
 
 #include <algorithm>
+#include <cstring>
 
 // CRITICAL: Subject updates trigger lv_obj_invalidate() which asserts if called
 // during LVGL rendering. WebSocket callbacks run on libhv's event loop thread,
@@ -98,10 +99,37 @@ void HumiditySensorManager::discover(const std::vector<std::string>& klipper_obj
 
     // Update sensor count subject
     if (subjects_initialized_) {
-        lv_subject_set_int(&sensor_count_, static_cast<int>(sensors_.size()));
+        int new_count = static_cast<int>(sensors_.size());
+        if (lv_subject_get_int(&sensor_count_) != new_count) {
+            lv_subject_set_int(&sensor_count_, new_count);
+        }
     }
 
     spdlog::info("[HumiditySensorManager] Discovered {} humidity sensors", sensors_.size());
+
+    // Auto-assign roles based on sensor name when no roles are configured yet.
+    // If a sensor name contains "chamber", assign CHAMBER role; "dryer" gets DRYER role.
+    // Only auto-assigns if no sensor already holds that role (respects saved config).
+    if (!sensors_.empty()) {
+        bool has_chamber_role = find_config_by_role(HumiditySensorRole::CHAMBER) != nullptr;
+        bool has_dryer_role = find_config_by_role(HumiditySensorRole::DRYER) != nullptr;
+
+        for (auto& sensor : sensors_) {
+            if (!has_chamber_role && sensor.role == HumiditySensorRole::NONE &&
+                sensor.sensor_name.find("chamber") != std::string::npos) {
+                sensor.role = HumiditySensorRole::CHAMBER;
+                has_chamber_role = true;
+                spdlog::info("[HumiditySensorManager] Auto-assigned CHAMBER role to {}",
+                             sensor.sensor_name);
+            } else if (!has_dryer_role && sensor.role == HumiditySensorRole::NONE &&
+                       sensor.sensor_name.find("dryer") != std::string::npos) {
+                sensor.role = HumiditySensorRole::DRYER;
+                has_dryer_role = true;
+                spdlog::info("[HumiditySensorManager] Auto-assigned DRYER role to {}",
+                             sensor.sensor_name);
+            }
+        }
+    }
 
     // Update subjects to reflect new state
     update_subjects();
@@ -528,9 +556,17 @@ void HumiditySensorManager::update_subjects() {
     };
 
     int chamber_humidity = get_chamber_humidity_value();
-    lv_subject_set_int(&chamber_humidity_, chamber_humidity);
-    lv_subject_set_int(&chamber_pressure_, get_chamber_pressure_value());
-    lv_subject_set_int(&dryer_humidity_, get_dryer_humidity_value());
+    if (lv_subject_get_int(&chamber_humidity_) != chamber_humidity) {
+        lv_subject_set_int(&chamber_humidity_, chamber_humidity);
+    }
+    int chamber_pressure = get_chamber_pressure_value();
+    if (lv_subject_get_int(&chamber_pressure_) != chamber_pressure) {
+        lv_subject_set_int(&chamber_pressure_, chamber_pressure);
+    }
+    int dryer_humidity = get_dryer_humidity_value();
+    if (lv_subject_get_int(&dryer_humidity_) != dryer_humidity) {
+        lv_subject_set_int(&dryer_humidity_, dryer_humidity);
+    }
 
     // Update text subject: format as "45%" or "—" if unavailable
     if (chamber_humidity >= 0) {
@@ -540,7 +576,9 @@ void HumiditySensorManager::update_subjects() {
         snprintf(chamber_humidity_text_buf_, sizeof(chamber_humidity_text_buf_), "%s",
                  helix::format::UNAVAILABLE);
     }
-    lv_subject_copy_string(&chamber_humidity_text_, chamber_humidity_text_buf_);
+    if (strcmp(lv_subject_get_string(&chamber_humidity_text_), chamber_humidity_text_buf_) != 0) {
+        lv_subject_copy_string(&chamber_humidity_text_, chamber_humidity_text_buf_);
+    }
 
     spdlog::trace("[HumiditySensorManager] Subjects updated: chamber_humidity={}, "
                   "chamber_pressure={}, dryer_humidity={}, text={}",

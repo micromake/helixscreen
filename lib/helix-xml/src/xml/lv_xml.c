@@ -289,6 +289,10 @@ void * lv_xml_create_in_scope(lv_obj_t * parent, lv_xml_component_scope_t * pare
     state.parent_scope = parent_scope;
 
     lv_obj_t ** parent_node = lv_ll_ins_head(&state.parent_ll);
+    if(parent_node == NULL) {
+        LV_LOG_ERROR("OOM: failed to allocate parent node");
+        return NULL;
+    }
     *parent_node = parent;
 
     /* Create an XML parser and set handlers */
@@ -433,6 +437,10 @@ lv_result_t lv_xml_register_font(lv_xml_component_scope_t * scope, const char * 
     }
 
     f = lv_ll_ins_head(&scope->font_ll);
+    if(f == NULL) {
+        LV_LOG_ERROR("OOM: failed to register font '%s'", name);
+        return LV_RESULT_INVALID;
+    }
     lv_memzero(f, sizeof(*f));
     f->name = lv_strdup(name);
     f->font = font;
@@ -482,6 +490,10 @@ lv_result_t lv_xml_register_subject(lv_xml_component_scope_t * scope, const char
     }
 
     s = lv_ll_ins_head(&scope->subjects_ll);
+    if(s == NULL) {
+        LV_LOG_ERROR("OOM: failed to register subject '%s'", name);
+        return LV_RESULT_INVALID;
+    }
     lv_memzero(s, sizeof(*s));
     s->name = lv_strdup(name);
     s->subject = subject;
@@ -530,6 +542,10 @@ lv_result_t lv_xml_register_timeline(lv_xml_component_scope_t * scope, const cha
     }
 
     at = lv_ll_ins_head(&scope->timeline_ll);
+    if(at == NULL) {
+        LV_LOG_ERROR("OOM: failed to register timeline '%s'", name);
+        return LV_RESULT_INVALID;
+    }
     at->name = lv_strdup(name);
     lv_ll_init(&at->anims_ll, sizeof(lv_xml_anim_timeline_child_t));
 
@@ -577,6 +593,10 @@ lv_result_t lv_xml_register_const(lv_xml_component_scope_t * scope, const char *
     }
 
     cnst = lv_ll_ins_head(&scope->const_ll);
+    if(cnst == NULL) {
+        LV_LOG_ERROR("OOM: failed to register const '%s'", name);
+        return LV_RESULT_INVALID;
+    }
     lv_memzero(cnst, sizeof(*cnst));
 
     cnst->name = lv_strdup(name);
@@ -642,6 +662,10 @@ lv_result_t lv_xml_register_image(lv_xml_component_scope_t * scope, const char *
     }
 
     img = lv_ll_ins_head(&scope->image_ll);
+    if(img == NULL) {
+        LV_LOG_ERROR("OOM: failed to register image '%s'", name);
+        return LV_RESULT_INVALID;
+    }
     lv_memzero(img, sizeof(*img));
     img->name = lv_strdup(name);
     if(lv_image_src_get_type(src) == LV_IMAGE_SRC_FILE) {
@@ -699,6 +723,10 @@ lv_result_t lv_xml_register_event_cb(lv_xml_component_scope_t * scope, const cha
     }
 
     e = lv_ll_ins_head(&scope->event_ll);
+    if(e == NULL) {
+        LV_LOG_ERROR("OOM: failed to register event_cb '%s'", name);
+        return LV_RESULT_INVALID;
+    }
     lv_memzero(e, sizeof(*e));
     e->name = lv_strdup(name);
     e->cb = cb;
@@ -932,6 +960,10 @@ static void view_start_element_handler(void * user_data, const char * name, cons
     }
 
     void ** new_parent = lv_ll_ins_tail(&state->parent_ll);
+    if(new_parent == NULL) {
+        LV_LOG_ERROR("OOM: failed to allocate parent node for '%s'", name);
+        return;
+    }
     *new_parent = state->item;
 
     if(is_view) {

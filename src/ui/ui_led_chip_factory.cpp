@@ -91,7 +91,7 @@ void update_led_chip_state(lv_obj_t* chip, bool selected) {
 
         // Auto-contrast text color against tertiary background
         lv_color_t bg = theme_manager_get_color("tertiary");
-        lv_color_t text = theme_manager_get_contrast_text(bg);
+        lv_color_t text = theme_manager_get_contrast_color(bg);
         lv_obj_set_style_text_color(chip, text, 0);
 
         if (icon) {

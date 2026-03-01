@@ -39,19 +39,17 @@ class FavoriteMacroWidget : public PanelWidget {
 
     void attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) override;
     void detach() override;
+    void on_size_changed(int colspan, int rowspan, int width_px, int height_px) override;
     const char* id() const override {
         return widget_id_.c_str();
     }
 
     /// Event handlers routed from static callbacks
     void handle_clicked();
-    void handle_long_press();
 
     // Static event callbacks (XML-registered)
     static void clicked_1_cb(lv_event_t* e);
-    static void long_press_1_cb(lv_event_t* e);
     static void clicked_2_cb(lv_event_t* e);
-    static void long_press_2_cb(lv_event_t* e);
     static void picker_backdrop_cb(lv_event_t* e);
 
   private:

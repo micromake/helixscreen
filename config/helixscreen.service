@@ -36,6 +36,11 @@ Group=@@HELIX_GROUP@@
 # Working directory for config/assets
 WorkingDirectory=@@INSTALL_DIR@@
 
+# Stop firmware display-management services that conflict with HelixScreen.
+# Creality SonicPad/Nebula ships display-sleep.sh which kills the backlight
+# when X11 isn't running (it polls xset, fails, and interprets that as "Off").
+ExecStartPre=+/bin/sh -c 'systemctl stop display-sleep.service 2>/dev/null || true'
+
 # Unbind framebuffer console before starting (requires root, runs before User= drop)
 # vtcon1 is the fbcon driver; vtcon0 is the dummy. Unbinding prevents kernel
 # messages (dmesg, undervoltage) from painting over the UI via fbcon.
@@ -45,9 +50,10 @@ ExecStartPre=+/bin/sh -c 'for f in /sys/class/vtconsole/vtcon*/bind; do echo 0 >
 ExecStart=@@INSTALL_DIR@@/bin/helix-launcher.sh
 
 # Environment variables
-# Use fbdev display backend on Pi (DRM atomic modesetting has compatibility issues
-# with some SoCs like Allwinner H616). fbdev works reliably across all Pi hardware.
-Environment="HELIX_DISPLAY_BACKEND=fbdev"
+# Display backend: auto-detected by launcher (DRM if GL libs present, else fbdev).
+# Uncomment to force a specific backend:
+# Environment="HELIX_DISPLAY_BACKEND=drm"
+# Environment="HELIX_DISPLAY_BACKEND=fbdev"
 # Override asset directory if ui_xml/assets/config are not under WorkingDirectory
 # Environment="HELIX_DATA_DIR=/usr/share/helixscreen"
 # Logging: auto-detects journal on systemd systems (can override with HELIX_LOG_DEST)

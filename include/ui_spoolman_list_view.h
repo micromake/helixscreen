@@ -112,6 +112,10 @@ class SpoolmanListView {
     int cached_row_height_ = 0;
     int cached_row_gap_ = 0;
 
+    // === Cached Spacer Heights (avoid redundant lv_obj_set_height → relayout) ===
+    int last_leading_height_ = -1;
+    int last_trailing_height_ = -1;
+
     // === Internal Methods ===
     void init_pool();
     void create_spacers();

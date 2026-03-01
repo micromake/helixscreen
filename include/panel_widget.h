@@ -5,6 +5,10 @@
 
 #include "lvgl/lvgl.h"
 
+#include <string>
+
+#include "hv/json.hpp"
+
 namespace helix {
 
 /// Base class for home widgets that need C++ behavioral wiring.
@@ -17,6 +21,19 @@ class PanelWidget {
     /// that XML bindings depend on. Default is no-op.
     virtual void init_subjects() {}
 
+    /// Set per-widget config from PanelWidgetEntry. Called after factory
+    /// creation, before get_component_name() and attach().
+    virtual void set_config(const nlohmann::json& config) {
+        (void)config;
+    }
+
+    /// Return the XML component name to use for this widget. Allows widgets
+    /// to select different XML layouts based on their config (e.g. carousel
+    /// vs stack mode). Default returns "panel_widget_<id>".
+    virtual std::string get_component_name() const {
+        return std::string("panel_widget_") + id();
+    }
+
     /// Called after XML obj is created. Wire observers, animators, callbacks.
     /// @param widget_obj  The root lv_obj from lv_xml_create()
     /// @param parent_screen  Screen for lazy overlay creation
@@ -25,11 +42,23 @@ class PanelWidget {
     /// Called before widget destruction. Clean up observers and state.
     virtual void detach() = 0;
 
-    /// Called after attach() with the number of widgets sharing this row.
-    /// Widgets can use this to adjust font sizes or layout density.
-    /// Default is no-op.
-    virtual void set_row_density(size_t widgets_in_row) {
-        (void)widgets_in_row;
+    /// Called when the owning panel becomes visible.
+    virtual void on_activate() {}
+
+    /// Called when the owning panel goes offscreen.
+    virtual void on_deactivate() {}
+
+    /// Called after grid cell placement and whenever the widget is resized.
+    /// Widgets can adapt their content layout based on available space.
+    /// @param colspan  Grid columns spanned
+    /// @param rowspan  Grid rows spanned
+    /// @param width_px  Actual pixel width of the widget
+    /// @param height_px  Actual pixel height of the widget
+    virtual void on_size_changed(int colspan, int rowspan, int width_px, int height_px) {
+        (void)colspan;
+        (void)rowspan;
+        (void)width_px;
+        (void)height_px;
     }
 
     /// Stable identifier matching PanelWidgetDef::id

@@ -1,8 +1,9 @@
 locale: zh
 translations:
-  ' elapsed · ': ' elapsed · '
+  ' elapsed · ': ' 已用 · '
   ' frames captured': ' 帧已捕获'
-  ' left': ' left'
+  ' left': ' 剩余'
+  '%u layers': '%u 层'
   + Add: + 添加
   + Add Preset: + 添加预设
   + New: + 新建
@@ -12,22 +13,39 @@ translations:
   --°C: --°C
   0 slots: '{0} 个料仓'
   0.4-2mm direct drive, 4-6mm bowden: 直驱 0.4-2mm，远程挤出 4-6mm
+  1 event queued: 1 个事件排队中
+  1 layer: 1 层
+  1 minute: 1 分钟
   1 more tap to {} beta features: 再点击 1 次以{}测试功能
   1. Printer homes and probes the bed: 1. 打印机归位并探测热床
   1. Printer will home and probe each screw: 1. 打印机将归位并探测每个螺丝位置
+  10 minutes: 10 分钟
+  12 Hour: 12 小时
+  120 seconds: 120 秒
+  15 seconds: 15 秒
+  2 minutes: 2 分钟
   2. Place paper between nozzle and bed: 2. 将纸张放在喷嘴和热床之间
   2. Results show how much to turn each screw: 2. 结果显示每个螺丝需要旋转多少
+  24 Hour: 24 小时
+  2D Heatmap: 2D 热图
+  2D Layers: 2D 图层
   3. Adjust screws, then re-probe to verify: 3. 调整螺丝，然后重新探测以验证
   3. Lower nozzle until paper drags slightly: 3. 降低喷嘴直到纸张有轻微阻力
+  30 minutes: 30 分钟
+  30 seconds: 30 秒
   3D Preview: 3D 预览
+  3D View: 3D 视图
   4. Paper should move but with resistance: 4. 纸张应能移动但有阻力
   4. Repeat until bed is level: 4. 重复直到热床水平
+  5 minutes: 5 分钟
   5V: 5V
+  60 seconds: 60 秒
   = Loosen: = 松开
   = Tighten: = 拧紧
   ABOUT: 关于
   ABS: ABS
   ADXL: ADXL
+  AFC Version Warning: AFC版本警告
   AFC failure reset complete: AFC故障重置完成
   AFC failure reset failed: AFC故障重置失败
   AFC recovery complete: AFC恢复完成
@@ -44,7 +62,6 @@ translations:
   Abort: 中止
   Abort failed: 中止失败
   Aborting AFC operation...: 正在中止AFC操作...
-  About HelixScreen: 关于 HelixScreen
   Accel to Decel: 加速到减速
   Acceleration to deceleration limit (mm/s²): 加速到减速限制 (mm/s²)
   Accelerometers: 加速度计
@@ -63,6 +80,7 @@ translations:
   Adjusts individual characteristics of your heaters for optimal control: 调整加热器的各项参数以实现最佳控制
   Advanced Setting: 高级设置
   After running the commands, tap Check Again below.: 执行命令后，点击下方的重新检查。
+  Alert: 警报
   All: 全部
   All screws are within tolerance.: 所有螺丝都在公差范围内。
   Allow display to sleep during active prints: 打印时允许屏幕休眠
@@ -81,6 +99,7 @@ translations:
   Apply Changes: 应用更改
   Applying...: 正在应用...
   Are you sure you want to cancel this print? All progress will be lost.: 确定要取消此打印吗？所有进度将丢失。
+  Are you sure? This will power off or restart the printer host.: 确定吗？这将关闭或重启打印机主机。
   Assign Klipper macros to control LEDs via on/off, toggle, or presets: 分配 Klipper 宏通过开/关、切换或预设控制 LED
   Assign a role to enable sensor monitoring: 分配角色以启用传感器监控
   Auto: 自动
@@ -104,13 +123,14 @@ translations:
   Bed Leveling: 热床调平
   Bed Mesh: 热床网格
   Bed Mesh Render: 热床网格渲染
+  Bed Moves: 热床移动
   Bed Screw Adjustment: 热床螺丝调整
   Bed Screws: 热床螺丝
   Bed Temp: 热床温度
   Bed is Level!: 热床已水平！
   Bed °C: 热床 °C
   'Bed:': 热床：
-  Beta features are enabled: 已启用测试版功能
+  Beta: 测试版
   'Beta features: OFF': '测试版功能: 关'
   'Beta features: ON': '测试版功能: 开'
   Black: 黑色
@@ -143,7 +163,12 @@ translations:
   Calibration & Tools: 校准与工具
   Calibration Complete!: 校准完成！
   Calibration Failed: 校准失败
+  Calibration complete: 校准完成
+  Calibration complete!: 校准完成！
+  Calibration complete! Press 'Next' to continue.: "校准完成！按“下一步”继续。"
+  Calibration failed - touch targets more precisely.: 校准失败 – 请更精确地触摸目标。
   Calibration saved but cannot apply on SDL display: 校准已保存，但无法在 SDL 显示上应用
+  Calibration timed out. Please try again.: 校准超时。请重试。
   Cancel: 取消
   Cancel Escalation: 取消升级
   Cancel Print: 取消打印
@@ -160,6 +185,7 @@ translations:
   Check Again: 重新检查
   Check for Updates: 检查更新
   Check the filament path and try again.: 检查耗材路径并重试。
+  Checking accelerometer...: 正在检查加速度计...
   Checking for plugin...: 正在检查插件...
   Checking slots...: 正在检查料仓...
   Checking timelapse plugin...: 正在检查延时摄影插件...
@@ -171,7 +197,7 @@ translations:
   Choose rendering mode for bed mesh visualization: 选择热床网格可视化的渲染模式
   Choose sound style: 选择声音风格
   Clean Nozzle: 清洁喷嘴
-  Chm: 腔体
+  Cleaning Nozzle...: 正在清洁喷嘴...
   Clear: 清除
   Clear All: 全部清除
   Clear All Events: 清除所有事件
@@ -186,8 +212,11 @@ translations:
   Color Mismatch: 颜色不匹配
   Color Sensors: 颜色传感器
   Complete: 完成
+  Complete!: 完成！
   Completed: 已完成
   Completed in 3 probes: 已完成 3 次探测
+  Completed prints will appear here: 已完成的打印将显示在这里
+  Computing calibration...: 正在计算校准...
   Config-defined (read-only): 配置定义（只读）
   Configuration added successfully.: 配置添加成功。
   Configuration already present.: 配置已存在。
@@ -217,6 +246,7 @@ translations:
   Connection successful!: 连接成功！
   Console: 控制台
   Control optional print start features: 控制可选的打印启动功能
+  Control power relays and smart outlets: 控制电源继电器和智能插座
   Control power switches and relays: 控制电源开关和继电器
   Controlled by hardware sensor: 由硬件传感器控制
   Cool Down: 冷却
@@ -240,6 +270,12 @@ translations:
   Current Version: 当前版本
   Current Z Position: 当前 Z 位置
   'Current name:': 当前名称：
+  'Current: %s · Slot %d': '当前: %s · 插槽 %d'
+  'Current: %s Â· Slot %d': '当前: %s Â· 插槽 %d'
+  'Current: Bypass': '当前: 旁通'
+  'Current: Slot %d': '当前: 插槽 %d'
+  'Current: Tool %d': '当前: 工具 %d'
+  Currently Loaded: 当前已装载
   Currently printing: 正在打印
   Custom: 自定义
   Custom...: 自定义...
@@ -250,6 +286,8 @@ translations:
   Danger: 危险
   Dark Mode: 深色模式
   Database: 数据库
+  Date (newest): 日期（最新）
+  Date (oldest): 日期（最早）
   Day: 日
   Default border thickness: 默认边框厚度
   Define macros in your printer.cfg: 在 printer.cfg 中定义宏
@@ -257,14 +295,17 @@ translations:
   Delete File?: 删除文件？
   Delete Profile?: 删除配置？
   Delete Spool?: 删除料盘？
+  Delete Video?: 删除视频？
   'Delta:': 差值：
   Deploy: 部署
+  Dev: 开发版
   Dev channel requires dev_url in config: 开发频道需要在配置中设置 dev_url
   Device name is required: 设备名称为必填项
   Disable: 禁用
   Disable Motors?: 关闭电机？
   Discard: 丢弃
   Discard Changes?: 丢弃更改？
+  Disconnected: 已断开
   Discord Community: Discord 社区
   Discovered Printers: 已发现的打印机
   Dismiss: 忽略
@@ -332,6 +373,7 @@ translations:
   Exhaust Fan: 排气扇
   Explore how the selected palette shapes text, controls, and status colors.: 探索所选调色板如何影响文本、控件和状态颜色。
   Explore palette and preview: 探索调色板和预览
+  External: 外部
   External Spool: 外部料盘
   Extra prime to compensate ooze: 额外挤出以补偿溢料
   Extrude: 挤出
@@ -388,6 +430,7 @@ translations:
   Flat Concentric Rings (existing ams_slot): 扁平同心环（现有 ams_slot）
   Flow Rate: 流量
   Forming tip...: 正在成型尖端...
+  Found 1 printer: 找到 1 台打印机
   Framerate: 帧率
   Front: 前
   G-code Console: G-code 控制台
@@ -401,7 +444,6 @@ translations:
   H: 头
   HELP & SUPPORT: 帮助与支持
   Happy Hare MMU: Happy Hare MMU
-  HE: 喷头
   Hardware: 硬件
   Hardware Health: 硬件状态
   Hardware Issues: 硬件问题
@@ -418,9 +460,15 @@ translations:
   Heatbed Temperature: 热床温度
   Heated Bed: 加热床
   Heater: 加热器
+  Heating (%d°C below minimum): "加热中（低于最低温度 %d°C）"
+  Heating Bed...: 正在加热热床...
+  Heating Nozzle...: 正在加热喷嘴...
+  Heating to %d°C...: "正在加热至 %d°C..."
+  Heating to target...: 正在加热至目标温度...
   Heating...: 正在加热...
   HelixScreen: HelixScreen
   HelixScreen Crashed: HelixScreen 崩溃
+  HelixScreen is detecting your display orientation: HelixScreen正在检测显示屏方向
   HelixScreen will integrate with your filament changer for multi-spool/color print operations.: HelixScreen 将与您的耗材更换器集成，用于多料盘/多色打印操作。
   Help improve HelixScreen?: 帮助改进 HelixScreen？
   Higher = faster: 越高 = 越快
@@ -428,6 +476,7 @@ translations:
   Home Widgets: 主页小组件
   Home failed: 归位失败
   Homing AFC system...: AFC系统归位中...
+  Homing...: 正在归零...
   Horizontal Progress (Leveling Wizard): 水平进度（调平向导）
   Host: 主机
   Hotend: 热端
@@ -437,6 +486,7 @@ translations:
   How often to check Spoolman for weight updates: 检查 Spoolman 重量更新的频率
   Humidity: 湿度
   Humidity Sensors: 湿度传感器
+  Hyperlapse: 延时摄影
   IMPORT FROM USB: 从 USB 导入
   'IP:': IP：
   Idle: 空闲
@@ -448,6 +498,7 @@ translations:
   Initializing...: 初始化中...
   Input: 输入
   Input Shaper: 输入整形器
+  Input Shaper Help: 输入整形器帮助
   Input Shaping: 输入整形
   Input shaper calibration sensors: 输入整形器校准传感器
   Input shaper settings applied!: 输入整形器设置已应用！
@@ -474,6 +525,7 @@ translations:
   Keyboard Test (Gboard-style): 键盘测试（Gboard 风格）
   Klipper: Klipper
   'Klipper firmware has disconnected from the host. ': 'Klipper 固件已与主机断开连接。 '
+  'Klipper has entered an error state. This is typically caused by an MCU ': Klipper已进入错误状态。这通常是由MCU
   'Klipper has entered shutdown state. This may be due to an emergency stop, ': Klipper 已进入关机状态。这可能是由于紧急停止、
   Klipper will restart to apply changes: Klipper 将重启以应用更改
   Klipper will restart to apply changes.: Klipper 将重启以应用更改。
@@ -492,17 +544,20 @@ translations:
   Last print cancelled: 上次打印已取消
   Last print failed: 上次打印失败
   Later: 稍后
+  Layer: 层
   Layer Height: 层高
   Layer mode captures one frame per layer change. Best for most prints.: 层模式在每次换层时捕获一帧。适用于大多数打印。
   'Layer:': 层：
   Layers: 层
   Learn More: 了解更多
   'Length:': 长度：
+  Leveling Gantry...: 正在调平龙门...
   Light: 浅色
   Link to Spoolman: 关联到Spoolman
   Load: 加载
   Load Filament: 加载耗材
   Loaded: 已加载
+  Loading Bed Mesh...: 正在加载热床网格...
   Loading Error: 加载错误
   Loading G-code...: 正在加载 G-code...
   Loading filament...: 正在加载耗材...
@@ -548,6 +603,7 @@ translations:
   Match your typical print fan speed: 匹配您常用的打印风扇速度
   Material: 材料
   Material Design Spinner: Material Design 加载动画
+  Max: 最大
   Max Accel: 最大加速
   Max Acceleration: 最大加速度
   Max Velocity: 最大速度
@@ -560,6 +616,7 @@ translations:
   Measured: 已测量
   Memory (MB): 内存 (MB)
   Mesh Complete: 网格完成
+  Min: 最小
   Mode: 模式
   Modified: 已修改
   Month: 月
@@ -574,6 +631,7 @@ translations:
   : 移动打印头以测量每个轴上的振动频率。需要 2-3 分钟。打印机会发出噪音——这是正常的。
   Multi Filament System Overview: 多耗材系统概览
   Multi-Filament: 多耗材
+  'Multi-Filament:': 多耗材：
   Multi-Material: 多材料
   My Custom Theme: 我的自定义主题
   My Panel: 我的面板
@@ -588,6 +646,7 @@ translations:
   Network Name (SSID): 网络名称 (SSID)
   Network Settings: 网络设置
   Network Test: 网络测试
+  Never: 从不
   'New Spool: Step ': '新料盘：步骤 '
   'New Spool: Step 1 of 3': 新料盘：步骤 1 / 3
   New Version Available: 发现新版本
@@ -610,7 +669,10 @@ translations:
   No filaments found: 未找到耗材
   No file loaded: 未加载文件
   No files available for printing: 没有可用于打印的文件
+  No images found on USB drive: USB驱动器上未找到图片
   No macros available: 无可用宏
+  No matching prints: 没有匹配的打印
+  No mesh data: 没有网格数据
   No mesh loaded: 未加载网格
   No network. Scan QR code to report on your phone.: 无网络。扫描二维码在手机上报告。
   No networks found: 未找到网络
@@ -618,11 +680,13 @@ translations:
   No plugins found: 未找到插件
   No presets: 无预设
   No preview: 无预览
+  No print history found: 未找到打印历史
   No print history yet: 暂无打印历史
   No print start macro found: 未找到打印启动宏
   No printers found: 未找到打印机
   No profiles available: 无可用配置
   No sensors detected: 未检测到传感器
+  No spool assigned: 未分配料盘
   No spools found in Spoolman: Spoolman中未找到料盘
   No timelapse videos found: 未找到延时视频
   No vendors found: 未找到供应商
@@ -634,11 +698,13 @@ translations:
   Not yet calibrated: 尚未校准
   Notes: 备注
   Notes (optional): 备注（可选）
+  Notification: 通知
   Notifications: 通知
   Notify when print finishes: 打印完成时通知
   Nozzle: 喷嘴
   'Nozzle ': '喷嘴 '
   Nozzle Clean: 喷嘴清洁
+  Nozzle Moves: 喷嘴移动
   Nozzle Priming: 喷嘴预挤
   Nozzle Temp: 喷嘴温度
   Nozzle Temperature: 喷嘴温度
@@ -668,7 +734,6 @@ translations:
   Paper Test Calibration: 纸张测试校准
   Part Cooling Fan: 零件冷却风扇
   Part Fan: 零件风扇
-  Part: 零件
   Password: 密码
   Password cannot be empty: 密码不能为空
   Pause: 暂停
@@ -683,6 +748,7 @@ translations:
   Pick: 选取
   Pick Color: 选择颜色
   Place PNG or JPEG files in config/custom_images/ to add custom images: 将 PNG 或 JPEG 文件放在 config/custom_images/ 中以添加自定义图片
+  'Place image files (PNG, JPEG, BMP, GIF) in config/custom_images/. Max size: 2048×2048 pixels.': '将图片文件 (PNG, JPEG, BMP, GIF) 放入 config/custom_images/。最大尺寸: 2048×2048 像素。'
   Place plugins in the plugins directory to extend HelixScreen: 将插件放在 plugins 目录中以扩展 HelixScreen
   Play a test beep: 播放测试提示音
   Please enter a theme name: 请输入主题名称
@@ -701,7 +767,10 @@ translations:
   Power: 电源
   Power Control: 电源控制
   Power Devices: 电源设备
+  Preparing: 准备中
   Preparing Print: 准备打印
+  Preparing Print...: 正在准备打印...
+  Preparing...: 正在准备...
   Preset: 预设
   Presets: 预设
   Previous: 上一步
@@ -754,6 +823,7 @@ translations:
   Progress Bar Tests: 进度条测试
   Purge: 排料
   Purging nozzle: 正在清洗喷嘴
+  Purging...: 正在清料...
   QGL: QGL
   QUEUED EVENTS: 排队事件
   QUICK BUTTONS: 快捷按钮
@@ -765,6 +835,8 @@ translations:
   'RSS:': RSS：
   Re-probe: 重新探测
   Ready: 就绪
+  Reboot: 重启
+  Rebooting...: 正在重启...
   Recalibrate or view detailed results anytime in Settings.: 可随时在设置中重新校准或查看详细结果。
   Record Timelapse: 录制延时摄影
   Record timelapses of your prints: 录制打印延时摄影
@@ -806,6 +878,7 @@ translations:
   Restarting HelixScreen...: 正在重启 HelixScreen…
   Restarting Klipper...: 正在重启 Klipper...
   Restarting Moonraker...: 正在重启 Moonraker...
+  Restarting...: 重启中...
   Resume: 恢复
   Resume Print: 恢复打印
   Retract: 回抽
@@ -817,6 +890,7 @@ translations:
   Review detected hardware validation issues: 查看检测到的硬件验证问题
   Review your changes: 查看您的更改
   'Role:': 角色：
+  'Rotation: %d\xc2\xb0 - %ds remaining (or wait to retry)': '旋转: %d\xc2\xb0 - 剩余%ds (或等待重试)'
   Run: 运行
   Run Macro: 运行宏
   Runout Sensor: 断料传感器
@@ -844,6 +918,7 @@ translations:
   Saving config... Klipper will restart.: 正在保存配置... Klipper 将重启。
   Saving will restart Klipper and CANCEL any active print!: 保存将重启 Klipper 并取消任何正在进行的打印！
   Scanning for networks...: 正在扫描网络...
+  'Score: 0': '得分: 0'
   Screen Dim: 屏幕变暗
   Screen dims to lower brightness after period of inactivity: 一段时间不活动后屏幕会降低亮度
   Screen will dim after the selected period of inactivity: 在选定的不活动时间后屏幕将变暗
@@ -881,7 +956,6 @@ translations:
   'Set ': '设置 '
   Set Active: 设为活动
   Settings: 设置
-  Settings reset to defaults: 设置已重置为默认值
   Settings reset to defaults. Restarting...: 设置已重置为默认值。正在重启...
   Setup Timelapse: 设置延时摄影
   Shadow Intensity: 阴影强度
@@ -889,6 +963,9 @@ translations:
   'Share this code in Discord or support:': 请将此代码分享至 Discord 或支持渠道：
   'Shininess:': 光泽度：
   Show detailed print preparation status: 显示详细的打印准备状态
+  Shutdown: 关机
+  Shutdown / Reboot: 关机 / 重启
+  Shutting down...: 正在关机...
   Side: 侧面
   Single toggle macro. State is not tracked.: 单个切换宏。不跟踪状态。
   Size: 大小
@@ -915,7 +992,9 @@ translations:
   Spool wt (g): 料盘重量 (g)
   Spoolman: Spoolman
   Spoolman has no spools configured: Spoolman 未配置料盘
+  Spoolman unavailable — filament weights may be stale: Spoolman不可用 — 耗材重量可能已过期
   Square Corner Velocity: 直角转弯速度
+  Stable: 稳定版
   Standby: 待机
   Start: 开始
   Start Anyway: 仍然开始
@@ -923,6 +1002,8 @@ translations:
   Start Print: 开始打印
   Start Probing: 开始探测
   Started: 已开始
+  Starting Print...: 正在启动打印...
+  Starting...: 正在启动...
   Startup, auto-control, and macro devices: 启动、自动控制和宏设备
   Status: 状态
   Status icons: 状态图标
@@ -947,6 +1028,12 @@ translations:
   THEME COLORS: 主题颜色
   TPU: TPU
   Takes 3-5 min. Do not interrupt.: 需要 3-5 分钟。请勿中断。
+  Tap again to confirm this orientation: 再次点击确认此方向
+  Tap anywhere if this text is right-side up: 如果文字方向正确请点击任意位置
+  Tap anywhere to begin: 点击任意位置开始
+  Tap anywhere to begin calibration: 点击任意位置开始校准
+  Tap the crosshair (point %1$d of 3) \xe2\x80\x94 touch %2$d of %3$d: 点击十字准星（第 %1$d 个点，共 3 个）\xe2\x80\x94 触摸 %2$d / %3$d
+  Tap to assign: 点击分配
   Tap to show keyboard...: 点击显示键盘...
   Target Temperature: 目标温度
   Telemetry Data: 遥测数据
@@ -960,6 +1047,7 @@ translations:
   Test Network: 测试网络
   Test Sound: 测试声音
   Test probe repeatability: 测试探针重复性
+  'Testing rotation: %d\xc2\xb0 (%d/%d) - %ds remaining': '测试旋转: %d\xc2\xb0 (%d/%d) - 剩余%ds'
   Thanks! Anonymous usage data helps improve HelixScreen.: 感谢！匿名使用数据有助于改进 HelixScreen。
   Thanks! TOTALLY anonymous usage data helps improve HelixScreen.: 感谢！完全匿名的使用数据有助于改进 HelixScreen。
   ? The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints.
@@ -990,6 +1078,7 @@ translations:
   This will reset all settings to defaults. This action cannot be undone.: 这将把所有设置重置为默认值。此操作无法撤销。
   This will restart Klipper firmware. Any active operations will be interrupted.: 将重启Klipper固件。所有正在进行的操作将被中断。
   This will restart Klipper.: 这将重启 Klipper。
+  Thumbnail Only: 仅缩略图
   Time: 时间
   Time Format: 时间格式
   Time to wait before escalating to emergency stop: 升级为紧急停止前的等待时间
@@ -1012,9 +1101,12 @@ translations:
   Total Prints: 总打印数
   Touch Calibration: 触摸校准
   Touch anywhere to test calibration: 触摸任意位置测试校准
+  Touch anywhere to verify accuracy: 触摸任意位置验证精度
   Touch screen to wake from sleep: 触摸屏幕唤醒
+  Touch the target (point %1$d of 3) \xe2\x80\x94 touch %2$d of %3$d: 触摸目标（第 %1$d 个点，共 3 个）\xe2\x80\x94 触摸 %2$d / %3$d
   Travels: 空驶
   'Troubleshooting:': 故障排除：
+  Try adjusting your search or filters: 尝试调整搜索或筛选条件
   Tune: 调优
   Tune at the temperature you print most often.: 在您最常打印的温度下进行调优。
   Tuning tower enabled - start a print to test: 调优塔已启用 - 开始打印以测试
@@ -1041,7 +1133,6 @@ translations:
   Update Available: 有可用更新
   Update Channel: 更新通道
   Update Failed: 更新失败
-  Update Installed: 更新已安装
   Upload: 上传
   Upload Debug Bundle: 上传调试捆绑包
   Upload Failed: 上传失败
@@ -1109,6 +1200,7 @@ translations:
   Z Movement: Z 轴移动
   Z Offset: Z 偏移
   Z Range: Z 范围
+  Z Tilt Adjust...: 正在调整Z倾斜...
   Z probes for bed leveling and mesh generation: 用于热床调平和网格生成的 Z 探针
   Z-Offset: Z 偏移
   Z-Offset Calibration: Z 偏移校准
@@ -1133,6 +1225,7 @@ translations:
   of: 的
   set to: 设置为
   started: 已启动
+  tall: 高
   used: 已使用
   v{} is available. Tap to update.: v{} 可用。点击以更新。
   '{} more taps to {} beta features': 再点击 {} 次以{}测试功能

@@ -50,8 +50,8 @@ jobs:
           build/lib/
           lib/libhv/lib/
           lib/libhv/include/hv/
-          lib/tinygl/lib/
-        key: deps-ubuntu-22.04-${{ hashFiles('lib/libhv/**/*.c', 'lib/libhv/**/*.cpp', 'lib/libhv/**/*.h', 'lib/tinygl/src/*.c', 'lib/tinygl/include/**/*.h', 'lib/wpa_supplicant/src/**/*.c', 'lib/wpa_supplicant/src/**/*.h', 'Makefile', 'mk/deps.mk') }}
+
+        key: deps-ubuntu-22.04-${{ hashFiles('lib/libhv/**/*.c', 'lib/libhv/**/*.cpp', 'lib/libhv/**/*.h', 'lib/wpa_supplicant/src/**/*.c', 'lib/wpa_supplicant/src/**/*.h', 'Makefile', 'mk/deps.mk') }}
         restore-keys: deps-ubuntu-22.04-
 
     - name: Cache ccache
@@ -222,8 +222,8 @@ jobs:
           build/lib/
           lib/libhv/lib/
           lib/libhv/include/hv/
-          lib/tinygl/lib/
-        key: deps-ubuntu-22.04-${{ hashFiles('lib/libhv/**/*.c', 'lib/libhv/**/*.cpp', 'lib/libhv/**/*.h', 'lib/tinygl/src/*.c', 'lib/tinygl/include/**/*.h', 'lib/wpa_supplicant/src/**/*.c', 'lib/wpa_supplicant/src/**/*.h', 'Makefile', 'mk/deps.mk') }}
+
+        key: deps-ubuntu-22.04-${{ hashFiles('lib/libhv/**/*.c', 'lib/libhv/**/*.cpp', 'lib/libhv/**/*.h', 'lib/wpa_supplicant/src/**/*.c', 'lib/wpa_supplicant/src/**/*.h', 'Makefile', 'mk/deps.mk') }}
         restore-keys: deps-ubuntu-22.04-
 
     - name: Cache ccache
@@ -300,8 +300,8 @@ jobs:
           build/lib/
           lib/libhv/lib/
           lib/libhv/include/hv/
-          lib/tinygl/lib/
-        key: deps-ubuntu-22.04-${{ hashFiles('lib/libhv/**/*.c', 'lib/libhv/**/*.cpp', 'lib/libhv/**/*.h', 'lib/tinygl/src/*.c', 'lib/tinygl/include/**/*.h', 'lib/wpa_supplicant/src/**/*.c', 'lib/wpa_supplicant/src/**/*.h', 'Makefile', 'mk/deps.mk') }}
+
+        key: deps-ubuntu-22.04-${{ hashFiles('lib/libhv/**/*.c', 'lib/libhv/**/*.cpp', 'lib/libhv/**/*.h', 'lib/wpa_supplicant/src/**/*.c', 'lib/wpa_supplicant/src/**/*.h', 'Makefile', 'mk/deps.mk') }}
         restore-keys: deps-ubuntu-22.04-
 
     - name: Cache ccache
@@ -394,8 +394,8 @@ jobs:
           build/lib/
           lib/libhv/lib/
           lib/libhv/include/hv/
-          lib/tinygl/lib/
-        key: deps-macos-14-${{ hashFiles('lib/libhv/**/*.c', 'lib/libhv/**/*.cpp', 'lib/libhv/**/*.h', 'lib/tinygl/src/*.c', 'lib/tinygl/include/**/*.h') }}
+
+        key: deps-macos-14-${{ hashFiles('lib/libhv/**/*.c', 'lib/libhv/**/*.cpp', 'lib/libhv/**/*.h') }}
         restore-keys: deps-macos-14-
 
     - name: Cache ccache

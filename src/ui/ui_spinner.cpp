@@ -51,31 +51,53 @@ static int32_t get_responsive_px(const char* token_name, int32_t fallback) {
 static int32_t g_last_start = 0;
 static int32_t g_last_end = 0;
 
+// Clamp an angle so the sweep (from..to) never falls below ARC_MIN_SWEEP.
+// At animation repeat boundaries the two independent animations can desync
+// by one frame, creating an invalid negative sweep that crashes NEON blend.
+static int32_t clamp_sweep(int32_t angle, int32_t reference, bool angle_is_start) {
+    int32_t sweep = angle_is_start ? (reference - angle) : (angle - reference);
+    if (sweep < 0)
+        sweep += 360;
+    if (sweep >= ARC_MIN_SWEEP)
+        return angle;
+
+    int32_t clamped = angle_is_start ? (reference - ARC_MIN_SWEEP) : (reference + ARC_MIN_SWEEP);
+    if (clamped < 0)
+        clamped += 360;
+    if (clamped >= 360)
+        clamped -= 360;
+    return clamped;
+}
+
 static void arc_anim_start_angle(void* obj, int32_t value) {
+    value = clamp_sweep(value, g_last_end, /*angle_is_start=*/true);
     g_last_start = value;
+
     if (DEBUG_SPINNER) {
         static int counter = 0;
         static int32_t min_sweep = 999, max_sweep = 0;
-        int32_t sweep = g_last_end - value;
-        if (sweep < 0)
-            sweep += 360; // Handle wrap
+        int32_t cur_sweep = g_last_end - value;
+        if (cur_sweep < 0)
+            cur_sweep += 360; // Handle wrap
 
-        if (sweep < min_sweep)
-            min_sweep = sweep;
-        if (sweep > max_sweep)
-            max_sweep = sweep;
+        if (cur_sweep < min_sweep)
+            min_sweep = cur_sweep;
+        if (cur_sweep > max_sweep)
+            max_sweep = cur_sweep;
 
         // Log every 8 frames with min/max tracking
         if (counter++ % 8 == 0) {
             spdlog::info("[SPIN] start={:3d} end={:3d} sweep={:3d} [range: {:3d}-{:3d}]", value,
-                         g_last_end % 360, sweep, min_sweep, max_sweep);
+                         g_last_end % 360, cur_sweep, min_sweep, max_sweep);
         }
     }
     lv_arc_set_start_angle(static_cast<lv_obj_t*>(obj), static_cast<uint32_t>(value));
 }
 
 static void arc_anim_end_angle(void* obj, int32_t value) {
+    value = clamp_sweep(value, g_last_start, /*angle_is_start=*/false);
     g_last_end = value;
+
     lv_arc_set_end_angle(static_cast<lv_obj_t*>(obj), static_cast<uint32_t>(value));
 }
 

@@ -14,6 +14,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include <cstring>
+
 namespace helix {
 
 void PrinterMotionState::init_subjects(bool register_xml) {
@@ -68,15 +70,26 @@ void PrinterMotionState::update_from_status(const nlohmann::json& status) {
             // Note: Klipper can send null position values before homing or during errors
             // Store positions as centimillimeters (×100) for 0.01mm precision
             if (pos.size() >= 3 && pos[0].is_number() && pos[1].is_number() && pos[2].is_number()) {
-                lv_subject_set_int(&position_x_, helix::units::to_centimm(pos[0].get<double>()));
-                lv_subject_set_int(&position_y_, helix::units::to_centimm(pos[1].get<double>()));
-                lv_subject_set_int(&position_z_, helix::units::to_centimm(pos[2].get<double>()));
+                int new_x = helix::units::to_centimm(pos[0].get<double>());
+                int new_y = helix::units::to_centimm(pos[1].get<double>());
+                int new_z = helix::units::to_centimm(pos[2].get<double>());
+                if (lv_subject_get_int(&position_x_) != new_x) {
+                    lv_subject_set_int(&position_x_, new_x);
+                }
+                if (lv_subject_get_int(&position_y_) != new_y) {
+                    lv_subject_set_int(&position_y_, new_y);
+                }
+                if (lv_subject_get_int(&position_z_) != new_z) {
+                    lv_subject_set_int(&position_z_, new_z);
+                }
             }
         }
 
         if (toolhead.contains("homed_axes") && toolhead["homed_axes"].is_string()) {
             std::string axes = toolhead["homed_axes"].get<std::string>();
-            lv_subject_copy_string(&homed_axes_, axes.c_str());
+            if (strcmp(lv_subject_get_string(&homed_axes_), axes.c_str()) != 0) {
+                lv_subject_copy_string(&homed_axes_, axes.c_str());
+            }
             // Note: Derived homing subjects (xy_homed, z_homed, all_homed) are now
             // panel-local in ControlsPanel, which observes this homed_axes string.
         }
@@ -92,23 +105,33 @@ void PrinterMotionState::update_from_status(const nlohmann::json& status) {
         if (gcode_move.contains("gcode_position") && gcode_move["gcode_position"].is_array()) {
             const auto& pos = gcode_move["gcode_position"];
             if (pos.size() >= 3 && pos[0].is_number() && pos[1].is_number() && pos[2].is_number()) {
-                lv_subject_set_int(&gcode_position_x_,
-                                   helix::units::to_centimm(pos[0].get<double>()));
-                lv_subject_set_int(&gcode_position_y_,
-                                   helix::units::to_centimm(pos[1].get<double>()));
-                lv_subject_set_int(&gcode_position_z_,
-                                   helix::units::to_centimm(pos[2].get<double>()));
+                int new_x = helix::units::to_centimm(pos[0].get<double>());
+                int new_y = helix::units::to_centimm(pos[1].get<double>());
+                int new_z = helix::units::to_centimm(pos[2].get<double>());
+                if (lv_subject_get_int(&gcode_position_x_) != new_x) {
+                    lv_subject_set_int(&gcode_position_x_, new_x);
+                }
+                if (lv_subject_get_int(&gcode_position_y_) != new_y) {
+                    lv_subject_set_int(&gcode_position_y_, new_y);
+                }
+                if (lv_subject_get_int(&gcode_position_z_) != new_z) {
+                    lv_subject_set_int(&gcode_position_z_, new_z);
+                }
             }
         }
 
         if (gcode_move.contains("speed_factor") && gcode_move["speed_factor"].is_number()) {
             int factor_pct = helix::units::json_to_percent(gcode_move, "speed_factor");
-            lv_subject_set_int(&speed_factor_, factor_pct);
+            if (lv_subject_get_int(&speed_factor_) != factor_pct) {
+                lv_subject_set_int(&speed_factor_, factor_pct);
+            }
         }
 
         if (gcode_move.contains("extrude_factor") && gcode_move["extrude_factor"].is_number()) {
             int factor_pct = helix::units::json_to_percent(gcode_move, "extrude_factor");
-            lv_subject_set_int(&flow_factor_, factor_pct);
+            if (lv_subject_get_int(&flow_factor_) != factor_pct) {
+                lv_subject_set_int(&flow_factor_, factor_pct);
+            }
         }
 
         // Parse Z-offset from homing_origin[2] (baby stepping / SET_GCODE_OFFSET Z=)
@@ -116,8 +139,10 @@ void PrinterMotionState::update_from_status(const nlohmann::json& status) {
             const auto& origin = gcode_move["homing_origin"];
             if (origin.size() >= 3 && origin[2].is_number()) {
                 int z_microns = static_cast<int>(origin[2].get<double>() * 1000.0);
-                lv_subject_set_int(&gcode_z_offset_, z_microns);
-                spdlog::trace("[PrinterMotionState] G-code Z-offset: {}um", z_microns);
+                if (lv_subject_get_int(&gcode_z_offset_) != z_microns) {
+                    lv_subject_set_int(&gcode_z_offset_, z_microns);
+                    spdlog::trace("[PrinterMotionState] G-code Z-offset: {}um", z_microns);
+                }
             }
         }
     }

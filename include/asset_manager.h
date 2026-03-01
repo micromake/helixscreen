@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 /**
  * @brief Manages font and image registration with LVGL XML system
  *
@@ -12,6 +14,9 @@
  *
  * All methods are static since assets are registered globally with LVGL.
  * Registration is idempotent - calling multiple times is safe.
+ *
+ * Font registration is breakpoint-aware: fonts only used at larger breakpoints
+ * are skipped on smaller screens, saving ~500-800KB of .rodata pages.
  *
  * @code
  * // Register all assets at startup
@@ -25,13 +30,18 @@
 class AssetManager {
   public:
     /**
-     * @brief Register all fonts with LVGL XML system
+     * @brief Register fonts with LVGL XML system, skipping unused sizes
+     *
+     * Uses the current LVGL display's vertical resolution to determine
+     * the active breakpoint and skip fonts that are only used at larger
+     * breakpoints. Falls back to registering all fonts if no display exists.
      *
      * Registers:
-     * - MDI icon fonts (16, 24, 32, 48, 64px)
-     * - Noto Sans regular fonts (10-28px)
-     * - Noto Sans bold fonts (14-28px)
-     * - Montserrat aliases (for XML compatibility)
+     * - MDI icon fonts (16, 24, 32, 48, 64px) — all breakpoints
+     * - Noto Sans regular fonts (10-28px) — subset by breakpoint
+     * - Noto Sans bold fonts (14-28px) — all breakpoints (used in watchdog/modals)
+     * - Noto Sans light fonts (10-18px) — subset by breakpoint
+     * - Montserrat aliases (for XML compatibility) — subset by breakpoint
      */
     static void register_fonts();
 

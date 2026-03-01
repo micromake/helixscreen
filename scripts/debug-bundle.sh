@@ -2,11 +2,20 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Fetch and display debug bundles from crash.helixscreen.org
 #
-# Usage:
+# Retrieve a single bundle:
 #   ./scripts/debug-bundle.sh <share_code>          # Pretty-print bundle
 #   ./scripts/debug-bundle.sh <share_code> --raw     # Raw JSON output
 #   ./scripts/debug-bundle.sh <share_code> --save     # Save to file
 #   ./scripts/debug-bundle.sh <share_code> --summary  # One-line summary
+#
+# List bundles (admin only):
+#   ./scripts/debug-bundle.sh --list                              # Last 20 bundles
+#   ./scripts/debug-bundle.sh --list --since 2026-02-27           # Since date
+#   ./scripts/debug-bundle.sh --list --until 2026-02-26           # Until date
+#   ./scripts/debug-bundle.sh --list --match "0.13.8"             # Match version/model/platform
+#   ./scripts/debug-bundle.sh --list --match "pi" --limit 10      # Combined filters
+#
+# Auth: Set HELIX_ADMIN_KEY env var, or create .env.telemetry with HELIX_TELEMETRY_ADMIN_KEY=...
 
 set -euo pipefail
 
@@ -19,7 +28,7 @@ ENV_FILE="$PROJECT_ROOT/.env.telemetry"
 
 if [[ -z "${HELIX_ADMIN_KEY:-}" ]]; then
     if [[ -f "$ENV_FILE" ]]; then
-        HELIX_ADMIN_KEY=$(grep -E '^HELIX_TELEMETRY_ADMIN_KEY=' "$ENV_FILE" | cut -d= -f2)
+        HELIX_ADMIN_KEY=$(grep -E '^HELIX_TELEMETRY_ADMIN_KEY=' "$ENV_FILE" | cut -d= -f2 || true)
     fi
 fi
 
@@ -31,18 +40,113 @@ fi
 
 usage() {
     echo "Usage: $(basename "$0") <share_code> [--raw|--save|--summary]"
+    echo "       $(basename "$0") --list [--since DATE] [--until DATE] [--match PATTERN] [--limit N]"
     echo ""
     echo "Options:"
     echo "  --raw       Output raw JSON (for piping to jq, etc.)"
     echo "  --save      Save JSON to debug-bundle-<code>.json"
     echo "  --summary   Print one-line summary"
     echo ""
+    echo "List options:"
+    echo "  --list      List debug bundles"
+    echo "  --since     Filter bundles uploaded on or after DATE (YYYY-MM-DD)"
+    echo "  --until     Filter bundles uploaded on or before DATE (YYYY-MM-DD)"
+    echo "  --match     Filter by version, printer model, or platform (substring)"
+    echo "  --limit     Max bundles to return (default 20, max 100)"
+    echo ""
     echo "Examples:"
     echo "  $(basename "$0") ZYZCAT4L"
     echo "  $(basename "$0") ZYZCAT4L --summary"
     echo "  $(basename "$0") ZYZCAT4L --raw | jq '.printer'"
+    echo "  $(basename "$0") --list"
+    echo "  $(basename "$0") --list --since 2026-02-27"
+    echo "  $(basename "$0") --list --match pi --limit 10"
     exit 1
 }
+
+# --- List mode ---
+if [[ "${1:-}" == "--list" ]]; then
+    shift
+    LIST_SINCE=""
+    LIST_UNTIL=""
+    LIST_MATCH=""
+    LIST_LIMIT=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --since) LIST_SINCE="$2"; shift 2 ;;
+            --until) LIST_UNTIL="$2"; shift 2 ;;
+            --match) LIST_MATCH="$2"; shift 2 ;;
+            --limit) LIST_LIMIT="$2"; shift 2 ;;
+            *) echo "Unknown list option: $1" >&2; usage ;;
+        esac
+    done
+
+    # Build query string
+    QUERY=""
+    [[ -n "$LIST_SINCE" ]] && QUERY="${QUERY}&since=${LIST_SINCE}"
+    [[ -n "$LIST_UNTIL" ]] && QUERY="${QUERY}&until=${LIST_UNTIL}"
+    [[ -n "$LIST_MATCH" ]] && QUERY="${QUERY}&match=${LIST_MATCH}"
+    [[ -n "$LIST_LIMIT" ]] && QUERY="${QUERY}&limit=${LIST_LIMIT}"
+    # Remove leading &
+    QUERY="${QUERY#&}"
+    [[ -n "$QUERY" ]] && QUERY="?${QUERY}"
+
+    TMPFILE=$(mktemp)
+    trap 'rm -f "$TMPFILE"' EXIT
+
+    HTTP_CODE=$(curl -s \
+        -H "X-Admin-Key: $HELIX_ADMIN_KEY" \
+        -o "$TMPFILE" \
+        -w "%{http_code}" \
+        "${CRASH_URL}${QUERY}")
+
+    BODY=$(cat "$TMPFILE")
+
+    if [[ "$HTTP_CODE" != "200" ]]; then
+        echo "Error: HTTP $HTTP_CODE" >&2
+        echo "$BODY" >&2
+        exit 1
+    fi
+
+    echo "$BODY" | python3 -c "
+import json, sys
+
+data = json.load(sys.stdin)
+bundles = data.get('bundles', [])
+
+if not bundles:
+    print('No bundles found.')
+    sys.exit(0)
+
+# Header
+fmt = '{:<12s} {:>8s}   {:<22s} {:>9s}   {:<16s} {:>8s}'
+print(fmt.format('Share Code', 'Size', 'Uploaded', 'Version', 'Printer', 'Platform'))
+print('-' * 85)
+
+for b in bundles:
+    code = b['share_code']
+    size_kb = b['size'] / 1024
+    if size_kb >= 1024:
+        size_str = f'{size_kb/1024:.1f} MB'
+    else:
+        size_str = f'{size_kb:.0f} KB'
+    uploaded = b.get('uploaded', '')[:19].replace('T', ' ')
+    if uploaded:
+        uploaded += ' UTC'
+    meta = b.get('metadata', {})
+    version = meta.get('version', '') or ''
+    printer = meta.get('printer_model', '') or ''
+    platform = meta.get('platform', '') or ''
+    # Truncate long printer names
+    if len(printer) > 16:
+        printer = printer[:15] + '…'
+    print(fmt.format(code, size_str, uploaded, version, printer, platform))
+
+if data.get('truncated'):
+    print(f'\\n... more results available (use --limit to increase)')
+"
+    exit 0
+fi
 
 if [[ $# -lt 1 ]]; then
     usage
@@ -54,7 +158,7 @@ MODE="${2:---pretty}"
 # Fetch the bundle
 TMPFILE=$(mktemp)
 TMPJSON=$(mktemp)
-trap "rm -f $TMPFILE $TMPJSON" EXIT
+trap 'rm -f "$TMPFILE" "$TMPJSON"' EXIT
 
 HTTP_CODE=$(curl -s \
     -H "X-Admin-Key: $HELIX_ADMIN_KEY" \

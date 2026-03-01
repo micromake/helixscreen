@@ -143,7 +143,7 @@ Errors always show the full alert regardless of this setting. To change this in 
 ### `beta_features`
 **Type:** boolean
 **Default:** `false`
-**Description:** Enable beta features that are still under testing. Gates several Advanced panel features (Macro Browser, Input Shaping, Z-Offset Calibration, HelixPrint plugin management, PRINT_START configuration, Timelapse), the Plugins section in Settings, and the Update Channel selector. Always enabled automatically when running in `--test` mode. Can also be toggled by tapping the version button 7 times in Settings > About. See the [Beta Features](USER_GUIDE.md#beta-features) section in the User Guide for the full list.
+**Description:** Enable beta features that are still under testing. Gates several Advanced panel features (Macro Browser, Input Shaping, Z-Offset Calibration, HelixPrint plugin management, PRINT_START configuration, Timelapse), the Plugins section in Settings, and the Update Channel selector. Always enabled automatically when running in `--test` mode. Can also be toggled by tapping the version button 7 times in Settings → About. See the [Beta Features](USER_GUIDE.md#beta-features) section in the User Guide for the full list.
 
 ---
 
@@ -242,7 +242,16 @@ Located in the `display` section:
 **Type:** integer
 **Default:** `0`
 **Values:** `0`, `90`, `180`, `270`
-**Description:** Rotate the entire display by specified degrees.
+**Description:** Rotate the entire display by the specified degrees. Touch coordinates are automatically adjusted to match.
+
+**Automatic detection:** On first boot, HelixScreen checks the kernel for panel orientation (e.g., `panel_orientation=upside_down` in the kernel command line). If detected, the rotation is applied immediately and saved here — no manual configuration needed. On framebuffer displays only (e.g., AD5M — **not** Raspberry Pi), an interactive rotation wizard runs instead if no kernel hint is found.
+
+**Performance note (Raspberry Pi / DRM displays):** When rotation is active on DRM-based displays (Pi 4, Pi 5), HelixScreen uses a software rotation approach that redraws the full screen on every frame update instead of only the changed regions. This adds a small overhead (typically <1ms per frame on Pi 5) but is necessary because the LVGL DRM driver does not support hardware rotation. Framebuffer displays (e.g., AD5M) use a more efficient partial-update rotation with no meaningful performance impact.
+
+### `rotation_probed`
+**Type:** boolean
+**Default:** `false`
+**Description:** Set to `true` after automatic rotation detection runs. Remove this key (along with `rotate`) to re-trigger automatic detection on next startup.
 
 ### `sleep_sec`
 **Type:** integer
@@ -315,7 +324,7 @@ This setting can also be changed via the Printer Manager overlay (tap the printe
 ### `calibration`
 **Type:** object
 **Default:** `{"valid": false}`
-**Description:** Touch calibration coefficients. Set by the calibration wizard or manually. Contains calibration matrix values when valid.
+**Description:** Touch calibration coefficients. Set by the calibration wizard or manually. Contains calibration matrix values (`a` through `f`) when valid. If the wizard auto-detects that the touchscreen's X/Y axes are swapped relative to the display, it also saves `"swap_axes": true` — this is applied automatically on startup.
 
 ---
 
@@ -328,7 +337,9 @@ Located in the `input` section:
   "input": {
     "scroll_throw": 25,
     "scroll_limit": 10,
-    "touch_device": ""
+    "jitter_threshold": 15,
+    "touch_device": "",
+    "force_calibration": false
   }
 }
 ```
@@ -350,6 +361,17 @@ Located in the `input` section:
 **Default:** `""` (auto-detect)
 **Example:** `"/dev/input/event1"`
 **Description:** Override touch/pointer input device. Leave empty for auto-detection. Auto-detection finds touch or pointer capable devices.
+
+### `jitter_threshold`
+**Type:** integer
+**Default:** `15`
+**Range:** `0` - `200`
+**Description:** Touch jitter filter dead zone in pixels. Suppresses small coordinate jitter from noisy touch controllers (e.g., Goodix GT9xx) that would cause taps to be misread as swipes. Set to `0` to disable. Can also be overridden with the `HELIX_TOUCH_JITTER` environment variable.
+
+### `force_calibration`
+**Type:** boolean
+**Default:** `false`
+**Description:** Force touch calibration on next startup, even if the device doesn't normally require it. After successful calibration, this flag is automatically cleared. Useful when touch input is inaccurate but HelixScreen doesn't show the calibration option in Settings.
 
 ---
 
@@ -793,13 +815,13 @@ Located under the `panel_widgets` key, grouped by panel ID:
       {"id": "firmware_restart", "enabled": false},
       {"id": "ams", "enabled": true},
       {"id": "temperature", "enabled": true},
-      {"id": "temp_stack", "enabled": false},
+      {"id": "temp_stack", "enabled": false, "config": {"display_mode": "stack"}},
       {"id": "led", "enabled": true},
       {"id": "humidity", "enabled": true},
       {"id": "width_sensor", "enabled": true},
       {"id": "probe", "enabled": true},
       {"id": "filament", "enabled": true},
-      {"id": "fan_stack", "enabled": true},
+      {"id": "fan_stack", "enabled": true, "config": {"display_mode": "stack"}},
       {"id": "thermistor", "enabled": false},
       {"id": "notifications", "enabled": true}
     ]
@@ -816,6 +838,8 @@ Located under the `panel_widgets` key, grouped by panel ID:
 
 - `id` — Widget identifier (see table below)
 - `enabled` — Whether the widget is shown (`true`/`false`)
+- `config` — (optional) Per-widget settings object. Currently used by `temp_stack` and `fan_stack` for display mode:
+  - `display_mode` — `"stack"` (default) or `"carousel"`. Stack shows compact rows; carousel shows swipeable full-size pages. Toggle via long-press on the widget.
 
 **Available widget IDs:**
 
@@ -826,13 +850,13 @@ Located under the `panel_widgets` key, grouped by panel ID:
 | `firmware_restart` | Klipper firmware restart | Disabled | No |
 | `ams` | Multi-material spool status | Enabled | Yes (requires AMS/MMU) |
 | `temperature` | Nozzle temperature with heating animation | Enabled | No |
-| `temp_stack` | Stacked nozzle, bed, and chamber temps | Disabled | No |
+| `temp_stack` | Stacked nozzle, bed, and chamber temps (supports carousel mode) | Disabled | No |
 | `led` | LED quick toggle | Enabled | Yes (requires LEDs) |
 | `humidity` | Enclosure humidity sensor | Enabled | Yes (requires sensor) |
 | `width_sensor` | Filament width sensor | Enabled | Yes (requires sensor) |
 | `probe` | Z probe status and offset | Enabled | Yes (requires probe) |
 | `filament` | Filament runout detection | Enabled | Yes (requires sensor) |
-| `fan_stack` | Part, hotend, and auxiliary fan speeds | Enabled | No |
+| `fan_stack` | Part, hotend, and auxiliary fan speeds (supports carousel mode with arc dials) | Enabled | No |
 | `thermistor` | Custom temperature sensor (chamber, etc.) | Disabled | Yes (requires sensor) |
 | `notifications` | Pending alerts with severity badge | Enabled | No |
 
@@ -1168,6 +1192,13 @@ HelixScreen accepts command-line options for overriding configuration and debugg
 | `--log-dest <dest>` | Log destination: `auto`, `journal`, `syslog`, `file`, `console` |
 | `--log-file <path>` | Log file path (when `--log-dest=file`) |
 
+### Debugging Options
+
+| Option | Description |
+|--------|-------------|
+| `--debug-touches` | Draw ripple effects at each touch point for diagnosing touch accuracy |
+| `--calibrate-touch` | Force touch calibration on startup |
+
 ### Utility Options
 
 | Option | Description |
@@ -1256,14 +1287,16 @@ Environment="HELIX_TOUCH_DEVICE=/dev/input/event0"
     "bed_mesh_show_zero_plane": true,
     "printer_image": "",
     "calibration": {
-      "valid": false
+      "valid": false,
+      "swap_axes": false
     }
   },
 
   "input": {
     "scroll_throw": 25,
     "scroll_limit": 10,
-    "touch_device": ""
+    "touch_device": "",
+    "force_calibration": false
   },
 
   "output": {

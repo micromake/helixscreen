@@ -67,7 +67,7 @@
                       clickable="false" event_bubble="true">
                 <text_body name="nozzle_target_temp"
                            bind_text="filament_nozzle_target" clickable="false" event_bubble="true"/>
-                <icon src="pencil" size="xs" variant="secondary" clickable="false" event_bubble="true"/>
+                <icon src="pencil" size="xs" variant="tertiary" clickable="false" event_bubble="true"/>
               </lv_obj>
             </lv_obj>
           </lv_obj>
@@ -88,7 +88,7 @@
                       scrollable="false" flex_flow="row" style_flex_cross_place="center" style_pad_gap="#space_xs"
                       clickable="false" event_bubble="true">
                 <text_body name="bed_target_temp" bind_text="filament_bed_target" clickable="false" event_bubble="true"/>
-                <icon src="pencil" size="xs" variant="secondary" clickable="false" event_bubble="true"/>
+                <icon src="pencil" size="xs" variant="tertiary" clickable="false" event_bubble="true"/>
               </lv_obj>
             </lv_obj>
           </lv_obj>
@@ -108,20 +108,20 @@
                  width="100%" flex_grow="1" style_pad_all="0" scrollable="false">
           <!-- Graph container - populated by C++ via TempControlPanel -->
           <lv_obj name="temp_graph_container"
-                  width="100%" height="100%" style_pad_all="0"/>
+                  width="100%" height="100%" style_pad_all="0"
+                  clickable="false" event_bubble="true"/>
         </lv_obj>
 
       <!-- BOTTOM: Multi-Filament Card (visible when AMS or multi-tool, managed by C++) -->
       <ui_card name="ams_status_card"
                width="100%" style_radius="#border_radius" style_pad_all="#space_md" flex_flow="column"
-               style_flex_main_place="start" style_flex_cross_place="center" style_pad_gap="#space_sm"
-               flags="hidden">
-        <!-- Header row with icon -->
-        <lv_obj width="100%"
+               style_flex_main_place="start" style_flex_cross_place="center" style_pad_gap="#space_sm">
+        <!-- Header row with icon (hidden when external spool mode — no AMS) -->
+        <lv_obj name="ams_card_header_row" width="100%"
                 height="content" style_pad_all="0" scrollable="false"
                 flex_flow="row" style_flex_main_place="start" style_flex_cross_place="center" style_pad_gap="#space_sm">
           <icon src="filament" size="sm" variant="secondary"/>
-          <text_body text="Multi-Filament" translation_tag="Multi-Filament" style_translate_y="2"/>
+          <text_body bind_text="filament_card_title" translation_tag="Multi-Filament" style_translate_y="2"/>
         </lv_obj>
 
         <!-- AMS mini status + action widget row -->
@@ -150,6 +150,29 @@
                        style_radius="#border_radius_sm" style_pad_all="#space_sm">
             <event_cb trigger="value_changed" callback="on_extruder_dropdown_changed"/>
           </lv_dropdown>
+          </lv_obj>
+        </lv_obj>
+
+        <!-- External spool row (visible when no AMS and no multi-tool, managed by C++) -->
+        <lv_obj name="external_spool_row" width="100%" height="content"
+                style_pad_all="0" scrollable="false"
+                flex_flow="row" style_flex_main_place="space_between" style_flex_cross_place="center"
+                style_pad_gap="#space_sm"
+                flags="hidden">
+          <!-- Spool canvas container (C++ creates 48x48 canvas inside) -->
+          <lv_obj name="external_spool_container" width="48" height="48"
+                  style_pad_all="0" scrollable="false" clickable="true">
+            <event_cb trigger="clicked" callback="on_external_spool_edit"/>
+          </lv_obj>
+          <!-- Material info column (clickable - opens edit modal) -->
+          <lv_obj flex_grow="1" height="content" style_pad_all="0" scrollable="false"
+                  flex_flow="column" style_flex_main_place="center" style_flex_cross_place="start"
+                  style_pad_gap="2" clickable="true">
+            <event_cb trigger="clicked" callback="on_external_spool_edit"/>
+            <text_body name="external_spool_material_label" text="No spool assigned" translation_tag="No spool assigned"
+                       clickable="false" event_bubble="true"/>
+            <text_small name="external_spool_color_label" text="Tap to assign" translation_tag="Tap to assign"
+                        clickable="false" event_bubble="true"/>
           </lv_obj>
         </lv_obj>
       </ui_card>

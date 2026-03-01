@@ -94,7 +94,7 @@ static bool is_mdi_icon_font(const lv_font_t* font) {
  *
  * Handles both internal label/icon (from text= attr) and XML child labels
  * (from layout="column" buttons with text_body/text_small children).
- * Uses theme_manager_get_contrast_text() to pick dark vs light text.
+ * Uses theme_manager_get_contrast_color() to pick dark vs light text.
  *
  * @param btn The button widget
  */
@@ -126,7 +126,7 @@ void update_button_text_contrast(lv_obj_t* btn) {
             bg = lv_color_mix(bg, screen_bg, LV_OPA_50);
         }
 
-        text_color = theme_manager_get_contrast_text(bg);
+        text_color = theme_manager_get_contrast_color(bg);
     }
 
     spdlog::trace("[ui_button] contrast: ghost={} disabled={} text=0x{:06X}", is_ghost, is_disabled,

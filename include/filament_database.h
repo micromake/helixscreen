@@ -10,6 +10,12 @@
 #include <string_view>
 #include <vector>
 
+// Forward declaration for override merge in find_material()
+namespace filament {
+struct MaterialOverride;
+const MaterialOverride* get_material_override(std::string_view name);
+} // namespace filament
+
 /**
  * @file filament_database.h
  * @brief Static database of filament materials with temperature recommendations
@@ -25,6 +31,19 @@
  */
 
 namespace filament {
+
+/**
+ * @brief User override for material temperature settings
+ *
+ * Only overridden fields are present (sparse storage).
+ * Applied transparently in find_material() so all callers
+ * automatically get user-customized values.
+ */
+struct MaterialOverride {
+    std::optional<int> nozzle_min;
+    std::optional<int> nozzle_max;
+    std::optional<int> bed_temp;
+};
 
 /**
  * @brief Material information with temperature recommendations
@@ -218,7 +237,14 @@ inline std::optional<MaterialInfo> find_material(std::string_view name) {
         std::transform(name_lower.begin(), name_lower.end(), name_lower.begin(), ::tolower);
 
         if (mat_lower == name_lower) {
-            return mat;
+            MaterialInfo result = mat;
+            const auto* ovr = get_material_override(mat.name);
+            if (ovr) {
+                if (ovr->nozzle_min) result.nozzle_min = *ovr->nozzle_min;
+                if (ovr->nozzle_max) result.nozzle_max = *ovr->nozzle_max;
+                if (ovr->bed_temp) result.bed_temp = *ovr->bed_temp;
+            }
+            return result;
         }
     }
     return std::nullopt;

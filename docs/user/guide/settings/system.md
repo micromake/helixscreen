@@ -23,6 +23,16 @@ Tap to open the Network Settings overlay with a two-column layout:
 
 ---
 
+## Power Devices
+
+> Only shown when Moonraker power devices are configured.
+
+Tap to open the Power Devices overlay, where you can toggle individual power relays and smart outlets on or off. This is the same panel accessible from **Advanced > Power Devices** or by long-pressing the home panel power button.
+
+See [Power Device Control](../advanced.md#power-device-control) for full details on device selection and the home panel quick-toggle.
+
+---
+
 ## Host
 
 Shows the current Moonraker host address (e.g., `localhost:7125`). Tap to open the **Change Host** dialog where you can enter a new IP address and port to connect to a different printer.
@@ -33,15 +43,18 @@ After changing the host, HelixScreen disconnects from the current printer and re
 
 ## Touch Calibration
 
-> Only shown on touchscreen displays, not in the desktop simulator.
+> Only shown on touchscreen displays that need calibration.
 
 Recalibrate if taps register in the wrong location:
 
 1. Tap **Touch Calibration** in Settings
-2. Tap each crosshair target as it appears on screen
-3. Calibration saves automatically
+2. Tap each crosshair target as it appears on screen (3 points)
+3. Test that taps land correctly in the verify area
+4. Calibration saves automatically
 
 The row description shows "Calibrated" or "Not calibrated" status.
+
+If this option doesn't appear in your Settings, your screen type doesn't normally need calibration. If you still need to force it, see the [Touch Calibration Guide](../touch-calibration.md) for alternative methods including CLI flags and config file options.
 
 ---
 

@@ -503,6 +503,30 @@ void GCodeParser::parse_metadata_comment(const std::string& line) {
         metadata_slicer_name_ = value;
         spdlog::trace("[GCode Parser] Parsed slicer: {}", value);
     }
+    // Parse layer height metadata (exact key match to avoid max_layer_height etc.)
+    // OrcaSlicer/PrusaSlicer: "; layer_height = 0.2"
+    // Cura: ";Layer height: 0.12"
+    else if (key_lower == "layer_height" || key_lower == "layer height" ||
+             key_lower == "first_layer_height" || key_lower == "first layer height") {
+        std::string numeric_value = value;
+        size_t mm_pos = numeric_value.find("mm");
+        if (mm_pos != std::string::npos) {
+            numeric_value = numeric_value.substr(0, mm_pos);
+        }
+        try {
+            float h = std::stof(numeric_value);
+            if (h > 0.01f && h < 2.0f) {
+                if (key_lower.find("first") != std::string::npos) {
+                    metadata_first_layer_height_ = h;
+                    spdlog::trace("[GCode Parser] Parsed first layer height: {}mm", h);
+                } else {
+                    metadata_layer_height_ = h;
+                    spdlog::trace("[GCode Parser] Parsed layer height: {}mm", h);
+                }
+            }
+        } catch (...) {
+        }
+    }
     // Parse extrusion width metadata
     // OrcaSlicer/PrusaSlicer/SuperSlicer: "; perimeters extrusion width = 0.45mm"
     // Cura: ";SETTING_3 line_width = 0.4" or ";SETTING_3 wall_line_width_0 = 0.4"
@@ -511,6 +535,14 @@ void GCodeParser::parse_metadata_comment(const std::string& line) {
              (key_lower.find("linewidth") != std::string::npos)) {
         // Extract numeric value (handle "0.45mm" format and plain "0.4")
         std::string numeric_value = value;
+
+        // Skip percentage values (e.g., "100%", "112.5%") — OrcaSlicer's settings dump
+        // at end of file uses percentages of nozzle diameter, not absolute mm values.
+        // These would overwrite the correct mm values from the header comments.
+        if (numeric_value.find('%') != std::string::npos) {
+            return;
+        }
+
         // Remove "mm" suffix if present
         size_t mm_pos = numeric_value.find("mm");
         if (mm_pos != std::string::npos) {
@@ -519,6 +551,12 @@ void GCodeParser::parse_metadata_comment(const std::string& line) {
 
         try {
             float width = std::stof(numeric_value);
+
+            // Sanity check: extrusion widths should be 0.05mm to 3.0mm
+            if (width < 0.05f || width > 3.0f) {
+                spdlog::debug("[GCode Parser] Ignoring out-of-range extrusion width: {}mm", width);
+                return;
+            }
 
             // Categorize by feature type
             if (contains_all({"first", "layer"}) || contains_all({"initial", "layer"})) {
@@ -852,13 +890,21 @@ ParsedGCodeFile GCodeParser::finalize() {
     result.filament_weight_g = metadata_filament_weight_;
     result.filament_cost = metadata_filament_cost_;
 
-    // Transfer extrusion width metadata
+    // Transfer layer height + extrusion width metadata
+    result.layer_height_mm = metadata_layer_height_;
+    result.first_layer_height_mm = metadata_first_layer_height_;
     result.extrusion_width_mm = metadata_extrusion_width_;
     result.perimeter_extrusion_width_mm = metadata_perimeter_extrusion_width_;
     result.infill_extrusion_width_mm = metadata_infill_extrusion_width_;
     result.first_layer_extrusion_width_mm = metadata_first_layer_extrusion_width_;
     result.estimated_print_time_minutes = metadata_print_time_;
     result.total_layer_count = metadata_layer_count_;
+
+    spdlog::info("[GCode Parser] Layer height: {}mm, first layer: {}mm, extrusion width: {}mm",
+                 result.layer_height_mm,
+                 result.first_layer_height_mm > 0 ? result.first_layer_height_mm
+                                                  : result.layer_height_mm,
+                 result.extrusion_width_mm);
 
     // Transfer multi-color tool palette
     result.tool_color_palette = tool_color_palette_;

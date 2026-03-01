@@ -125,6 +125,7 @@ class KeyboardManager {
     // Helper methods
     void apply_keyboard_mode();
     void overlay_cleanup();
+    void longpress_reset();
     void show_overlay(const lv_area_t* key_area, const char* alternatives);
     const char* find_alternatives(char base_char) const;
     bool point_in_area(const lv_area_t* area, const lv_point_t* point) const;
@@ -151,7 +152,7 @@ class KeyboardManager {
     LongPressState longpress_state_ = LP_IDLE;
     lv_obj_t* overlay_ = nullptr;
     uint32_t pressed_btn_id_ = 0;
-    const char* pressed_char_ = nullptr;
+    char pressed_char_ = 0;
     const char* alternatives_ = nullptr;
     lv_point_t press_point_{};
     lv_area_t pressed_key_area_{};

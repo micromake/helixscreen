@@ -18,7 +18,7 @@ SUDO=""
 check_permissions() {
     local platform=$1
 
-    if [ "$platform" = "ad5m" ] || [ "$platform" = "k1" ]; then
+    if [ "$platform" = "ad5m" ] || [ "$platform" = "ad5x" ] || [ "$platform" = "k1" ]; then
         if [ "$(id -u)" != "0" ]; then
             log_error "Installation on $platform requires root privileges."
             log_error "Please run: sudo $0 $*"
@@ -49,8 +49,8 @@ install_permission_rules() {
     local platform=$1
     local helix_user="${KLIPPER_USER:-root}"
 
-    # Skip for platforms that run as root (AD5M, K1) or if user is root
-    if [ "$platform" = "ad5m" ] || [ "$platform" = "k1" ] || [ "$helix_user" = "root" ]; then
+    # Skip for platforms that run as root (AD5M, AD5X, K1) or if user is root
+    if [ "$platform" = "ad5m" ] || [ "$platform" = "ad5x" ] || [ "$platform" = "k1" ] || [ "$helix_user" = "root" ]; then
         log_info "Skipping permission rules (running as root)"
         return 0
     fi

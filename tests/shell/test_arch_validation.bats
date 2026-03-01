@@ -27,6 +27,13 @@ setup() {
     [ "$status" -eq 0 ]
 }
 
+@test "validate_binary_architecture: MIPS binary passes for ad5x" {
+    local binary="$BATS_TEST_TMPDIR/helix-screen"
+    create_fake_mips_elf "$binary"
+    run validate_binary_architecture "$binary" "ad5x"
+    [ "$status" -eq 0 ]
+}
+
 @test "validate_binary_architecture: ARM32 binary passes for pi32" {
     local binary="$BATS_TEST_TMPDIR/helix-screen"
     create_fake_arm32_elf "$binary"
@@ -63,6 +70,20 @@ setup() {
     local binary="$BATS_TEST_TMPDIR/helix-screen"
     create_fake_arm32_elf "$binary"
     run validate_binary_architecture "$binary" "k1"
+    [ "$status" -eq 1 ]
+}
+
+@test "validate_binary_architecture: ARM32 binary FAILS for ad5x" {
+    local binary="$BATS_TEST_TMPDIR/helix-screen"
+    create_fake_arm32_elf "$binary"
+    run validate_binary_architecture "$binary" "ad5x"
+    [ "$status" -eq 1 ]
+}
+
+@test "validate_binary_architecture: AARCH64 binary FAILS for ad5x" {
+    local binary="$BATS_TEST_TMPDIR/helix-screen"
+    create_fake_aarch64_elf "$binary"
+    run validate_binary_architecture "$binary" "ad5x"
     [ "$status" -eq 1 ]
 }
 

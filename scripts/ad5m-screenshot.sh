@@ -21,7 +21,7 @@ ssh root@${HOST} 'cat /dev/fb0' > /tmp/fb_raw.bin 2>/dev/null
 
 # AD5M fb is 800x480x4 = 1536000 bytes, but double-buffered
 echo "Converting to PNG..."
-head -c 1536000 /tmp/fb_raw.bin | magick -size 800x480 -depth 8 BGRA:- "${OUTPUT_PATH}"
+head -c 1536000 /tmp/fb_raw.bin | convert -size 800x480 -depth 8 BGRA:- "${OUTPUT_PATH}"
 
 echo "Screenshot saved to: ${OUTPUT_PATH}"
 

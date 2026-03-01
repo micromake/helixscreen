@@ -251,6 +251,8 @@ bool has_pattern(const std::vector<std::string>& objects, const std::string& pat
 // Check if all patterns in array are present
 bool has_all_patterns(const std::vector<std::string>& objects, const json& patterns) {
     for (const auto& pattern : patterns) {
+        if (!pattern.is_string())
+            continue;
         if (!has_pattern(objects, pattern.get<std::string>())) {
             return false;
         }
@@ -280,6 +282,8 @@ std::vector<std::string> get_field_data(const PrinterHardwareData& hardware,
         return {hardware.kinematics};
     if (field == "mcu")
         return {hardware.mcu};
+    if (field == "cpu_arch")
+        return {hardware.cpu_arch};
 
     // Unknown field - return empty vector
     return {};
@@ -312,26 +316,26 @@ bool check_build_volume_range(const BuildVolume& volume, const json& heuristic) 
         return false;
     }
 
-    // Check X range
+    // Check X range (value() provides type-safe default if key is wrong type)
     if (heuristic.contains("min_x")) {
-        float min_x = heuristic["min_x"].get<float>();
+        float min_x = heuristic.value("min_x", 0.0f);
         if (x_size < min_x)
             return false;
     }
     if (heuristic.contains("max_x")) {
-        float max_x = heuristic["max_x"].get<float>();
+        float max_x = heuristic.value("max_x", 0.0f);
         if (x_size > max_x)
             return false;
     }
 
     // Check Y range
     if (heuristic.contains("min_y")) {
-        float min_y = heuristic["min_y"].get<float>();
+        float min_y = heuristic.value("min_y", 0.0f);
         if (y_size < min_y)
             return false;
     }
     if (heuristic.contains("max_y")) {
-        float max_y = heuristic["max_y"].get<float>();
+        float max_y = heuristic.value("max_y", 0.0f);
         if (y_size > max_y)
             return false;
     }
@@ -457,6 +461,49 @@ int execute_heuristic(const json& heuristic, const PrinterHardwareData& hardware
 
             if (mcu_lower.find(pattern_lower) != std::string::npos) {
                 spdlog::debug("[PrinterDetector] Matched MCU '{}' (confidence: {})", pattern,
+                              confidence);
+                return confidence;
+            }
+        }
+    } else if (type == "tool_count") {
+        // Count extruder objects from heaters (matching "extruder" prefix, excluding
+        // "extruder_stepper")
+        std::string pattern = heuristic.value("pattern", "");
+        int extruder_count = 0;
+        for (const auto& heater : hardware.heaters) {
+            if (heater.rfind("extruder", 0) == 0 && heater.rfind("extruder_stepper", 0) != 0) {
+                extruder_count++;
+            }
+        }
+
+        // Parse expected count from pattern (tool_count_N)
+        if (pattern.rfind("tool_count_", 0) == 0) {
+            int expected_count = 0;
+            try {
+                expected_count = std::stoi(pattern.substr(11));
+            } catch (...) {
+                spdlog::warn("[PrinterDetector] Invalid tool_count pattern: {}", pattern);
+                return 0;
+            }
+            if (extruder_count == expected_count) {
+                spdlog::debug("[PrinterDetector] Matched {} extruders (confidence: {})",
+                              extruder_count, confidence);
+                return confidence;
+            }
+        }
+    } else if (type == "cpu_arch_match") {
+        // Case-insensitive substring match of cpu_arch against pattern
+        std::string pattern = heuristic.value("pattern", "");
+        if (!hardware.cpu_arch.empty()) {
+            std::string cpu_lower = hardware.cpu_arch;
+            std::transform(cpu_lower.begin(), cpu_lower.end(), cpu_lower.begin(),
+                           [](unsigned char c) { return std::tolower(c); });
+            std::string pattern_lower = pattern;
+            std::transform(pattern_lower.begin(), pattern_lower.end(), pattern_lower.begin(),
+                           [](unsigned char c) { return std::tolower(c); });
+
+            if (cpu_lower.find(pattern_lower) != std::string::npos) {
+                spdlog::debug("[PrinterDetector] Matched CPU arch '{}' (confidence: {})", pattern,
                               confidence);
                 return confidence;
             }
@@ -1253,6 +1300,7 @@ PrinterDetectionResult PrinterDetector::auto_detect(const helix::PrinterDiscover
     hw_data.build_volume = discovery.build_volume();
     hw_data.mcu = discovery.mcu();
     hw_data.mcu_list = discovery.mcu_list();
+    hw_data.cpu_arch = discovery.cpu_arch();
 
     return detect(hw_data);
 }

@@ -66,11 +66,16 @@ void PrinterLedState::update_from_status(const nlohmann::json& status) {
             int brightness = std::clamp(static_cast<int>(val * 100.0 + 0.5), 0, 100);
             int intensity = std::clamp(static_cast<int>(val * 255.0 + 0.5), 0, 255);
 
-            lv_subject_set_int(&led_r_, intensity);
-            lv_subject_set_int(&led_g_, intensity);
-            lv_subject_set_int(&led_b_, intensity);
-            lv_subject_set_int(&led_w_, 0);
-            lv_subject_set_int(&led_brightness_, brightness);
+            if (lv_subject_get_int(&led_r_) != intensity)
+                lv_subject_set_int(&led_r_, intensity);
+            if (lv_subject_get_int(&led_g_) != intensity)
+                lv_subject_set_int(&led_g_, intensity);
+            if (lv_subject_get_int(&led_b_) != intensity)
+                lv_subject_set_int(&led_b_, intensity);
+            if (lv_subject_get_int(&led_w_) != 0)
+                lv_subject_set_int(&led_w_, 0);
+            if (lv_subject_get_int(&led_brightness_) != brightness)
+                lv_subject_set_int(&led_brightness_, brightness);
 
             bool is_on = (val > 0.0);
             int new_state = is_on ? 1 : 0;
@@ -113,12 +118,17 @@ void PrinterLedState::update_from_status(const nlohmann::json& status) {
     int max_channel = std::max({r_int, g_int, b_int, w_int});
     int brightness = (max_channel * 100) / 255;
 
-    // Update RGBW subjects
-    lv_subject_set_int(&led_r_, r_int);
-    lv_subject_set_int(&led_g_, g_int);
-    lv_subject_set_int(&led_b_, b_int);
-    lv_subject_set_int(&led_w_, w_int);
-    lv_subject_set_int(&led_brightness_, brightness);
+    // Update RGBW subjects (skip if unchanged to avoid redundant observer notifications)
+    if (lv_subject_get_int(&led_r_) != r_int)
+        lv_subject_set_int(&led_r_, r_int);
+    if (lv_subject_get_int(&led_g_) != g_int)
+        lv_subject_set_int(&led_g_, g_int);
+    if (lv_subject_get_int(&led_b_) != b_int)
+        lv_subject_set_int(&led_b_, b_int);
+    if (lv_subject_get_int(&led_w_) != w_int)
+        lv_subject_set_int(&led_w_, w_int);
+    if (lv_subject_get_int(&led_brightness_) != brightness)
+        lv_subject_set_int(&led_brightness_, brightness);
 
     // LED is "on" if any channel is non-zero
     bool is_on = (max_channel > 0);

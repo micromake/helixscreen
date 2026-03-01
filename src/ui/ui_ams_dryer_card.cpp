@@ -39,13 +39,14 @@ AmsDryerCard::~AmsDryerCard() {
 }
 
 AmsDryerCard::AmsDryerCard(AmsDryerCard&& other) noexcept
-    : dryer_card_(other.dryer_card_), dryer_modal_(other.dryer_modal_),
+    : active_(other.active_), dryer_card_(other.dryer_card_), dryer_modal_(other.dryer_modal_),
       progress_fill_(other.progress_fill_), progress_observer_(std::move(other.progress_observer_)),
       cached_presets_(std::move(other.cached_presets_)) {
     // Update modal's user_data so the LV_EVENT_DELETE callback points to new owner
     if (dryer_modal_) {
         lv_obj_set_user_data(dryer_modal_, this);
     }
+    other.active_ = false;
     other.dryer_card_ = nullptr;
     other.dryer_modal_ = nullptr;
     other.progress_fill_ = nullptr;
@@ -55,6 +56,7 @@ AmsDryerCard& AmsDryerCard::operator=(AmsDryerCard&& other) noexcept {
     if (this != &other) {
         cleanup();
 
+        active_ = other.active_;
         dryer_card_ = other.dryer_card_;
         dryer_modal_ = other.dryer_modal_;
         progress_fill_ = other.progress_fill_;
@@ -66,6 +68,7 @@ AmsDryerCard& AmsDryerCard::operator=(AmsDryerCard&& other) noexcept {
             lv_obj_set_user_data(dryer_modal_, this);
         }
 
+        other.active_ = false;
         other.dryer_card_ = nullptr;
         other.dryer_modal_ = nullptr;
         other.progress_fill_ = nullptr;
@@ -102,6 +105,9 @@ bool AmsDryerCard::setup(lv_obj_t* panel) {
         progress_observer_ = helix::ui::observe_int_sync<AmsDryerCard>(
             AmsState::instance().get_dryer_progress_pct_subject(), this,
             [](AmsDryerCard* self, int progress) {
+                if (!self->active_) {
+                    return;
+                }
                 if (self->progress_fill_) {
                     lv_obj_set_width(self->progress_fill_,
                                      lv_pct(std::max(0, std::min(100, progress))));
@@ -114,13 +120,18 @@ bool AmsDryerCard::setup(lv_obj_t* panel) {
     // Modal is created on-demand via helix::ui::modal_show() in on_open_modal_cb
     // Initial sync of dryer state
     AmsState::instance().sync_dryer_from_backend();
+
+    active_ = true;
     spdlog::debug("[AmsDryerCard] Setup complete");
 
     return true;
 }
 
 void AmsDryerCard::cleanup() {
-    // Remove observer first
+    // Deactivate FIRST — prevents observer callbacks from accessing freed widgets
+    active_ = false;
+
+    // Remove observer
     progress_observer_.reset();
 
     // Hide modal if visible (Modal system handles deletion via exit animation).
@@ -246,12 +257,17 @@ void AmsDryerCard::register_callbacks() {
 AmsDryerCard* AmsDryerCard::get_instance_from_event(lv_event_t* e) {
     auto* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
 
-    // Traverse parent chain to find dryer_card or dryer_modal with user_data
+    // Find dryer_card or dryer_presets_modal by name, then get our instance from its user_data.
+    // Cannot walk parents checking any user_data — ui_button and other widgets set their own
+    // user_data, which would be miscast as AmsDryerCard* (L069).
     lv_obj_t* obj = target;
     while (obj) {
-        void* user_data = lv_obj_get_user_data(obj);
-        if (user_data) {
-            return static_cast<AmsDryerCard*>(user_data);
+        const char* name = lv_obj_get_name(obj);
+        if (name && (strcmp(name, "dryer_card") == 0 || strcmp(name, "dryer_presets_modal") == 0)) {
+            void* user_data = lv_obj_get_user_data(obj);
+            if (user_data) {
+                return static_cast<AmsDryerCard*>(user_data);
+            }
         }
         obj = lv_obj_get_parent(obj);
     }
