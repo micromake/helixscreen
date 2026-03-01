@@ -101,6 +101,44 @@ static void register_color_picker_responsive_constants() {
 }
 
 /**
+ * Register responsive constants into the color_picker component scope.
+ * Must be called AFTER register_xml("color_picker.xml") so the scope exists.
+ */
+static void register_color_picker_component_constants() {
+    lv_display_t* display = lv_display_get_default();
+    int32_t hor_res = lv_display_get_horizontal_resolution(display);
+    int32_t ver_res = lv_display_get_vertical_resolution(display);
+    int32_t greater_res = LV_MAX(hor_res, ver_res);
+
+    const char* swatch_size;
+    const char* sv_size;
+    const char* hue_height;
+    if (greater_res <= UI_BREAKPOINT_SMALL_MAX) {
+        swatch_size = "28";
+        sv_size = "140";
+        hue_height = "16";
+    } else if (greater_res <= UI_BREAKPOINT_MEDIUM_MAX) {
+        swatch_size = "32";
+        sv_size = "180";
+        hue_height = "20";
+    } else {
+        swatch_size = "32";
+        sv_size = "180";
+        hue_height = "20";
+    }
+
+    lv_xml_component_scope_t* scope = lv_xml_component_get_scope("color_picker");
+    if (scope) {
+        lv_xml_register_const(scope, "swatch_size", swatch_size);
+        lv_xml_register_const(scope, "sv_size", sv_size);
+        lv_xml_register_const(scope, "hue_height", hue_height);
+        spdlog::debug("[Color Picker] Registered swatch_size={}, sv_size={}, hue_height={} "
+                      "for screen {}px",
+                      swatch_size, sv_size, hue_height, greater_res);
+    }
+}
+
+/**
  * Toggle password visibility on a sibling textarea.
  * Finds "password_input" by walking up to the shared parent container,
  * then swaps the eye/eye_off icon on the button.
@@ -254,6 +292,7 @@ void register_xml_components() {
     register_xml("macro_enhance_modal.xml");
     register_xml("action_prompt_modal.xml");
     register_xml("color_picker.xml");
+    register_color_picker_component_constants();
 
     // Print file components
     register_xml("print_file_card.xml");
