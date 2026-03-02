@@ -3,6 +3,9 @@ translations:
   ' elapsed · ': ' 経過 · '
   ' frames captured': ' フレームをキャプチャしました'
   ' left': ' 残り'
+  '%lu days ago': ''
+  '%lu hours ago': ''
+  '%lu min ago': ''
   '%u layers': '%uレイヤー'
   + Add: + 追加
   + Add Preset: + プリセットを追加
@@ -11,10 +14,14 @@ translations:
   '- Ensure ADXL345 is connected': '- ADXL345 が接続されていることを確認してください'
   '- Try Measure Noise first': '- まず「ノイズ測定」をお試しください'
   --°C: --°C
+  0 = computed: ''
   0 slots: '{0} スロット'
   0.4-2mm direct drive, 4-6mm bowden: 0.4-2mm ダイレクトドライブ、4-6mm ボーデン
+  1 day ago: ''
   1 event queued: 1件のイベント待機中
+  1 hour ago: ''
   1 layer: 1レイヤー
+  1 min ago: ''
   1 minute: 1分
   1 more tap to {} beta features: あと1回タップでベータ機能を{}
   1. Printer homes and probes the bed: 1. プリンターがホーミングしてベッドをプローブします
@@ -33,6 +40,7 @@ translations:
   3. Lower nozzle until paper drags slightly: 3. 紙がわずかに引っかかるまでノズルを下げてください
   30 minutes: 30分
   30 seconds: 30秒
+  3D Pipes: ''
   3D Preview: 3Dプレビュー
   3D View: 3Dビュー
   4. Paper should move but with resistance: 4. 紙が抵抗を感じながら動く状態が適切です
@@ -46,6 +54,7 @@ translations:
   ABOUT: 情報
   ABS: ABS
   ADXL: ADXL
+  AFC: ''
   AFC Version Warning: AFCバージョン警告
   AFC failure reset complete: AFCエラーリセット完了
   AFC failure reset failed: AFCエラーリセット失敗
@@ -148,6 +157,8 @@ translations:
   Both: 両方
   Brightness: 明るさ
   Browse: 参照
+  Buffer Status: ''
+  Buffer information not available for this backend: ''
   Bundle Uploaded: バンドルをアップロードしました
   Button taps and navigation sounds: ボタンタップとナビゲーション音
   Bypass: バイパス
@@ -209,6 +220,7 @@ translations:
   Clear All Events: すべてのイベントをクリア
   Clear Spool: スプールを解除
   Clipboard unavailable - use SSH: クリップボード利用不可 - SSHを使用してください
+  Clog Detection: ''
   Close: 閉じる
   Closer: 近く
   Closer = more squish | Farther = less squish: 近い = より圧縮 | 遠い = 圧縮少なめ
@@ -291,6 +303,7 @@ translations:
   DISABLED: 無効
   Damping (Kd): 減衰 (Kd)
   Danger: 危険
+  Danger Zone: ''
   Dark Mode: ダークモード
   Database: データベース
   Date (newest): 日付（新しい順）
@@ -306,11 +319,14 @@ translations:
   'Delta:': '差分:'
   Deploy: 展開
   Detailed: 詳細
+  Detection Length: ''
+  Detection Mode: ''
   Dev: 開発版
   Dev channel requires dev_url in config: 開発チャンネルには設定にdev_urlが必要です
   Device name is required: デバイス名は必須です
   Disable: 無効化
   Disable Motors?: モーターを無効にしますか？
+  Disabled: ''
   Discard: 破棄
   Discard Changes?: 変更を破棄しますか？
   Disconnected: 切断
@@ -319,6 +335,7 @@ translations:
   Dismiss: 閉じる
   Display Settings: ディスプレイ設定
   Display Sleep: ディスプレイスリープ
+  Distance to Fault: ''
   Do not power off your printer.: プリンターの電源を切らないでください。
   Do not touch the printer during calibration: キャリブレーション中はプリンターに触れないでください
   Documentation: ドキュメント
@@ -361,6 +378,7 @@ translations:
   Enable audio feedback: 音声フィードバックを有効化
   Enable detailed print preparation tracking (Recommended): 詳細な印刷準備トラッキングを有効化（推奨）
   Enabled: 有効
+  Encoder: ''
   Ended: 終了
   Enhancement Complete!: 改善完了！
   Enhancement Failed: 改善失敗
@@ -410,6 +428,7 @@ translations:
   Failed to open wizard: ウィザードを開けませんでした
   Failed to reset theme: テーマのリセットに失敗しました
   Failed to restart Moonraker.: Moonrakerの再起動に失敗しました。
+  Failed to save changes to Spoolman: ''
   Failed to save configuration: 設定の保存に失敗しました
   Failed to save spool: スプールの保存に失敗しました
   Failed to save theme file: テーマファイルの保存に失敗しました
@@ -420,6 +439,7 @@ translations:
   Fan Transfer: ファン熱伝達
   Fans: ファン
   Farther: 遠く
+  Fault Detection: ''
   Feed filament directly to extruder: フィラメントをエクストルーダーに直接供給
   Filament: フィラメント
   Filament Detected: フィラメント検出
@@ -440,6 +460,8 @@ translations:
   Firmware restarting...: ファームウェア再起動中...
   Flat Concentric Rings (existing ams_slot): 同心円リング（既存の ams_slot）
   Flow Rate: フローレート
+  Flowguard: ''
+  Flying Toasters: ''
   Forming tip...: チップを形成中...
   Found 1 printer: プリンター1台を検出
   Framerate: フレームレート
@@ -570,6 +592,7 @@ translations:
   Learn More: 詳細を見る
   'Length:': '長さ:'
   Leveling Gantry...: ガントリーレベリング中...
+  Lifetime Print Stats: ''
   Light: ライト
   Link to Spoolman: Spoolmanに連携
   Load: 装填
@@ -616,6 +639,7 @@ translations:
   Make Optional: オプションにする
   Make bed mesh and QGL skippable: ベッドメッシュと QGL をスキップ可能にする
   Manage: 管理
+  Manual: ''
   Manual Bed Leveling: 手動ベッドレベリング
   Markdown Viewer: Markdownビューアー
   Master volume level: マスター音量
@@ -686,6 +710,7 @@ translations:
   No PRINT_START macro found: PRINT_START マクロが見つかりません
   No Power Devices: 電源デバイスなし
   No Spools: スプールなし
+  No buffer data available: ''
   No changes to revert: 元に戻す変更はありません
   No effects available: 利用可能なエフェクトがありません
   No events queued: キューにイベントはありません
@@ -712,6 +737,7 @@ translations:
   No sensors detected: センサーが検出されませんでした
   No spool assigned: スプール未割当
   No spools found in Spoolman: Spoolmanにスプールが見つかりません
+  No sync feedback data available: ''
   No timelapse videos found: タイムラプス動画が見つかりません
   No vendors found: ベンダーが見つかりません
   No webcam detected.\nA webcam is required for timelapse.: ウェブカメラが検出されませんでした。\nタイムラプスにはウェブカメラが必要です。
@@ -834,6 +860,7 @@ translations:
   Printer name: プリンター名
   Printer ready: プリンター準備完了
   Printing: 印刷中
+  Prints: ''
   Prints Trend: 印刷傾向
   'Private:': 'プライベート:'
   Probe: プローブ
@@ -927,6 +954,7 @@ translations:
   'Role:': '役割:'
   'Rotation: %d\xc2\xb0 - %ds remaining (or wait to retry)': '回転: %d\xc2\xb0 - %ds残り (待つと再試行)'
   Run: 実行
+  Run Dangerous Macro?: ''
   Run Macro: マクロを実行
   Runout Sensor: フィラメント切れセンサー
   SHIPPED IMAGES: 付属画像
@@ -1002,6 +1030,7 @@ translations:
   'Shininess:': '光沢:'
   Show detailed print preparation status: 詳細な印刷準備ステータスを表示
   Show flying toasters instead of dimming: 画面を暗くする代わりにフライングトースターを表示
+  Show instead of dimming: ''
   Shutdown: シャットダウン
   Shutdown / Reboot: シャットダウン / 再起動
   Shutting down...: シャットダウン中...
@@ -1017,6 +1046,7 @@ translations:
   Sound Settings: サウンド設定
   Sound Theme: サウンドテーマ
   Sounds: サウンド
+  Source: ''
   Speaker: スピーカー
   'Specular:': 'スペキュラー:'
   Speed of prime movement: プライム動作の速度
@@ -1035,6 +1065,7 @@ translations:
   Square Corner Velocity: 直角コーナー速度
   Stable: 安定版
   Standby: スタンバイ
+  Starfield: ''
   Start: 開始
   Start Anyway: このまま開始
   Start Calibration: キャリブレーション開始
@@ -1044,6 +1075,7 @@ translations:
   Starting Print...: 印刷開始中...
   Starting...: 開始中...
   Startup, auto-control, and macro devices: 起動、自動制御、マクロデバイス
+  State: ''
   Status: ステータス
   Status icons: ステータスアイコン
   Step: ステップ
@@ -1053,6 +1085,7 @@ translations:
   Stop Print?: 印刷を停止しますか？
   Stops all motion. Requires firmware restart.: すべての動作を停止します。ファームウェアの再起動が必要です。
   Stow: 格納
+  Success: ''
   Success Rate: 成功率
   Success!: 成功！
   Surfaces inherit app background tokens for light and dark modes.: サーフェスはライトモードとダークモードのアプリ背景トークンを継承します。
@@ -1061,6 +1094,8 @@ translations:
   Switch between light and dark themes: ライトテーマとダークテーマを切り替え
   Switching heater control to MPC. Klipper will restart.: ヒーター制御をMPCに切り替えます。Klipperが再起動します。
   Switching to MPC requires a config change and Klipper restart.: MPCへの切り替えには設定変更とKlipperの再起動が必要です。
+  Sync Drive: ''
+  Sync Feedback: ''
   Sync with Spoolman: Spoolman と同期
   Sysfs: Sysfs
   System: システム
@@ -1215,6 +1250,7 @@ translations:
   Webcam: ウェブカメラ
   Website (optional): ウェブサイト（オプション）
   Week: 週
+  Weekly Print Stats: ''
   ? Weight data is synced from Spoolman to display remaining filament. Changes are also synced when prints start, pause, or complete.
   : 残りのフィラメントを表示するために、重量データが Spoolman から同期されます。印刷の開始、一時停止、完了時にも変更が同期されます。
   Weight sync settings: 重量同期設定
@@ -1263,13 +1299,16 @@ translations:
   disabled: 無効
   e.g. Jet Black: 例：ジェットブラック
   e.g. Polymaker: 例：Polymaker
+  eSpooler: ''
   elapsed: 経過
   enable: 有効化
   enabled: 有効
   est: est
   layers: レイヤー
+  mm before clog: ''
   not detected: 未検出
   of: の
+  prints: ''
   set to: に設定
   started: 開始
   tall: 高さ

@@ -3,6 +3,9 @@ translations:
   ' elapsed · ': ' elapsed · '
   ' frames captured': ' frames captured'
   ' left': ' left'
+  '%lu days ago': '%lu days ago'
+  '%lu hours ago': '%lu hours ago'
+  '%lu min ago': '%lu min ago'
   '%u layers': '%u layers'
   + Add: + Add
   + Add Preset: + Add Preset
@@ -11,10 +14,14 @@ translations:
   '- Ensure ADXL345 is connected': '- Ensure ADXL345 is connected'
   '- Try Measure Noise first': '- Try Measure Noise first'
   --°C: --°C
+  0 = computed: 0 = computed
   0 slots: 0 slots
   0.4-2mm direct drive, 4-6mm bowden: 0.4-2mm direct drive, 4-6mm bowden
+  1 day ago: 1 day ago
   1 event queued: 1 event queued
+  1 hour ago: 1 hour ago
   1 layer: 1 layer
+  1 min ago: 1 min ago
   1 minute: 1 minute
   1 more tap to {} beta features: 1 more tap to {} beta features
   1. Printer homes and probes the bed: 1. Printer homes and probes the bed
@@ -33,6 +40,7 @@ translations:
   3. Lower nozzle until paper drags slightly: 3. Lower nozzle until paper drags slightly
   30 minutes: 30 minutes
   30 seconds: 30 seconds
+  3D Pipes: 3D Pipes
   3D Preview: 3D Preview
   3D View: 3D View
   4. Paper should move but with resistance: 4. Paper should move but with resistance
@@ -46,6 +54,7 @@ translations:
   ABOUT: ABOUT
   ABS: ABS
   ADXL: ADXL
+  AFC: AFC
   AFC Version Warning: AFC Version Warning
   AFC failure reset complete: AFC failure reset complete
   AFC failure reset failed: AFC failure reset failed
@@ -148,6 +157,8 @@ translations:
   Both: Both
   Brightness: Brightness
   Browse: Browse
+  Buffer Status: Buffer Status
+  Buffer information not available for this backend: Buffer information not available for this backend
   Bundle Uploaded: Bundle Uploaded
   Button taps and navigation sounds: Button taps and navigation sounds
   Bypass: Bypass
@@ -209,6 +220,7 @@ translations:
   Clear All Events: Clear All Events
   Clear Spool: Clear Spool
   Clipboard unavailable - use SSH: Clipboard unavailable - use SSH
+  Clog Detection: Clog Detection
   Close: Close
   Closer: Closer
   Closer = more squish | Farther = less squish: Closer = more squish | Farther = less squish
@@ -291,6 +303,7 @@ translations:
   DISABLED: DISABLED
   Damping (Kd): Damping (Kd)
   Danger: Danger
+  Danger Zone: Danger Zone
   Dark Mode: Dark Mode
   Database: Database
   Date (newest): Date (newest)
@@ -306,11 +319,14 @@ translations:
   'Delta:': 'Delta:'
   Deploy: Deploy
   Detailed: Detailed
+  Detection Length: Detection Length
+  Detection Mode: Detection Mode
   Dev: Dev
   Dev channel requires dev_url in config: Dev channel requires dev_url in config
   Device name is required: Device name is required
   Disable: Disable
   Disable Motors?: Disable Motors?
+  Disabled: Disabled
   Discard: Discard
   Discard Changes?: Discard Changes?
   Disconnected: Disconnected
@@ -319,6 +335,7 @@ translations:
   Dismiss: Dismiss
   Display Settings: Display Settings
   Display Sleep: Display Sleep
+  Distance to Fault: Distance to Fault
   Do not power off your printer.: Do not power off your printer.
   Do not touch the printer during calibration: Do not touch the printer during calibration
   Documentation: Documentation
@@ -361,6 +378,7 @@ translations:
   Enable audio feedback: Enable audio feedback
   Enable detailed print preparation tracking (Recommended): Enable detailed print preparation tracking (Recommended)
   Enabled: Enabled
+  Encoder: Encoder
   Ended: Ended
   Enhancement Complete!: Enhancement Complete!
   Enhancement Failed: Enhancement Failed
@@ -410,6 +428,7 @@ translations:
   Failed to open wizard: Failed to open wizard
   Failed to reset theme: Failed to reset theme
   Failed to restart Moonraker.: Failed to restart Moonraker.
+  Failed to save changes to Spoolman: Failed to save changes to Spoolman
   Failed to save configuration: Failed to save configuration
   Failed to save spool: Failed to save spool
   Failed to save theme file: Failed to save theme file
@@ -420,6 +439,7 @@ translations:
   Fan Transfer: Fan Transfer
   Fans: Fans
   Farther: Farther
+  Fault Detection: Fault Detection
   Feed filament directly to extruder: Feed filament directly to extruder
   Filament: Filament
   Filament Detected: Filament Detected
@@ -440,6 +460,8 @@ translations:
   Firmware restarting...: Firmware restarting...
   Flat Concentric Rings (existing ams_slot): Flat Concentric Rings (existing ams_slot)
   Flow Rate: Flow Rate
+  Flowguard: Flowguard
+  Flying Toasters: Flying Toasters
   Forming tip...: Forming tip...
   Found 1 printer: Found 1 printer
   Framerate: Framerate
@@ -570,6 +592,7 @@ translations:
   Learn More: Learn More
   'Length:': 'Length:'
   Leveling Gantry...: Leveling Gantry...
+  Lifetime Print Stats: Lifetime Print Stats
   Light: Light
   Link to Spoolman: Link to Spoolman
   Load: Load
@@ -616,6 +639,7 @@ translations:
   Make Optional: Make Optional
   Make bed mesh and QGL skippable: Make bed mesh and QGL skippable
   Manage: Manage
+  Manual: Manual
   Manual Bed Leveling: Manual Bed Leveling
   Markdown Viewer: Markdown Viewer
   Master volume level: Master volume level
@@ -686,6 +710,7 @@ translations:
   No PRINT_START macro found: No PRINT_START macro found
   No Power Devices: No Power Devices
   No Spools: No Spools
+  No buffer data available: No buffer data available
   No changes to revert: No changes to revert
   No effects available: No effects available
   No events queued: No events queued
@@ -712,6 +737,7 @@ translations:
   No sensors detected: No sensors detected
   No spool assigned: No spool assigned
   No spools found in Spoolman: No spools found in Spoolman
+  No sync feedback data available: No sync feedback data available
   No timelapse videos found: No timelapse videos found
   No vendors found: No vendors found
   No webcam detected.\nA webcam is required for timelapse.: No webcam detected.\nA webcam is required for timelapse.
@@ -834,6 +860,7 @@ translations:
   Printer name: Printer name
   Printer ready: Printer ready
   Printing: Printing
+  Prints: Prints
   Prints Trend: Prints Trend
   'Private:': 'Private:'
   Probe: Probe
@@ -927,6 +954,7 @@ translations:
   'Role:': 'Role:'
   'Rotation: %d\xc2\xb0 - %ds remaining (or wait to retry)': 'Rotation: %d\xc2\xb0 - %ds remaining (or wait to retry)'
   Run: Run
+  Run Dangerous Macro?: Run Dangerous Macro?
   Run Macro: Run Macro
   Runout Sensor: Runout Sensor
   SHIPPED IMAGES: SHIPPED IMAGES
@@ -1002,6 +1030,7 @@ translations:
   'Shininess:': 'Shininess:'
   Show detailed print preparation status: Show detailed print preparation status
   Show flying toasters instead of dimming: Show flying toasters instead of dimming
+  Show instead of dimming: Show instead of dimming
   Shutdown: Shutdown
   Shutdown / Reboot: Shutdown / Reboot
   Shutting down...: Shutting down...
@@ -1017,6 +1046,7 @@ translations:
   Sound Settings: Sound Settings
   Sound Theme: Sound Theme
   Sounds: Sounds
+  Source: Source
   Speaker: Speaker
   'Specular:': 'Specular:'
   Speed of prime movement: Speed of prime movement
@@ -1035,6 +1065,7 @@ translations:
   Square Corner Velocity: Square Corner Velocity
   Stable: Stable
   Standby: Standby
+  Starfield: Starfield
   Start: Start
   Start Anyway: Start Anyway
   Start Calibration: Start Calibration
@@ -1044,6 +1075,7 @@ translations:
   Starting Print...: Starting Print...
   Starting...: Starting...
   Startup, auto-control, and macro devices: Startup, auto-control, and macro devices
+  State: State
   Status: Status
   Status icons: Status icons
   Step: Step
@@ -1053,6 +1085,7 @@ translations:
   Stop Print?: Stop Print?
   Stops all motion. Requires firmware restart.: Stops all motion. Requires firmware restart.
   Stow: Stow
+  Success: Success
   Success Rate: Success Rate
   Success!: Success!
   Surfaces inherit app background tokens for light and dark modes.: Surfaces inherit app background tokens for light and dark modes.
@@ -1061,6 +1094,8 @@ translations:
   Switch between light and dark themes: Switch between light and dark themes
   Switching heater control to MPC. Klipper will restart.: Switching heater control to MPC. Klipper will restart.
   Switching to MPC requires a config change and Klipper restart.: Switching to MPC requires a config change and Klipper restart.
+  Sync Drive: Sync Drive
+  Sync Feedback: Sync Feedback
   Sync with Spoolman: Sync with Spoolman
   Sysfs: Sysfs
   System: System
@@ -1215,6 +1250,7 @@ translations:
   Webcam: Webcam
   Website (optional): Website (optional)
   Week: Week
+  Weekly Print Stats: Weekly Print Stats
   ? Weight data is synced from Spoolman to display remaining filament. Changes are also synced when prints start, pause, or complete.
   : Weight data is synced from Spoolman to display remaining filament. Changes are also synced when prints start, pause, or complete.
   Weight sync settings: Weight sync settings
@@ -1263,13 +1299,16 @@ translations:
   disabled: disabled
   e.g. Jet Black: e.g. Jet Black
   e.g. Polymaker: e.g. Polymaker
+  eSpooler: eSpooler
   elapsed: elapsed
   enable: enable
   enabled: enabled
   est: est
   layers: layers
+  mm before clog: mm before clog
   not detected: not detected
   of: of
+  prints: prints
   set to: set to
   started: started
   tall: tall

@@ -3,6 +3,9 @@ translations:
   ' elapsed · ': ' 已用 · '
   ' frames captured': ' 帧已捕获'
   ' left': ' 剩余'
+  '%lu days ago': ''
+  '%lu hours ago': ''
+  '%lu min ago': ''
   '%u layers': '%u 层'
   + Add: + 添加
   + Add Preset: + 添加预设
@@ -11,10 +14,14 @@ translations:
   '- Ensure ADXL345 is connected': '- 确保 ADXL345 已连接'
   '- Try Measure Noise first': '- 先尝试测量噪声'
   --°C: --°C
+  0 = computed: ''
   0 slots: '{0} 个料仓'
   0.4-2mm direct drive, 4-6mm bowden: 直驱 0.4-2mm，远程挤出 4-6mm
+  1 day ago: ''
   1 event queued: 1 个事件排队中
+  1 hour ago: ''
   1 layer: 1 层
+  1 min ago: ''
   1 minute: 1 分钟
   1 more tap to {} beta features: 再点击 1 次以{}测试功能
   1. Printer homes and probes the bed: 1. 打印机归位并探测热床
@@ -33,6 +40,7 @@ translations:
   3. Lower nozzle until paper drags slightly: 3. 降低喷嘴直到纸张有轻微阻力
   30 minutes: 30 分钟
   30 seconds: 30 秒
+  3D Pipes: ''
   3D Preview: 3D 预览
   3D View: 3D 视图
   4. Paper should move but with resistance: 4. 纸张应能移动但有阻力
@@ -46,6 +54,7 @@ translations:
   ABOUT: 关于
   ABS: ABS
   ADXL: ADXL
+  AFC: ''
   AFC Version Warning: AFC版本警告
   AFC failure reset complete: AFC故障重置完成
   AFC failure reset failed: AFC故障重置失败
@@ -148,6 +157,8 @@ translations:
   Both: 两者
   Brightness: 亮度
   Browse: 浏览
+  Buffer Status: ''
+  Buffer information not available for this backend: ''
   Bundle Uploaded: 捆绑包已上传
   Button taps and navigation sounds: 按钮点击和导航声音
   Bypass: 旁路
@@ -209,6 +220,7 @@ translations:
   Clear All Events: 清除所有事件
   Clear Spool: 移除料盘
   Clipboard unavailable - use SSH: 剪贴板不可用 - 请使用 SSH
+  Clog Detection: ''
   Close: 关闭
   Closer: 更近
   Closer = more squish | Farther = less squish: 更近 = 更多挤压 | 更远 = 更少挤压
@@ -291,6 +303,7 @@ translations:
   DISABLED: 已禁用
   Damping (Kd): 阻尼 (Kd)
   Danger: 危险
+  Danger Zone: ''
   Dark Mode: 深色模式
   Database: 数据库
   Date (newest): 日期（最新）
@@ -306,11 +319,14 @@ translations:
   'Delta:': 差值：
   Deploy: 部署
   Detailed: 详细
+  Detection Length: ''
+  Detection Mode: ''
   Dev: 开发版
   Dev channel requires dev_url in config: 开发频道需要在配置中设置 dev_url
   Device name is required: 设备名称为必填项
   Disable: 禁用
   Disable Motors?: 关闭电机？
+  Disabled: ''
   Discard: 丢弃
   Discard Changes?: 丢弃更改？
   Disconnected: 已断开
@@ -319,6 +335,7 @@ translations:
   Dismiss: 忽略
   Display Settings: 显示设置
   Display Sleep: 显示休眠
+  Distance to Fault: ''
   Do not power off your printer.: 请勿关闭打印机电源。
   Do not touch the printer during calibration: 校准期间请勿触碰打印机
   Documentation: 文档
@@ -361,6 +378,7 @@ translations:
   Enable audio feedback: 启用声音反馈
   Enable detailed print preparation tracking (Recommended): 启用详细打印准备跟踪（推荐）
   Enabled: 已启用
+  Encoder: ''
   Ended: 已结束
   Enhancement Complete!: 增强完成！
   Enhancement Failed: 增强失败
@@ -410,6 +428,7 @@ translations:
   Failed to open wizard: 打开向导失败
   Failed to reset theme: 重置主题失败
   Failed to restart Moonraker.: 重启 Moonraker 失败。
+  Failed to save changes to Spoolman: ''
   Failed to save configuration: 保存配置失败
   Failed to save spool: 保存料盘失败
   Failed to save theme file: 保存主题文件失败
@@ -420,6 +439,7 @@ translations:
   Fan Transfer: 风扇传热
   Fans: 风扇
   Farther: 更远
+  Fault Detection: ''
   Feed filament directly to extruder: 将耗材直接送入挤出机
   Filament: 耗材
   Filament Detected: 检测到耗材
@@ -440,6 +460,8 @@ translations:
   Firmware restarting...: 固件重启中...
   Flat Concentric Rings (existing ams_slot): 扁平同心环（现有 ams_slot）
   Flow Rate: 流量
+  Flowguard: ''
+  Flying Toasters: ''
   Forming tip...: 正在成型尖端...
   Found 1 printer: 找到 1 台打印机
   Framerate: 帧率
@@ -570,6 +592,7 @@ translations:
   Learn More: 了解更多
   'Length:': 长度：
   Leveling Gantry...: 正在调平龙门...
+  Lifetime Print Stats: ''
   Light: 浅色
   Link to Spoolman: 关联到Spoolman
   Load: 加载
@@ -616,6 +639,7 @@ translations:
   Make Optional: 设为可选
   Make bed mesh and QGL skippable: 使热床网格和 QGL 可跳过
   Manage: 管理
+  Manual: ''
   Manual Bed Leveling: 手动热床调平
   Markdown Viewer: Markdown 查看器
   Master volume level: 主音量
@@ -686,6 +710,7 @@ translations:
   No PRINT_START macro found: 未找到 PRINT_START 宏
   No Power Devices: 无电源设备
   No Spools: 无料盘
+  No buffer data available: ''
   No changes to revert: 没有可撤销的更改
   No effects available: 无可用特效
   No events queued: 无排队事件
@@ -712,6 +737,7 @@ translations:
   No sensors detected: 未检测到传感器
   No spool assigned: 未分配料盘
   No spools found in Spoolman: Spoolman中未找到料盘
+  No sync feedback data available: ''
   No timelapse videos found: 未找到延时视频
   No vendors found: 未找到供应商
   No webcam detected.\nA webcam is required for timelapse.: 未检测到摄像头。\n延时摄影需要摄像头。
@@ -834,6 +860,7 @@ translations:
   Printer name: 打印机名称
   Printer ready: 打印机就绪
   Printing: 正在打印
+  Prints: ''
   Prints Trend: 打印趋势
   'Private:': 私有：
   Probe: 探针
@@ -927,6 +954,7 @@ translations:
   'Role:': 角色：
   'Rotation: %d\xc2\xb0 - %ds remaining (or wait to retry)': '旋转: %d\xc2\xb0 - 剩余%ds (或等待重试)'
   Run: 运行
+  Run Dangerous Macro?: ''
   Run Macro: 运行宏
   Runout Sensor: 断料传感器
   SHIPPED IMAGES: 内置图片
@@ -1002,6 +1030,7 @@ translations:
   'Shininess:': 光泽度：
   Show detailed print preparation status: 显示详细的打印准备状态
   Show flying toasters instead of dimming: 显示飞行烤面包机而非屏幕变暗
+  Show instead of dimming: ''
   Shutdown: 关机
   Shutdown / Reboot: 关机 / 重启
   Shutting down...: 正在关机...
@@ -1017,6 +1046,7 @@ translations:
   Sound Settings: 声音设置
   Sound Theme: 声音主题
   Sounds: 声音
+  Source: ''
   Speaker: 扬声器
   'Specular:': 镜面反射：
   Speed of prime movement: 预挤移动速度
@@ -1035,6 +1065,7 @@ translations:
   Square Corner Velocity: 直角转弯速度
   Stable: 稳定版
   Standby: 待机
+  Starfield: ''
   Start: 开始
   Start Anyway: 仍然开始
   Start Calibration: 开始校准
@@ -1044,6 +1075,7 @@ translations:
   Starting Print...: 正在启动打印...
   Starting...: 正在启动...
   Startup, auto-control, and macro devices: 启动、自动控制和宏设备
+  State: ''
   Status: 状态
   Status icons: 状态图标
   Step: 步骤
@@ -1053,6 +1085,7 @@ translations:
   Stop Print?: 停止打印？
   Stops all motion. Requires firmware restart.: 停止所有运动。需要固件重启。
   Stow: 收回
+  Success: ''
   Success Rate: 成功率
   Success!: 成功！
   Surfaces inherit app background tokens for light and dark modes.: 表面继承应用背景色用于浅色和深色模式。
@@ -1061,6 +1094,8 @@ translations:
   Switch between light and dark themes: 切换浅色和深色主题
   Switching heater control to MPC. Klipper will restart.: 正在将加热控制切换为 MPC。Klipper 将重启。
   Switching to MPC requires a config change and Klipper restart.: 切换到 MPC 需要修改配置并重启 Klipper。
+  Sync Drive: ''
+  Sync Feedback: ''
   Sync with Spoolman: 与 Spoolman 同步
   Sysfs: Sysfs
   System: 系统
@@ -1215,6 +1250,7 @@ translations:
   Webcam: 摄像头
   Website (optional): 网站（可选）
   Week: 周
+  Weekly Print Stats: ''
   ? Weight data is synced from Spoolman to display remaining filament. Changes are also synced when prints start, pause, or complete.
   : 重量数据从 Spoolman 同步以显示剩余耗材。打印开始、暂停或完成时也会同步更改。
   Weight sync settings: 重量同步设置
@@ -1263,13 +1299,16 @@ translations:
   disabled: 已禁用
   e.g. Jet Black: 例如 炭黑
   e.g. Polymaker: 例如 Polymaker
+  eSpooler: ''
   elapsed: 已用时
   enable: 启用
   enabled: 已启用
   est: est
   layers: 层
+  mm before clog: ''
   not detected: 未检测到
   of: 的
+  prints: ''
   set to: 设置为
   started: 已启动
   tall: 高

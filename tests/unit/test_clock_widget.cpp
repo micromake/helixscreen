@@ -6,6 +6,11 @@
 #include "panel_widget_manager.h"
 #include "panel_widget_registry.h"
 
+#include "format_utils.h"
+#include "locale_formats.h"
+#include "system_settings_manager.h"
+#include "ui_format_utils.h"
+
 #include "../catch_amalgamated.hpp"
 
 using namespace helix;
@@ -174,6 +179,290 @@ TEST_CASE_METHOD(ClockWidgetFixture, "ClockWidget: timer fires during LVGL proce
 
     widget.on_deactivate();
     widget.detach();
+}
+
+// ---------------------------------------------------------------------------
+// Locale-aware date formatting tests
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Locale date formatting", "[clock_widget][i18n]") {
+    // Fixed time: Friday, February 28, 2026 14:30:00
+    struct tm test_tm = {};
+    test_tm.tm_year = 126; // 2026 - 1900
+    test_tm.tm_mon = 1;    // February (0-based)
+    test_tm.tm_mday = 28;
+    test_tm.tm_hour = 14;
+    test_tm.tm_min = 30;
+    test_tm.tm_wday = 5;   // Friday (0=Sunday)
+
+    SECTION("English: Day, Mon DD") {
+        helix::SystemSettingsManager::instance().set_language("en");
+        helix::ui::locale_set_language("en");
+        REQUIRE(helix::ui::format_localized_date(&test_tm) == "Fri, Feb 28");
+    }
+
+    SECTION("German: Day, DD. Mon") {
+        helix::SystemSettingsManager::instance().set_language("de");
+        helix::ui::locale_set_language("de");
+        auto result = helix::ui::format_localized_date(&test_tm);
+        // System locale may or may not be installed, check structure
+        REQUIRE(result.find("28.") != std::string::npos);
+    }
+
+    SECTION("French: Day, DD Mon") {
+        helix::SystemSettingsManager::instance().set_language("fr");
+        helix::ui::locale_set_language("fr");
+        auto result = helix::ui::format_localized_date(&test_tm);
+        REQUIRE(result.find(", 28 ") != std::string::npos);
+    }
+
+    SECTION("Japanese: MM/DD (Day)") {
+        helix::SystemSettingsManager::instance().set_language("ja");
+        helix::ui::locale_set_language("ja");
+        auto result = helix::ui::format_localized_date(&test_tm);
+        REQUIRE(result.find("2/28") != std::string::npos);
+    }
+
+    SECTION("Chinese: MM/DD (Day)") {
+        helix::SystemSettingsManager::instance().set_language("zh");
+        helix::ui::locale_set_language("zh");
+        auto result = helix::ui::format_localized_date(&test_tm);
+        REQUIRE(result.find("2/28") != std::string::npos);
+    }
+
+    SECTION("Russian") {
+        helix::SystemSettingsManager::instance().set_language("ru");
+        helix::ui::locale_set_language("ru");
+        auto result = helix::ui::format_localized_date(&test_tm);
+        REQUIRE(result.find(", 28 ") != std::string::npos);
+    }
+
+    SECTION("Unknown language falls back to English") {
+        helix::SystemSettingsManager::instance().set_language("xx");
+        helix::ui::locale_set_language("xx");
+        REQUIRE(helix::ui::format_localized_date(&test_tm) == "Fri, Feb 28");
+    }
+
+    SECTION("nullptr tm returns unavailable") {
+        REQUIRE(helix::ui::format_localized_date(nullptr) == helix::format::UNAVAILABLE);
+    }
+
+    // Restore default
+    helix::SystemSettingsManager::instance().set_language("en");
+    helix::ui::locale_set_language("en");
+}
+
+TEST_CASE("Locale date formatting: all months cycle", "[clock_widget][i18n]") {
+    helix::SystemSettingsManager::instance().set_language("en");
+    helix::ui::locale_set_language("en");
+
+    // Verify all 12 months produce correct English abbreviations
+    const char* expected_months[] = {
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    };
+
+    for (int m = 0; m < 12; ++m) {
+        struct tm test_tm = {};
+        test_tm.tm_year = 126;
+        test_tm.tm_mon = m;
+        test_tm.tm_mday = 15;
+        test_tm.tm_wday = 0; // Sunday
+        auto result = helix::ui::format_localized_date(&test_tm);
+        REQUIRE(result.find(expected_months[m]) != std::string::npos);
+    }
+}
+
+TEST_CASE("Locale date formatting: all days of week", "[clock_widget][i18n]") {
+    helix::SystemSettingsManager::instance().set_language("en");
+    helix::ui::locale_set_language("en");
+
+    const char* expected_days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+
+    for (int d = 0; d < 7; ++d) {
+        struct tm test_tm = {};
+        test_tm.tm_year = 126;
+        test_tm.tm_mon = 0; // January
+        test_tm.tm_mday = 1;
+        test_tm.tm_wday = d;
+        auto result = helix::ui::format_localized_date(&test_tm);
+        REQUIRE(result.find(expected_days[d]) != std::string::npos);
+    }
+}
+
+TEST_CASE("Locale date formatting: Spanish and Portuguese", "[clock_widget][i18n]") {
+    struct tm test_tm = {};
+    test_tm.tm_year = 126;
+    test_tm.tm_mon = 1;
+    test_tm.tm_mday = 28;
+    test_tm.tm_hour = 14;
+    test_tm.tm_min = 30;
+    test_tm.tm_wday = 5;
+
+    SECTION("Spanish: DMY order") {
+        helix::SystemSettingsManager::instance().set_language("es");
+        helix::ui::locale_set_language("es");
+        auto result = helix::ui::format_localized_date(&test_tm);
+        REQUIRE(result.find(", 28 ") != std::string::npos);
+    }
+
+    SECTION("Portuguese: DMY order") {
+        helix::SystemSettingsManager::instance().set_language("pt");
+        helix::ui::locale_set_language("pt");
+        auto result = helix::ui::format_localized_date(&test_tm);
+        REQUIRE(result.find(", 28 ") != std::string::npos);
+    }
+
+    SECTION("Italian: DMY order") {
+        helix::SystemSettingsManager::instance().set_language("it");
+        helix::ui::locale_set_language("it");
+        auto result = helix::ui::format_localized_date(&test_tm);
+        REQUIRE(result.find(", 28 ") != std::string::npos);
+    }
+
+    helix::SystemSettingsManager::instance().set_language("en");
+    helix::ui::locale_set_language("en");
+}
+
+TEST_CASE("Locale modified date formatting", "[clock_widget][i18n]") {
+    struct tm test_tm = {};
+    test_tm.tm_year = 126;
+    test_tm.tm_mon = 1;    // February
+    test_tm.tm_mday = 28;
+    test_tm.tm_hour = 14;
+    test_tm.tm_min = 30;
+    test_tm.tm_wday = 5;
+
+    SECTION("English modified date includes month and time") {
+        helix::SystemSettingsManager::instance().set_language("en");
+        helix::ui::locale_set_language("en");
+        auto result = helix::ui::format_localized_modified_date(&test_tm);
+        // Should contain "Feb" and "28" and time
+        REQUIRE(result.find("Feb") != std::string::npos);
+        REQUIRE(result.find("28") != std::string::npos);
+    }
+
+    SECTION("German modified date: DD. Mon time") {
+        helix::SystemSettingsManager::instance().set_language("de");
+        helix::ui::locale_set_language("de");
+        auto result = helix::ui::format_localized_modified_date(&test_tm);
+        REQUIRE(result.find("28.") != std::string::npos);
+    }
+
+    SECTION("CJK modified date: MM/DD time") {
+        helix::SystemSettingsManager::instance().set_language("ja");
+        helix::ui::locale_set_language("ja");
+        auto result = helix::ui::format_localized_modified_date(&test_tm);
+        REQUIRE(result.find("2/28") != std::string::npos);
+    }
+
+    SECTION("nullptr returns unavailable") {
+        REQUIRE(helix::ui::format_localized_modified_date(nullptr) == helix::format::UNAVAILABLE);
+    }
+
+    helix::SystemSettingsManager::instance().set_language("en");
+    helix::ui::locale_set_language("en");
+}
+
+TEST_CASE("Locale date formatting: boundary day values", "[clock_widget][i18n]") {
+    helix::SystemSettingsManager::instance().set_language("en");
+    helix::ui::locale_set_language("en");
+
+    SECTION("Day 1 (first of month)") {
+        struct tm test_tm = {};
+        test_tm.tm_year = 126;
+        test_tm.tm_mon = 0;
+        test_tm.tm_mday = 1;
+        test_tm.tm_wday = 3;
+        auto result = helix::ui::format_localized_date(&test_tm);
+        REQUIRE(result == "Wed, Jan 1");
+    }
+
+    SECTION("Day 31 (last of month)") {
+        struct tm test_tm = {};
+        test_tm.tm_year = 126;
+        test_tm.tm_mon = 0;
+        test_tm.tm_mday = 31;
+        test_tm.tm_wday = 5;
+        auto result = helix::ui::format_localized_date(&test_tm);
+        REQUIRE(result == "Fri, Jan 31");
+    }
+}
+
+TEST_CASE("Locale date formatting: CJK single-digit month", "[clock_widget][i18n]") {
+    helix::SystemSettingsManager::instance().set_language("ja");
+    helix::ui::locale_set_language("ja");
+
+    SECTION("January (single digit)") {
+        struct tm test_tm = {};
+        test_tm.tm_year = 126;
+        test_tm.tm_mon = 0;
+        test_tm.tm_mday = 5;
+        test_tm.tm_wday = 0;
+        auto result = helix::ui::format_localized_date(&test_tm);
+        REQUIRE(result.find("1/5") != std::string::npos);
+    }
+
+    SECTION("December (double digit)") {
+        struct tm test_tm = {};
+        test_tm.tm_year = 126;
+        test_tm.tm_mon = 11;
+        test_tm.tm_mday = 25;
+        test_tm.tm_wday = 4;
+        auto result = helix::ui::format_localized_date(&test_tm);
+        REQUIRE(result.find("12/25") != std::string::npos);
+    }
+
+    helix::SystemSettingsManager::instance().set_language("en");
+    helix::ui::locale_set_language("en");
+}
+
+TEST_CASE("format_modified_date integration", "[clock_widget][i18n]") {
+    // Verify the public API format_modified_date() uses locale formatting
+    helix::SystemSettingsManager::instance().set_language("en");
+    helix::ui::locale_set_language("en");
+
+    // Use a known timestamp
+    time_t ts = 1740700200; // Feb 28, 2025 ~2:30 UTC (actual local depends on TZ)
+    auto result = helix::ui::format_modified_date(ts);
+    REQUIRE(!result.empty());
+    REQUIRE(result != "Unknown");
+}
+
+TEST_CASE("Locale default 24h", "[clock_widget][i18n]") {
+    REQUIRE_FALSE(helix::ui::locale_default_24h("en"));
+    REQUIRE(helix::ui::locale_default_24h("de"));
+    REQUIRE(helix::ui::locale_default_24h("fr"));
+    REQUIRE(helix::ui::locale_default_24h("es"));
+    REQUIRE(helix::ui::locale_default_24h("ru"));
+    REQUIRE(helix::ui::locale_default_24h("pt"));
+    REQUIRE(helix::ui::locale_default_24h("it"));
+    REQUIRE(helix::ui::locale_default_24h("ja"));
+    REQUIRE(helix::ui::locale_default_24h("zh"));
+    REQUIRE_FALSE(helix::ui::locale_default_24h("xx")); // unknown = en default
+    REQUIRE_FALSE(helix::ui::locale_default_24h(""));    // empty = en default
+}
+
+TEST_CASE("Locale set language caching", "[clock_widget][i18n]") {
+    // Setting the same language twice shouldn't break anything
+    helix::ui::locale_set_language("fr");
+    helix::ui::locale_set_language("fr");
+
+    struct tm test_tm = {};
+    test_tm.tm_year = 126;
+    test_tm.tm_mon = 1;
+    test_tm.tm_mday = 28;
+    test_tm.tm_wday = 5;
+
+    auto result = helix::ui::format_localized_date(&test_tm);
+    REQUIRE(result.find(", 28 ") != std::string::npos);
+
+    // Switch back
+    helix::ui::locale_set_language("en");
+    result = helix::ui::format_localized_date(&test_tm);
+    REQUIRE(result == "Fri, Feb 28");
+
+    helix::SystemSettingsManager::instance().set_language("en");
 }
 
 // ---------------------------------------------------------------------------

@@ -17,6 +17,7 @@ using helix::ui::format_filament_weight;
 using helix::ui::format_file_size;
 using helix::ui::format_modified_date;
 using helix::ui::format_print_time;
+using helix::ui::format_relative_time;
 using helix::ui::image_scale_to_contain;
 using helix::ui::image_scale_to_cover;
 
@@ -177,6 +178,37 @@ TEST_CASE("UI Utils: format_modified_date - edge cases", "[ui_utils][format][edg
         time_t now = time(nullptr);
         std::string result = format_modified_date(now);
         REQUIRE(!result.empty());
+    }
+}
+
+// ============================================================================
+// format_relative_time() Tests
+// ============================================================================
+
+TEST_CASE("UI Utils: format_relative_time", "[ui_utils][format][i18n]") {
+    SECTION("Just now - under 1 minute") {
+        REQUIRE(format_relative_time(0) == "Just now");
+        REQUIRE(format_relative_time(30000) == "Just now");   // 30s
+        REQUIRE(format_relative_time(59999) == "Just now");   // 59.999s
+    }
+
+    SECTION("Minutes ago") {
+        REQUIRE(format_relative_time(60000) == "1 min ago");  // exactly 1 min
+        REQUIRE(format_relative_time(120000) == "2 min ago"); // 2 min
+        REQUIRE(format_relative_time(300000) == "5 min ago"); // 5 min
+        REQUIRE(format_relative_time(3599999) == "59 min ago"); // just under 1 hour
+    }
+
+    SECTION("Hours ago") {
+        REQUIRE(format_relative_time(3600000) == "1 hour ago");   // exactly 1 hour
+        REQUIRE(format_relative_time(7200000) == "2 hours ago");  // 2 hours
+        REQUIRE(format_relative_time(86399999) == "23 hours ago"); // just under 1 day
+    }
+
+    SECTION("Days ago") {
+        REQUIRE(format_relative_time(86400000) == "1 day ago");    // exactly 1 day
+        REQUIRE(format_relative_time(172800000) == "2 days ago");  // 2 days
+        REQUIRE(format_relative_time(604800000) == "7 days ago");  // 1 week
     }
 }
 

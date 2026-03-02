@@ -5,7 +5,9 @@
 
 #include "display_settings_manager.h"
 #include "format_utils.h"
+#include "locale_formats.h"
 #include "moonraker_client.h"
+#include "ui_format_utils.h"
 
 #include <spdlog/spdlog.h>
 
@@ -34,28 +36,8 @@ std::string format_history_duration(double seconds) {
  * @return Formatted string like "Dec 1, 2:30 PM" (12H) or "Dec 1, 14:30" (24H)
  */
 std::string format_history_date(double timestamp) {
-    char buf[64];
     time_t t = static_cast<time_t>(timestamp);
-    struct tm* timeinfo = localtime(&t);
-    if (timeinfo) {
-        // Format date part, then time part based on user preference
-        TimeFormat format = DisplaySettingsManager::instance().get_time_format();
-        if (format == TimeFormat::HOUR_12) {
-            strftime(buf, sizeof(buf), "%b %d, %l:%M %p", timeinfo);
-            // Trim double spaces from %l (space-padded hour)
-            std::string result(buf);
-            size_t pos;
-            while ((pos = result.find("  ")) != std::string::npos) {
-                result.erase(pos, 1);
-            }
-            return result;
-        } else {
-            strftime(buf, sizeof(buf), "%b %d, %H:%M", timeinfo);
-        }
-    } else {
-        snprintf(buf, sizeof(buf), "Unknown");
-    }
-    return std::string(buf);
+    return helix::ui::format_modified_date(t);
 }
 
 /**

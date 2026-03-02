@@ -4,6 +4,7 @@
 #include "ui_panel_notification_history.h"
 
 #include "ui_event_safety.h"
+#include "ui_format_utils.h"
 #include "ui_nav_manager.h"
 #include "ui_notification_manager.h"
 #include "ui_panel_common.h"
@@ -196,23 +197,9 @@ std::string NotificationHistoryPanel::format_timestamp(uint64_t timestamp_ms) {
     uint64_t now = lv_tick_get();
 
     // Handle edge case where timestamp is in future (shouldn't happen)
-    if (timestamp_ms > now) {
-        return "Just now";
-    }
+    uint64_t diff_ms = (timestamp_ms > now) ? 0 : (now - timestamp_ms);
 
-    uint64_t diff_ms = now - timestamp_ms;
-
-    if (diff_ms < 60000) { // < 1 min
-        return "Just now";
-    } else if (diff_ms < 3600000) { // < 1 hour
-        return fmt::format("{} min ago", diff_ms / 60000);
-    } else if (diff_ms < 86400000) { // < 1 day
-        uint64_t hours = diff_ms / 3600000;
-        return fmt::format("{} hour{} ago", hours, hours > 1 ? "s" : "");
-    } else {
-        uint64_t days = diff_ms / 86400000;
-        return fmt::format("{} day{} ago", days, days > 1 ? "s" : "");
-    }
+    return helix::ui::format_relative_time(diff_ms);
 }
 
 // ============================================================================

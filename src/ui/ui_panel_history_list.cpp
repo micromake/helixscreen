@@ -15,6 +15,7 @@
 #include "app_globals.h"
 #include "display_settings_manager.h"
 #include "format_utils.h"
+#include "ui_format_utils.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "moonraker_client.h"
@@ -1081,23 +1082,8 @@ void HistoryListPanel::update_detail_subjects(const PrintHistoryJob& job) {
     // Format end time from end_time timestamp
     if (job.end_time > 0) {
         time_t end_ts = static_cast<time_t>(job.end_time);
-        struct tm* tm_info = localtime(&end_ts);
-        char buf[32];
-        // Format based on user's time format preference
-        TimeFormat format = DisplaySettingsManager::instance().get_time_format();
-        if (format == TimeFormat::HOUR_12) {
-            strftime(buf, sizeof(buf), "%b %d, %l:%M %p", tm_info);
-            // Trim double spaces from %l (space-padded hour)
-            std::string result(buf);
-            size_t pos;
-            while ((pos = result.find("  ")) != std::string::npos) {
-                result.erase(pos, 1);
-            }
-            lv_subject_copy_string(&detail_end_time_, result.c_str());
-        } else {
-            strftime(buf, sizeof(buf), "%b %d, %H:%M", tm_info);
-            lv_subject_copy_string(&detail_end_time_, buf);
-        }
+        std::string end_str = helix::ui::format_modified_date(end_ts);
+        lv_subject_copy_string(&detail_end_time_, end_str.c_str());
     } else {
         lv_subject_copy_string(&detail_end_time_, "-");
     }

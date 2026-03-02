@@ -3,6 +3,9 @@ translations:
   ' elapsed · ': ' écoulé · '
   ' frames captured': ' images capturées'
   ' left': ' restant'
+  '%lu days ago': 'il y a %lu jours'
+  '%lu hours ago': 'il y a %lu heures'
+  '%lu min ago': 'il y a %lu min'
   '%u layers': '%u couches'
   + Add: + Ajouter
   + Add Preset: + Ajouter un préréglage
@@ -11,10 +14,14 @@ translations:
   '- Ensure ADXL345 is connected': '- Assurez-vous que l''ADXL345 est connecté'
   '- Try Measure Noise first': '- Essayez d''abord Mesurer le bruit'
   --°C: --°C
+  0 = computed: '0 = calculé'
   0 slots: 0 emplacements
   0.4-2mm direct drive, 4-6mm bowden: 0.4-2mm entraînement direct, 4-6mm bowden
+  1 day ago: 'il y a 1 jour'
   1 event queued: "1 événement en attente"
+  1 hour ago: 'il y a 1 heure'
   1 layer: 1 couche
+  1 min ago: 'il y a 1 min'
   1 minute: 1 minute
   1 more tap to {} beta features: 1 appui supplémentaire pour {} les fonctionnalités bêta
   1. Printer homes and probes the bed: 1. L'imprimante fait l'origine et palpe le plateau
@@ -33,6 +40,7 @@ translations:
   3. Lower nozzle until paper drags slightly: 3. Abaissez la buse jusqu'à ce que le papier frotte légèrement
   30 minutes: 30 minutes
   30 seconds: 30 secondes
+  3D Pipes: 3D Pipes
   3D Preview: Aperçu 3D
   3D View: Vue 3D
   4. Paper should move but with resistance: 4. Le papier doit bouger mais avec résistance
@@ -46,6 +54,7 @@ translations:
   ABOUT: À PROPOS
   ABS: ABS
   ADXL: ADXL
+  AFC: AFC
   AFC Version Warning: Avertissement de version AFC
   AFC failure reset complete: Réinitialisation erreur AFC terminée
   AFC failure reset failed: Échec de la réinitialisation erreur AFC
@@ -148,6 +157,8 @@ translations:
   Both: Les deux
   Brightness: Luminosité
   Browse: Parcourir
+  Buffer Status: 'État du tampon'
+  Buffer information not available for this backend: 'Informations de tampon non disponibles pour ce backend'
   Bundle Uploaded: Bundle téléversé
   Button taps and navigation sounds: Sons de boutons et de navigation
   Bypass: Bypass
@@ -209,6 +220,7 @@ translations:
   Clear All Events: Effacer tous les événements
   Clear Spool: Retirer la bobine
   Clipboard unavailable - use SSH: Presse-papiers indisponible - utilisez SSH
+  Clog Detection: 'Détection de bouchon'
   Close: Fermer
   Closer: Plus près
   Closer = more squish | Farther = less squish: Plus proche = plus écrasé | Plus loin = moins écrasé
@@ -291,6 +303,7 @@ translations:
   DISABLED: DÉSACTIVÉ
   Damping (Kd): Amortissement (Kd)
   Danger: Danger
+  Danger Zone: 'Zone dangereuse'
   Dark Mode: Mode sombre
   Database: Base de données
   Date (newest): Date (plus récent)
@@ -306,11 +319,14 @@ translations:
   'Delta:': 'Delta :'
   Deploy: Déployer
   Detailed: Détaillé
+  Detection Length: 'Longueur de détection'
+  Detection Mode: 'Mode de détection'
   Dev: Dev
   Dev channel requires dev_url in config: Le canal de développement nécessite dev_url dans la configuration
   Device name is required: Le nom de l'appareil est requis
   Disable: Désactiver
   Disable Motors?: Désactiver les moteurs ?
+  Disabled: Désactivé
   Discard: Abandonner
   Discard Changes?: Abandonner les modifications ?
   Disconnected: Déconnecté
@@ -319,6 +335,7 @@ translations:
   Dismiss: Ignorer
   Display Settings: Paramètres d'affichage
   Display Sleep: Veille de l'écran
+  Distance to Fault: 'Distance au défaut'
   Do not power off your printer.: N'éteignez pas votre imprimante.
   Do not touch the printer during calibration: Ne touchez pas l'imprimante pendant la calibration
   Documentation: Documentation
@@ -361,6 +378,7 @@ translations:
   Enable audio feedback: Activer le retour audio
   Enable detailed print preparation tracking (Recommended): Activer le suivi détaillé de la préparation d'impression (Recommandé)
   Enabled: Activé
+  Encoder: Encodeur
   Ended: Terminé
   Enhancement Complete!: Amélioration terminée !
   Enhancement Failed: Amélioration échouée
@@ -410,6 +428,7 @@ translations:
   Failed to open wizard: Échec de l'ouverture de l'assistant
   Failed to reset theme: Échec de la réinitialisation du thème
   Failed to restart Moonraker.: Échec du redémarrage de Moonraker.
+  Failed to save changes to Spoolman: "Échec de l'enregistrement des modifications dans Spoolman"
   Failed to save configuration: Échec de l'enregistrement de la configuration
   Failed to save spool: Échec de l'enregistrement de la bobine
   Failed to save theme file: Échec de l'enregistrement du fichier de thème
@@ -420,6 +439,7 @@ translations:
   Fan Transfer: Transfert ventilateur
   Fans: Ventilateurs
   Farther: Plus loin
+  Fault Detection: 'Détection de défaut'
   Feed filament directly to extruder: Alimenter le filament directement vers l'extrudeur
   Filament: Filament
   Filament Detected: Filament détecté
@@ -440,6 +460,8 @@ translations:
   Firmware restarting...: Redémarrage du firmware...
   Flat Concentric Rings (existing ams_slot): Anneaux concentriques plats (ams_slot existant)
   Flow Rate: Débit
+  Flowguard: Flowguard
+  Flying Toasters: Flying Toasters
   Forming tip...: Formation de la pointe...
   Found 1 printer: 1 imprimante trouvée
   Framerate: Fréquence d'images
@@ -570,6 +592,7 @@ translations:
   Learn More: En savoir plus
   'Length:': 'Longueur :'
   Leveling Gantry...: Nivellement du portique...
+  Lifetime Print Stats: "Statistiques d'impression totales"
   Light: Clair
   Link to Spoolman: Lier à Spoolman
   Load: Charger
@@ -616,6 +639,7 @@ translations:
   Make Optional: Rendre optionnel
   Make bed mesh and QGL skippable: Rendre le maillage du plateau et QGL ignorables
   Manage: Gérer
+  Manual: Manuel
   Manual Bed Leveling: Mise à niveau manuelle du plateau
   Markdown Viewer: Visionneuse Markdown
   Master volume level: Niveau de volume principal
@@ -686,6 +710,7 @@ translations:
   No PRINT_START macro found: Aucune macro PRINT_START trouvée
   No Power Devices: Aucun appareil électrique
   No Spools: Aucune bobine
+  No buffer data available: 'Aucune donnée de tampon disponible'
   No changes to revert: Aucune modification à annuler
   No effects available: Aucun effet disponible
   No events queued: Aucun événement en file
@@ -712,6 +737,7 @@ translations:
   No sensors detected: Aucun capteur détecté
   No spool assigned: Aucune bobine assignée
   No spools found in Spoolman: Aucune bobine trouvée dans Spoolman
+  No sync feedback data available: 'Aucune donnée de retour sync disponible'
   No timelapse videos found: Aucune vidéo timelapse trouvée
   No vendors found: Aucun fournisseur trouvé
   No webcam detected.\nA webcam is required for timelapse.: Aucune webcam détectée.\nUne webcam est requise pour le timelapse.
@@ -834,6 +860,7 @@ translations:
   Printer name: Nom de l'imprimante
   Printer ready: Imprimante prête
   Printing: Impression
+  Prints: Impressions
   Prints Trend: Tendance des impressions
   'Private:': 'Privé :'
   Probe: Sonde
@@ -927,6 +954,7 @@ translations:
   'Role:': 'Rôle :'
   'Rotation: %d\xc2\xb0 - %ds remaining (or wait to retry)': 'Rotation : %d\xc2\xb0 - %ds restantes (ou attendre pour réessayer)'
   Run: Exécuter
+  Run Dangerous Macro?: 'Exécuter le macro dangereux ?'
   Run Macro: Exécuter la macro
   Runout Sensor: Capteur de fin de filament
   SHIPPED IMAGES: IMAGES FOURNIES
@@ -1002,6 +1030,7 @@ translations:
   'Shininess:': 'Brillance :'
   Show detailed print preparation status: Afficher l'état détaillé de la préparation d'impression
   Show flying toasters instead of dimming: Afficher des grille-pains volants plutôt que d'assombrir
+  Show instead of dimming: "Afficher au lieu d'atténuer"
   Shutdown: Éteindre
   Shutdown / Reboot: Éteindre / Redémarrer
   Shutting down...: Arrêt en cours...
@@ -1017,6 +1046,7 @@ translations:
   Sound Settings: Paramètres sonores
   Sound Theme: Thème sonore
   Sounds: Sons
+  Source: Source
   Speaker: Haut-parleur
   'Specular:': 'Spéculaire :'
   Speed of prime movement: Vitesse du mouvement d'amorçage
@@ -1035,6 +1065,7 @@ translations:
   Square Corner Velocity: Vitesse dans les angles
   Stable: Stable
   Standby: Veille
+  Starfield: Starfield
   Start: Démarrer
   Start Anyway: Démarrer quand même
   Start Calibration: Démarrer la calibration
@@ -1044,6 +1075,7 @@ translations:
   Starting Print...: "Démarrage de l'impression..."
   Starting...: Démarrage...
   Startup, auto-control, and macro devices: Démarrage, contrôle auto et appareils macro
+  State: ''
   Status: État
   Status icons: Icônes d'état
   Step: Étape
@@ -1053,6 +1085,7 @@ translations:
   Stop Print?: Arrêter l'impression ?
   Stops all motion. Requires firmware restart.: Arrête tout mouvement. Nécessite un redémarrage du firmware.
   Stow: Ranger
+  Success: ''
   Success Rate: Taux de réussite
   Success!: Succès !
   Surfaces inherit app background tokens for light and dark modes.: Les surfaces héritent des jetons d'arrière-plan de l'application pour les modes clair et sombre.
@@ -1061,6 +1094,8 @@ translations:
   Switch between light and dark themes: Basculer entre les thèmes clair et sombre
   Switching heater control to MPC. Klipper will restart.: Basculement du chauffage vers MPC. Klipper va redémarrer.
   Switching to MPC requires a config change and Klipper restart.: Le passage à MPC nécessite une modification de la config et un redémarrage de Klipper.
+  Sync Drive: ''
+  Sync Feedback: ''
   Sync with Spoolman: Synchroniser avec Spoolman
   Sysfs: Sysfs
   System: Système
@@ -1215,6 +1250,7 @@ translations:
   Webcam: Webcam
   Website (optional): Site web (facultatif)
   Week: Semaine
+  Weekly Print Stats: ''
   ? Weight data is synced from Spoolman to display remaining filament. Changes are also synced when prints start, pause, or complete.
   : Les données de poids sont synchronisées depuis Spoolman pour afficher le filament restant. Les modifications sont également synchronisées au démarrage, à la pause ou à la fin des impressions.
   Weight sync settings: Paramètres de synchronisation du poids
@@ -1263,13 +1299,16 @@ translations:
   disabled: désactivé
   e.g. Jet Black: p. ex. Noir profond
   e.g. Polymaker: p. ex. Polymaker
+  eSpooler: ''
   elapsed: écoulé
   enable: activer
   enabled: activé
   est: est
   layers: couches
+  mm before clog: ''
   not detected: non détecté
   of: de
+  prints: ''
   set to: réglé à
   started: lancé
   tall: de haut

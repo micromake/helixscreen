@@ -5,6 +5,7 @@
 
 #include "display_settings_manager.h"
 #include "format_utils.h"
+#include "locale_formats.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 
 #include <cstdio>
@@ -97,27 +98,43 @@ std::string format_time(const struct tm* tm_info) {
 }
 
 std::string format_modified_date(time_t timestamp) {
-    char buf[64];
-    struct tm* timeinfo = localtime(&timestamp);
-    if (timeinfo) {
-        // Format: "Jan 15 2:30 PM" (12H) or "Jan 15 14:30" (24H)
-        TimeFormat format = DisplaySettingsManager::instance().get_time_format();
-        if (format == TimeFormat::HOUR_12) {
-            strftime(buf, sizeof(buf), "%b %d %l:%M %p", timeinfo);
-            // Trim double spaces from %l (space-padded hour)
-            std::string result(buf);
-            size_t pos;
-            while ((pos = result.find("  ")) != std::string::npos) {
-                result.erase(pos, 1);
-            }
-            return result;
-        } else {
-            strftime(buf, sizeof(buf), "%b %d %H:%M", timeinfo);
-        }
-    } else {
-        snprintf(buf, sizeof(buf), "Unknown");
+    struct tm tm_buf;
+    struct tm* timeinfo = localtime_r(&timestamp, &tm_buf);
+    if (!timeinfo) {
+        return "Unknown";
     }
-    return std::string(buf);
+    return format_localized_modified_date(timeinfo);
+}
+
+std::string format_relative_time(uint64_t elapsed_ms) {
+    if (elapsed_ms < 60000) { // < 1 min
+        return lv_tr("Just now");
+    }
+    if (elapsed_ms < 3600000) { // < 1 hour
+        uint64_t mins = elapsed_ms / 60000;
+        if (mins == 1) {
+            return lv_tr("1 min ago");
+        }
+        char buf[32];
+        snprintf(buf, sizeof(buf), lv_tr("%lu min ago"), static_cast<unsigned long>(mins));
+        return buf;
+    }
+    if (elapsed_ms < 86400000) { // < 1 day
+        uint64_t hours = elapsed_ms / 3600000;
+        if (hours == 1) {
+            return lv_tr("1 hour ago");
+        }
+        char buf[32];
+        snprintf(buf, sizeof(buf), lv_tr("%lu hours ago"), static_cast<unsigned long>(hours));
+        return buf;
+    }
+    uint64_t days = elapsed_ms / 86400000;
+    if (days == 1) {
+        return lv_tr("1 day ago");
+    }
+    char buf[32];
+    snprintf(buf, sizeof(buf), lv_tr("%lu days ago"), static_cast<unsigned long>(days));
+    return buf;
 }
 
 } // namespace helix::ui
