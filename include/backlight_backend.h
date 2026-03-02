@@ -90,6 +90,20 @@ class BacklightBackend {
     }
 
     /**
+     * @brief Check if this backend supports continuous brightness dimming
+     *
+     * Binary backlights (e.g. GPIO with max_brightness=1) can only be fully
+     * on or off — intermediate values get truncated to 0, turning the screen
+     * black. Returns false for such backends so the UI can hide the brightness
+     * slider and skip the dim-before-sleep transition.
+     *
+     * @return true if brightness can be smoothly adjusted (PWM/analog)
+     */
+    virtual bool supports_dimming() const {
+        return true;
+    }
+
+    /**
      * @brief Factory: create best available backend with auto-detection
      *
      * Detection order:

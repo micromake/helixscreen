@@ -985,7 +985,7 @@ translations:
   'Score: 0': 'Счёт: 0'
   Screen Dim: Затемнение экрана
   Screen dims to lower brightness after period of inactivity: Экран затемняется после периода простоя
-  Screen will dim after the selected period of inactivity: Экран затемнится после выбранного периода простоя
+  Screen sleeps after the selected period of inactivity: Экран затемнится после выбранного периода простоя
   Screensaver: Заставка
   Screws Tilt: Наклон винтов
   Scroll Speed: Скорость прокрутки

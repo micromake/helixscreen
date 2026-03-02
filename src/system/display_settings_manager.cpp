@@ -127,6 +127,14 @@ void DisplaySettingsManager::init_subjects() {
     UI_MANAGED_SUBJECT_INT(has_backlight_subject_, has_backlight ? 1 : 0, "settings_has_backlight",
                            subjects_);
 
+    // Has dimming control subject (for brightness slider visibility)
+    bool has_dimming = false;
+    if (auto* dm = DisplayManager::instance()) {
+        has_dimming = dm->has_dimming_control();
+    }
+    UI_MANAGED_SUBJECT_INT(has_dimming_subject_, has_dimming ? 1 : 0, "settings_has_dimming",
+                           subjects_);
+
     // Sleep while printing (default: true = allow sleep during prints)
     bool sleep_while_printing = config->get<bool>("/display/sleep_while_printing", true);
     UI_MANAGED_SUBJECT_INT(sleep_while_printing_subject_, sleep_while_printing ? 1 : 0,
@@ -414,6 +422,13 @@ void DisplaySettingsManager::set_brightness(int percent) {
 bool DisplaySettingsManager::has_backlight_control() const {
     if (auto* dm = DisplayManager::instance()) {
         return dm->has_backlight_control();
+    }
+    return false;
+}
+
+bool DisplaySettingsManager::has_dimming_control() const {
+    if (auto* dm = DisplayManager::instance()) {
+        return dm->has_dimming_control();
     }
     return false;
 }

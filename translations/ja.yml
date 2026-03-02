@@ -985,7 +985,7 @@ translations:
   'Score: 0': 'スコア: 0'
   Screen Dim: 画面減光
   Screen dims to lower brightness after period of inactivity: 一定時間操作がないと画面の明るさが下がります
-  Screen will dim after the selected period of inactivity: 選択した時間操作がないと画面が減光します
+  Screen sleeps after the selected period of inactivity: 選択した時間操作がないと画面が減光します
   Screensaver: スクリーンセーバー
   Screws Tilt: ネジ傾き
   Scroll Speed: スクロール速度

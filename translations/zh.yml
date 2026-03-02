@@ -985,7 +985,7 @@ translations:
   'Score: 0': '得分: 0'
   Screen Dim: 屏幕变暗
   Screen dims to lower brightness after period of inactivity: 一段时间不活动后屏幕会降低亮度
-  Screen will dim after the selected period of inactivity: 在选定的不活动时间后屏幕将变暗
+  Screen sleeps after the selected period of inactivity: 在选定的不活动时间后屏幕将变暗
   Screensaver: 屏保
   Screws Tilt: 螺丝倾斜
   Scroll Speed: 滚动速度

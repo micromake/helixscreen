@@ -76,6 +76,10 @@ class BacklightBackendNone : public BacklightBackend {
         return simulate_ ? "Simulated" : "None";
     }
 
+    bool supports_dimming() const override {
+        return simulate_;
+    }
+
   private:
     bool simulate_;
     int cached_brightness_;
@@ -159,6 +163,10 @@ class BacklightBackendSysfs : public BacklightBackend {
 
     const char* name() const override {
         return "Sysfs";
+    }
+
+    bool supports_dimming() const override {
+        return max_brightness_ > 1;
     }
 
   private:

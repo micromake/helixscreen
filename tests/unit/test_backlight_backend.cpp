@@ -165,4 +165,40 @@ TEST_CASE("Sysfs backend works without bl_power file", "[api][backlight][sysfs]"
     REQUIRE(backend->set_brightness(100));
     REQUIRE(fake.read_file("brightness") == "255");
 }
+TEST_CASE("Sysfs supports_dimming() returns false when max_brightness=1",
+          "[api][backlight][sysfs]") {
+    FakeSysfsBacklight fake(1); // Binary backlight (GPIO on/off)
+    auto backend = BacklightBackend::create_sysfs(fake.base_dir.string());
+    REQUIRE(backend->is_available());
+    REQUIRE_FALSE(backend->supports_dimming());
+}
+
+TEST_CASE("Sysfs supports_dimming() returns true when max_brightness > 1",
+          "[api][backlight][sysfs]") {
+    FakeSysfsBacklight fake(255); // PWM backlight with full range
+    auto backend = BacklightBackend::create_sysfs(fake.base_dir.string());
+    REQUIRE(backend->is_available());
+    REQUIRE(backend->supports_dimming());
+}
+
 #endif // __linux__
+
+// ============================================================================
+// BacklightBackendNone::supports_dimming() Tests
+// ============================================================================
+
+TEST_CASE("None backend supports_dimming() mirrors simulate flag", "[api][backlight]") {
+    // In test mode (simulated), supports_dimming should be true
+    TestModeGuard guard(get_runtime_config());
+    auto backend = BacklightBackend::create();
+    REQUIRE(std::string(backend->name()) == "Simulated");
+    REQUIRE(backend->supports_dimming());
+}
+
+TEST_CASE("None backend supports_dimming() returns false without simulate",
+          "[api][backlight]") {
+    // Production None backend: no dimming
+    auto backend = BacklightBackend::create();
+    REQUIRE(std::string(backend->name()) == "None");
+    REQUIRE_FALSE(backend->supports_dimming());
+}

@@ -695,11 +695,12 @@ void DisplayManager::check_display_sleep() {
         }
     } else {
         // Currently awake - check if we should dim or sleep
+        bool can_dim = m_backlight && m_backlight->supports_dimming();
         if (sleep_timeout_sec > 0 && inactive_ms >= sleep_timeout_ms) {
             // Skip dim, go straight to sleep (sleep timeout <= dim timeout)
             enter_sleep(sleep_timeout_sec);
-        } else if (m_dim_timeout_sec > 0 && inactive_ms >= dim_timeout_ms) {
-            // Dim the display
+        } else if (can_dim && m_dim_timeout_sec > 0 && inactive_ms >= dim_timeout_ms) {
+            // Dim the display (only if backlight supports continuous dimming)
             m_display_dimmed = true;
 #ifdef HELIX_ENABLE_SCREENSAVER
             // Start screensaver instead of just dimming (if configured)
@@ -831,6 +832,10 @@ void DisplayManager::set_backlight_brightness(int percent) {
 
 bool DisplayManager::has_backlight_control() const {
     return m_backlight && m_backlight->is_available();
+}
+
+bool DisplayManager::has_dimming_control() const {
+    return m_backlight && m_backlight->supports_dimming();
 }
 
 // ============================================================================

@@ -105,6 +105,9 @@ class DisplaySettingsManager {
     /** @brief Check if hardware backlight control is available */
     bool has_backlight_control() const;
 
+    /** @brief Check if backlight supports continuous dimming (not binary on/off) */
+    bool has_dimming_control() const;
+
     /** @brief Get sleep while printing state */
     bool get_sleep_while_printing() const;
 
@@ -247,6 +250,11 @@ class DisplaySettingsManager {
         return &has_backlight_subject_;
     }
 
+    /** @brief Has dimming control subject (integer: 0=binary only, 1=dimmable) */
+    lv_subject_t* subject_has_dimming() {
+        return &has_dimming_subject_;
+    }
+
     /** @brief Sleep while printing subject (integer: 0=inhibit, 1=allow) */
     lv_subject_t* subject_sleep_while_printing() {
         return &sleep_while_printing_subject_;
@@ -297,6 +305,7 @@ class DisplaySettingsManager {
     lv_subject_t display_sleep_subject_;
     lv_subject_t brightness_subject_;
     lv_subject_t has_backlight_subject_;
+    lv_subject_t has_dimming_subject_;
     lv_subject_t sleep_while_printing_subject_;
     lv_subject_t animations_enabled_subject_;
     lv_subject_t gcode_3d_enabled_subject_;
