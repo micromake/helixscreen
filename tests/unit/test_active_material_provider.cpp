@@ -130,3 +130,68 @@ TEST_CASE("build_active_material: material alias resolved",
     CHECK(result.material_info.nozzle_max == 280);
     CHECK(result.material_name == "Nylon"); // Keep original name for display
 }
+
+// ============================================================================
+// Spool preset matching logic tests
+// ============================================================================
+
+TEST_CASE("build_active_material: nozzle_recommended() computes midpoint",
+          "[active_material][preset]") {
+    SlotInfo slot;
+    slot.material = "PETG"; // DB: 230-260°C
+
+    auto result = build_active_material(slot);
+    CHECK(result.material_info.nozzle_recommended() == 245); // (230+260)/2
+}
+
+TEST_CASE("build_active_material: overridden temps affect nozzle_recommended()",
+          "[active_material][preset]") {
+    SlotInfo slot;
+    slot.material = "PETG";
+    slot.nozzle_temp_min = 240;
+    slot.nozzle_temp_max = 260;
+
+    auto result = build_active_material(slot);
+    CHECK(result.material_info.nozzle_recommended() == 250); // (240+260)/2
+}
+
+TEST_CASE("build_active_material: partial temp override (min only) preserves DB max",
+          "[active_material][preset]") {
+    SlotInfo slot;
+    slot.material = "PLA";
+    slot.nozzle_temp_min = 200; // Override min only, DB max stays 220
+
+    auto result = build_active_material(slot);
+    CHECK(result.material_info.nozzle_min == 200);
+    CHECK(result.material_info.nozzle_max == 220); // From DB
+    CHECK(result.material_info.nozzle_recommended() == 210);
+}
+
+TEST_CASE("build_active_material: synthetic material has correct bed_temp default",
+          "[active_material][preset]") {
+    SlotInfo slot;
+    slot.material = "MysteryFilament";
+    // No temps set
+
+    auto result = build_active_material(slot);
+    CHECK(result.material_info.bed_temp == 60); // Sensible default
+}
+
+TEST_CASE("build_active_material: case-insensitive material lookup",
+          "[active_material][preset]") {
+    SlotInfo slot;
+    slot.material = "petg"; // lowercase
+
+    auto result = build_active_material(slot);
+    CHECK(result.material_info.nozzle_min == 230); // Still finds PETG
+    CHECK(result.material_info.bed_temp == 80);
+}
+
+TEST_CASE("build_active_material: display_name with empty brand and material",
+          "[active_material][preset]") {
+    SlotInfo slot;
+    // Both empty
+
+    auto result = build_active_material(slot);
+    CHECK(result.display_name == "Unknown");
+}

@@ -38,6 +38,7 @@
 #include <spdlog/fmt/fmt.h>
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
 #include <cstring>
 #include <memory>
 
@@ -91,6 +92,7 @@ FilamentPanel::FilamentPanel(PrinterState& printer_state, MoonrakerAPI* api)
         {"on_filament_preset_petg", on_preset_petg_clicked},
         {"on_filament_preset_abs", on_preset_abs_clicked},
         {"on_filament_preset_tpu", on_preset_tpu_clicked},
+        {"on_filament_preset_spool", on_preset_spool_clicked},
         // Temperature tap targets
         {"on_filament_nozzle_temp_tap", on_nozzle_temp_tap_clicked},
         {"on_filament_bed_temp_tap", on_bed_temp_tap_clicked},
@@ -280,8 +282,17 @@ void FilamentPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
     external_spool_material_label_ = lv_obj_find_by_name(panel_, "external_spool_material_label");
     external_spool_color_label_ = lv_obj_find_by_name(panel_, "external_spool_color_label");
 
+    // Find spool preset widgets
+    spool_preset_row_ = lv_obj_find_by_name(panel_, "spool_preset_row");
+    spool_preset_button_ = lv_obj_find_by_name(panel_, "preset_spool");
+    spool_preset_label_ = lv_obj_find_by_name(panel_, "spool_preset_label");
+    spool_preset_temps_ = lv_obj_find_by_name(panel_, "spool_preset_temps");
+
     // Setup external spool display (creates canvas, wires observer)
     setup_external_spool_display();
+
+    // Setup spool preset button (show if active material doesn't match standard presets)
+    update_spool_preset();
 
     // Populate extruder dropdown and set card visibility
     populate_extruder_dropdown();
@@ -448,6 +459,10 @@ void FilamentPanel::update_preset_buttons_visual() {
         } else {
             lv_obj_remove_state(preset_buttons_[i], LV_STATE_CHECKED);
         }
+    }
+    // Deselect spool preset when a standard preset is selected
+    if (spool_preset_button_ && selected_material_ >= 0) {
+        lv_obj_remove_state(spool_preset_button_, LV_STATE_CHECKED);
     }
 }
 
@@ -1204,6 +1219,101 @@ void FilamentPanel::on_preset_tpu_clicked(lv_event_t* e) {
     LV_UNUSED(e);
     get_global_filament_panel().handle_preset_button(3);
     LVGL_SAFE_EVENT_CB_END();
+}
+
+void FilamentPanel::on_preset_spool_clicked(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[FilamentPanel] on_preset_spool_clicked");
+    LV_UNUSED(e);
+    get_global_filament_panel().handle_spool_preset_button();
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void FilamentPanel::handle_spool_preset_button() {
+    if (!cached_active_material_.has_value())
+        return;
+
+    const auto& mat = cached_active_material_->material_info;
+    nozzle_target_ = mat.nozzle_recommended();
+    bed_target_ = mat.bed_temp;
+
+    // Deselect all fixed presets
+    selected_material_ = -1;
+    lv_subject_set_int(&material_selected_subject_, -1);
+    update_preset_buttons_visual();
+
+    // Highlight spool preset
+    if (spool_preset_button_) {
+        lv_obj_add_state(spool_preset_button_, LV_STATE_CHECKED);
+    }
+
+    update_temp_display();
+    update_material_temp_display();
+    update_status();
+
+    // Send temperature commands
+    if (api_) {
+        api_->set_temperature(
+            printer_state_.active_extruder_name(), static_cast<double>(nozzle_target_),
+            [t = nozzle_target_]() { NOTIFY_SUCCESS("Nozzle target set to {}°C", t); },
+            [](const MoonrakerError& err) {
+                NOTIFY_ERROR("Failed to set nozzle temp: {}", err.user_message());
+            });
+        api_->set_temperature(
+            "heater_bed", static_cast<double>(bed_target_),
+            [t = bed_target_]() { NOTIFY_SUCCESS("Bed target set to {}°C", t); },
+            [](const MoonrakerError& err) {
+                NOTIFY_ERROR("Failed to set bed temp: {}", err.user_message());
+            });
+    }
+
+    spdlog::info("[{}] Spool preset applied: {} (nozzle={}°C, bed={}°C)", get_name(),
+                 cached_active_material_->display_name, nozzle_target_, bed_target_);
+}
+
+void FilamentPanel::update_spool_preset() {
+    cached_active_material_ = helix::get_active_material();
+
+    if (!spool_preset_row_)
+        return;
+
+    if (!cached_active_material_.has_value()) {
+        lv_obj_add_flag(spool_preset_row_, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+
+    const auto& active = *cached_active_material_;
+
+    // Check if material matches an existing preset — if so, don't show spool button
+    for (int i = 0; i < PRESET_COUNT; i++) {
+        std::string preset_lower(PRESET_MATERIAL_NAMES[i]);
+        std::string mat_lower(active.material_name);
+        std::transform(preset_lower.begin(), preset_lower.end(), preset_lower.begin(), ::tolower);
+        std::transform(mat_lower.begin(), mat_lower.end(), mat_lower.begin(), ::tolower);
+        if (preset_lower == mat_lower) {
+            lv_obj_add_flag(spool_preset_row_, LV_OBJ_FLAG_HIDDEN);
+            return;
+        }
+    }
+
+    // Novel material — show spool preset button
+    lv_obj_remove_flag(spool_preset_row_, LV_OBJ_FLAG_HIDDEN);
+
+    if (spool_preset_label_) {
+        lv_label_set_text(spool_preset_label_, active.material_name.c_str());
+    }
+    if (spool_preset_temps_) {
+        auto text = fmt::format("{} / {}°C", active.material_info.nozzle_recommended(),
+                                active.material_info.bed_temp);
+        lv_label_set_text(spool_preset_temps_, text.c_str());
+    }
+
+    // Deselect spool button initially (user must tap)
+    if (spool_preset_button_) {
+        lv_obj_remove_state(spool_preset_button_, LV_STATE_CHECKED);
+    }
+
+    spdlog::debug("[{}] Spool preset shown: {} ({}°C / {}°C)", get_name(), active.display_name,
+                  active.material_info.nozzle_recommended(), active.material_info.bed_temp);
 }
 
 // Temperature tap callbacks (XML event_cb - use global singleton)
