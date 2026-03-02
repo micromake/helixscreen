@@ -67,12 +67,21 @@ class CameraStream {
     std::atomic<bool> flip_h_{false};
     std::atomic<bool> flip_v_{false};
 
+    // Draw buffer helpers — use system malloc (thread-safe) instead of
+    // lv_draw_buf_create which calls lv_malloc (NOT thread-safe)
+    static lv_draw_buf_t* create_draw_buf(uint32_t w, uint32_t h, lv_color_format_t cf);
+    static void destroy_draw_buf(lv_draw_buf_t* buf);
+
     // Double buffer — decode into back, swap to front on delivery
     lv_draw_buf_t* front_buf_ = nullptr;
     lv_draw_buf_t* back_buf_ = nullptr;
     int frame_width_ = 0;
     int frame_height_ = 0;
     std::mutex buf_mutex_;
+
+    // Old front buffers awaiting safe cleanup — LVGL may still reference
+    // them via lv_image_set_src until the widget clears the source
+    std::vector<lv_draw_buf_t*> retired_bufs_;
 
     // MJPEG parser state
     std::vector<uint8_t> recv_buf_;

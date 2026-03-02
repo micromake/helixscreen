@@ -6,7 +6,7 @@
 
 #include "lvgl.h"
 
-#if LV_USE_LIBJPEG_TURBO
+#if HELIX_HAS_CAMERA
 #include "camera_stream.h"
 #endif
 
@@ -16,7 +16,7 @@ using namespace helix;
 // Registry: camera widget definition
 // ============================================================================
 
-#if LV_USE_LIBJPEG_TURBO
+#if HELIX_HAS_CAMERA
 
 TEST_CASE("CameraWidget: registered in widget registry", "[camera][panel_widget]") {
     const auto* def = find_widget_def("camera");
@@ -58,11 +58,11 @@ TEST_CASE("CameraStream: frame_consumed resets pending flag", "[camera]") {
     REQUIRE_FALSE(stream.is_running());
 }
 
-#else // !LV_USE_LIBJPEG_TURBO
+#else // !HELIX_HAS_CAMERA
 
 TEST_CASE("CameraWidget: not registered on embedded platforms", "[camera][panel_widget]") {
     const auto* def = find_widget_def("camera");
     REQUIRE(def == nullptr);
 }
 
-#endif // LV_USE_LIBJPEG_TURBO
+#endif // HELIX_HAS_CAMERA

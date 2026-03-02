@@ -216,6 +216,10 @@ void CameraWidget::start_stream() {
 
 void CameraWidget::stop_stream() {
     if (stream_) {
+        // Invalidate alive guard FIRST — queued UI callbacks check this and
+        // become no-ops, preventing use-after-free on freed draw buffers
+        *alive_ = false;
+
         // Clear image source before stopping — stop() frees the draw buffers
         // that LVGL may still reference for rendering
         if (camera_image_ && lv_is_initialized()) {
@@ -223,6 +227,10 @@ void CameraWidget::stop_stream() {
         }
         stream_->stop();
         stream_.reset();
+
+        // Reset alive guard so the stream can be restarted (on_activate)
+        alive_ = std::make_shared<bool>(true);
+
         spdlog::debug("[CameraWidget] Stream stopped");
     }
 }

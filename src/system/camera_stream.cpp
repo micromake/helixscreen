@@ -75,6 +75,7 @@ void CameraStream::stop() {
     free_buffers();
     recv_buf_.clear();
     on_frame_ = nullptr;
+    on_error_ = nullptr;
 }
 
 bool CameraStream::is_running() const {
@@ -385,22 +386,63 @@ void CameraStream::deliver_frame() {
 // Buffer Management
 // ============================================================================
 
+// Allocate a draw buffer using the system allocator (calloc/free) instead of
+// lv_draw_buf_create which calls lv_malloc — LVGL's allocator is NOT
+// thread-safe and these run on the background stream thread.
+lv_draw_buf_t* CameraStream::create_draw_buf(uint32_t w, uint32_t h, lv_color_format_t cf) {
+    auto* buf = static_cast<lv_draw_buf_t*>(calloc(1, sizeof(lv_draw_buf_t)));
+    if (!buf) return nullptr;
+
+    uint32_t stride = lv_draw_buf_width_to_stride(w, cf);
+    uint32_t data_size = stride * h;
+
+    auto* data = calloc(1, data_size);
+    if (!data) {
+        free(buf);
+        return nullptr;
+    }
+
+    lv_draw_buf_init(buf, w, h, cf, stride, data, data_size);
+    lv_draw_buf_set_flag(buf, LV_IMAGE_FLAGS_MODIFIABLE);
+    return buf;
+}
+
+void CameraStream::destroy_draw_buf(lv_draw_buf_t* buf) {
+    if (!buf) return;
+    free(buf->data);
+    free(buf);
+}
+
 void CameraStream::ensure_buffers(int width, int height) {
     if (front_buf_ && frame_width_ == width && frame_height_ == height) {
         return;
     }
 
     spdlog::debug("[CameraStream] Allocating buffers for {}x{}", width, height);
-    free_buffers();
 
-    front_buf_ = lv_draw_buf_create(static_cast<uint32_t>(width), static_cast<uint32_t>(height),
-                                    LV_COLOR_FORMAT_RGB888, LV_STRIDE_AUTO);
-    back_buf_ = lv_draw_buf_create(static_cast<uint32_t>(width), static_cast<uint32_t>(height),
-                                   LV_COLOR_FORMAT_RGB888, LV_STRIDE_AUTO);
+    // Retire old front buffer — LVGL may still reference it via lv_image_set_src
+    // until the widget processes the next frame and updates the source pointer.
+    // Retired buffers are freed in free_buffers() after the thread joins.
+    if (front_buf_) {
+        retired_bufs_.push_back(front_buf_);
+        front_buf_ = nullptr;
+    }
+    if (back_buf_) {
+        destroy_draw_buf(back_buf_);
+        back_buf_ = nullptr;
+    }
+
+    auto w = static_cast<uint32_t>(width);
+    auto h = static_cast<uint32_t>(height);
+    front_buf_ = create_draw_buf(w, h, LV_COLOR_FORMAT_RGB888);
+    back_buf_ = create_draw_buf(w, h, LV_COLOR_FORMAT_RGB888);
 
     if (!front_buf_ || !back_buf_) {
         spdlog::error("[CameraStream] Failed to allocate draw buffers for {}x{}", width, height);
-        free_buffers();
+        destroy_draw_buf(front_buf_);
+        destroy_draw_buf(back_buf_);
+        front_buf_ = nullptr;
+        back_buf_ = nullptr;
         return;
     }
 
@@ -410,14 +452,14 @@ void CameraStream::ensure_buffers(int width, int height) {
 
 void CameraStream::free_buffers() {
     std::lock_guard<std::mutex> lock(buf_mutex_);
-    if (front_buf_) {
-        lv_draw_buf_destroy(front_buf_);
-        front_buf_ = nullptr;
+    destroy_draw_buf(front_buf_);
+    front_buf_ = nullptr;
+    destroy_draw_buf(back_buf_);
+    back_buf_ = nullptr;
+    for (auto* buf : retired_bufs_) {
+        destroy_draw_buf(buf);
     }
-    if (back_buf_) {
-        lv_draw_buf_destroy(back_buf_);
-        back_buf_ = nullptr;
-    }
+    retired_bufs_.clear();
     frame_width_ = 0;
     frame_height_ = 0;
 }
