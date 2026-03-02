@@ -135,6 +135,9 @@ AmsState::AmsState() {
     std::memset(current_weight_text_buf_, 0, sizeof(current_weight_text_buf_));
     std::memset(clog_meter_value_text_buf_, 0, sizeof(clog_meter_value_text_buf_));
     std::memset(clog_meter_mode_text_buf_, 0, sizeof(clog_meter_mode_text_buf_));
+    std::memset(clog_meter_center_text_buf_, 0, sizeof(clog_meter_center_text_buf_));
+    std::memset(clog_meter_label_left_buf_, 0, sizeof(clog_meter_label_left_buf_));
+    std::memset(clog_meter_label_right_buf_, 0, sizeof(clog_meter_label_right_buf_));
 }
 
 AmsState::~AmsState() {
@@ -288,6 +291,11 @@ void AmsState::init_subjects(bool register_xml) {
     INIT_SUBJECT_INT(clog_meter_warning, 0, subjects_, register_xml);
     INIT_SUBJECT_STRING(clog_meter_value_text, "", subjects_, register_xml);
     INIT_SUBJECT_STRING(clog_meter_mode_text, "", subjects_, register_xml);
+    INIT_SUBJECT_INT(clog_meter_danger_pct, 0, subjects_, register_xml);
+    INIT_SUBJECT_INT(clog_meter_peak_pct, 0, subjects_, register_xml);
+    INIT_SUBJECT_STRING(clog_meter_center_text, "", subjects_, register_xml);
+    INIT_SUBJECT_STRING(clog_meter_label_left, "", subjects_, register_xml);
+    INIT_SUBJECT_STRING(clog_meter_label_right, "", subjects_, register_xml);
 
     // Per-slot subjects (dynamic names require manual init)
     char name_buf[32];
@@ -1089,13 +1097,49 @@ void AmsState::sync_dryer_from_backend() {
 
 void AmsState::sync_clog_meter_from_info(const AmsSystemInfo& info) {
     // Priority: flowguard > encoder > afc_buffer > legacy > none
+    // Source override: 0=auto (use priority), 1=encoder, 2=flowguard, 3=afc
     int mode = 0;
     int value = 0;
     int warning = 0;
     char value_text[16] = "";
     char mode_text[24] = "";
+    int new_danger_pct = 75;
+    int new_peak_pct = 0;
+    char center_buf[16] = "";
+    char left_buf[16] = "";
+    char right_buf[16] = "";
 
-    if (info.flowguard_info.enabled) {
+    // Determine which sources are available
+    bool has_flowguard = info.flowguard_info.enabled;
+    bool has_encoder = info.encoder_info.enabled;
+    bool has_afc = false;
+    for (const auto& unit : info.units) {
+        if (unit.buffer_health && unit.buffer_health->fault_detection_enabled) {
+            has_afc = true;
+            break;
+        }
+    }
+
+    // Apply source override: skip to the forced source if available
+    bool use_flowguard = has_flowguard;
+    bool use_encoder = has_encoder;
+    bool use_afc = has_afc;
+
+    if (source_override_ == 1) {
+        // Force encoder only
+        use_flowguard = false;
+        use_afc = false;
+    } else if (source_override_ == 2) {
+        // Force flowguard only
+        use_encoder = false;
+        use_afc = false;
+    } else if (source_override_ == 3) {
+        // Force AFC only
+        use_flowguard = false;
+        use_encoder = false;
+    }
+
+    if (use_flowguard) {
         // Flowguard mode: bidirectional (-100 to +100)
         mode = 2;
         value = static_cast<int>(info.flowguard_info.level * 100.0f);
@@ -1117,7 +1161,16 @@ void AmsState::sync_clog_meter_from_info(const AmsSystemInfo& info) {
             snprintf(mode_text, sizeof(mode_text), "Flowguard");
         }
 
-    } else if (info.encoder_info.enabled) {
+        // Enhanced clog detection widget subjects
+        new_danger_pct = 80;
+        float max_clog = std::abs(info.flowguard_info.max_clog);
+        float max_tangle = std::abs(info.flowguard_info.max_tangle);
+        new_peak_pct = static_cast<int>(std::max(max_clog, max_tangle) * 100);
+        snprintf(center_buf, sizeof(center_buf), "%+d%%", static_cast<int>(info.flowguard_info.level * 100));
+        snprintf(left_buf, sizeof(left_buf), "TANGLE");
+        snprintf(right_buf, sizeof(right_buf), "CLOG");
+
+    } else if (use_encoder && info.encoder_info.enabled) {
         // Encoder mode: 0-100 clog percentage
         mode = 1;
         value = info.encoder_info.get_clog_pct();
@@ -1136,10 +1189,28 @@ void AmsState::sync_clog_meter_from_info(const AmsSystemInfo& info) {
             snprintf(mode_text, sizeof(mode_text), "Manual");
         }
 
+        // Enhanced clog detection widget subjects
+        float det_len = info.encoder_info.detection_length;
+        float headroom = info.encoder_info.headroom;
+        float desired = info.encoder_info.desired_headroom;
+        float min_headroom = info.encoder_info.min_headroom;
+        if (det_len > 0) {
+            new_danger_pct = static_cast<int>((1.0f - desired / det_len) * 100);
+            new_peak_pct = static_cast<int>((1.0f - min_headroom / det_len) * 100);
+            snprintf(center_buf, sizeof(center_buf), "%.1fmm", headroom);
+            snprintf(left_buf, sizeof(left_buf), "%.0fmm", det_len);
+        } else {
+            new_danger_pct = 75;
+            new_peak_pct = value;
+            snprintf(center_buf, sizeof(center_buf), "---");
+            snprintf(left_buf, sizeof(left_buf), "---");
+        }
+        snprintf(right_buf, sizeof(right_buf), "0");
+
     } else {
         // Check AFC buffer fault detection (buffer_health is per-unit, not per-slot)
         for (const auto& unit : info.units) {
-            if (unit.buffer_health && unit.buffer_health->fault_detection_enabled) {
+            if (use_afc && unit.buffer_health && unit.buffer_health->fault_detection_enabled) {
                 mode = 3;
                 // Value: proximity to fault (0=safe, 100=imminent)
                 // TODO: compute from sensitivity when available: (11 - sensitivity) * 10
@@ -1152,6 +1223,13 @@ void AmsState::sync_clog_meter_from_info(const AmsSystemInfo& info) {
                 snprintf(value_text, sizeof(value_text), "%.0fmm", dist);
                 snprintf(mode_text, sizeof(mode_text), "%s",
                          unit.buffer_health->state.c_str());
+
+                // Enhanced clog detection widget subjects
+                new_danger_pct = 75;
+                new_peak_pct = value;
+                snprintf(center_buf, sizeof(center_buf), "%.0fmm", dist);
+                snprintf(left_buf, sizeof(left_buf), "SAFE");
+                snprintf(right_buf, sizeof(right_buf), "FAULT");
                 break; // Use first unit with fault detection
             }
         }
@@ -1170,8 +1248,13 @@ void AmsState::sync_clog_meter_from_info(const AmsSystemInfo& info) {
             } else {
                 snprintf(mode_text, sizeof(mode_text), "Manual");
             }
+            // Legacy: use defaults (danger_pct=75, peak_pct=0, empty labels)
         }
     }
+
+    // Apply danger threshold override if set
+    if (danger_threshold_override_ > 0)
+        new_danger_pct = danger_threshold_override_;
 
     // Update subjects only when changed
     if (lv_subject_get_int(&clog_meter_mode_) != mode) {
@@ -1189,9 +1272,48 @@ void AmsState::sync_clog_meter_from_info(const AmsSystemInfo& info) {
     if (strcmp(lv_subject_get_string(&clog_meter_mode_text_), mode_text) != 0) {
         lv_subject_copy_string(&clog_meter_mode_text_, mode_text);
     }
+    if (lv_subject_get_int(&clog_meter_danger_pct_) != new_danger_pct) {
+        lv_subject_set_int(&clog_meter_danger_pct_, new_danger_pct);
+    }
+    if (lv_subject_get_int(&clog_meter_peak_pct_) != new_peak_pct) {
+        lv_subject_set_int(&clog_meter_peak_pct_, new_peak_pct);
+    }
+    if (strcmp(lv_subject_get_string(&clog_meter_center_text_), center_buf) != 0) {
+        lv_subject_copy_string(&clog_meter_center_text_, center_buf);
+    }
+    if (strcmp(lv_subject_get_string(&clog_meter_label_left_), left_buf) != 0) {
+        lv_subject_copy_string(&clog_meter_label_left_, left_buf);
+    }
+    if (strcmp(lv_subject_get_string(&clog_meter_label_right_), right_buf) != 0) {
+        lv_subject_copy_string(&clog_meter_label_right_, right_buf);
+    }
 
     spdlog::trace("[AMS State] Synced clog meter - mode={}, value={}, warning={}",
                   mode, value, warning);
+}
+
+void AmsState::set_source_override(int source) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    source_override_ = source;
+    spdlog::debug("[AMS State] Source override set to {}", source);
+    // Re-sync to apply the override
+    auto* backend = get_backend();
+    if (backend) {
+        auto info = backend->get_system_info();
+        sync_clog_meter_from_info(info);
+    }
+}
+
+void AmsState::set_danger_threshold_override(int pct) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    danger_threshold_override_ = pct;
+    spdlog::debug("[AMS State] Danger threshold override set to {}", pct);
+    // Re-sync to apply the override
+    auto* backend = get_backend();
+    if (backend) {
+        auto info = backend->get_system_info();
+        sync_clog_meter_from_info(info);
+    }
 }
 
 void AmsState::set_action_detail(const std::string& detail) {

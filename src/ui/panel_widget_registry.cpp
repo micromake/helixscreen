@@ -28,6 +28,7 @@ void register_print_status_widget();
 void register_shutdown_widget();
 void register_clock_widget();
 void register_job_queue_widget();
+void register_clog_detection_widget();
 
 // Vector order defines the default display order on the home panel.
 // NOTE: Factories are registered at runtime via init_widget_registrations(),
@@ -57,6 +58,7 @@ static std::vector<PanelWidgetDef> s_widget_defs = {
     {"job_queue",        "Job Queue",         "progress_clock",   "Queued print jobs",                           "Job Queue",        nullptr,              false, 2, 2, 2, 1, 4, 3},
     //                                                                                                                                          en  col row min_c min_r max_c max_r
     {"tips",             "Tips",              "help_circle",      "Rotating tips and helpful information",        "Tips",             nullptr,              true,  4, 2, 2, 1, 6, 2},
+    {"clog_detection",   "Clog Detection",    "water",            "Filament clog/flow detection meter",           "Clog Detection",   "clog_meter_mode",    true,  1, 1, 1, 1, 2, 2},
     {"notifications",    "Notifications",     "notifications",    "Pending alerts and system messages",           "Notifications",    nullptr,              true,  1, 1, 1, 1, 2, 1},
 };
 // clang-format on
@@ -119,6 +121,7 @@ void init_widget_registrations() {
     register_humidity_widget();
     register_width_sensor_widget();
     register_shutdown_widget();
+    register_clog_detection_widget();
 
     spdlog::debug("[PanelWidgetRegistry] All widget factories registered");
 }

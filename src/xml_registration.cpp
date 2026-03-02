@@ -311,6 +311,7 @@ void register_xml_components() {
     register_xml("components/panel_widget_notifications.xml");
     register_xml("components/panel_widget_firmware_restart.xml");
     register_xml("components/panel_widget_ams.xml");
+    register_xml("components/panel_widget_camera.xml");
     register_xml("components/panel_widget_temperature.xml");
     register_xml("components/panel_widget_temp_stack.xml");
     register_xml("components/panel_widget_temp_carousel.xml");
@@ -329,6 +330,8 @@ void register_xml_components() {
     register_xml("components/panel_widget_print_status.xml");
     register_xml("components/panel_widget_shutdown.xml");
     register_xml("components/panel_widget_job_queue.xml");
+    register_xml("components/panel_widget_clog_detection.xml");
+    register_xml("components/clog_detection_config_modal.xml");
     register_xml("job_queue_modal.xml");
     register_xml("thermistor_sensor_picker.xml");
     register_xml("favorite_macro_picker.xml");
