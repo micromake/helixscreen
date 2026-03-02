@@ -12,6 +12,7 @@
 #include "ui_temperature_utils.h"
 
 #include "ams_backend.h"
+#include "active_material_provider.h"
 #include "ams_state.h"
 #include "ams_types.h"
 #include "app_constants.h"
@@ -684,17 +685,12 @@ void AmsOperationSidebar::handle_bypass_toggle() {
 // ============================================================================
 
 int AmsOperationSidebar::get_load_temp_for_slot(int slot_index) {
-    // External spool (bypass/direct) — get info from AmsState
+    // External spool (bypass/direct)
     if (slot_index == -2) {
         auto info = AmsState::instance().get_external_spool_info();
         if (info.has_value()) {
-            if (info->nozzle_temp_min > 0)
-                return info->nozzle_temp_min;
-            if (!info->material.empty()) {
-                auto mat = filament::find_material(info->material);
-                if (mat.has_value())
-                    return mat->nozzle_min;
-            }
+            auto active = helix::build_active_material(*info);
+            return active.material_info.nozzle_min;
         }
         return AppConstants::Ams::DEFAULT_LOAD_PREHEAT_TEMP;
     }
@@ -705,19 +701,8 @@ int AmsOperationSidebar::get_load_temp_for_slot(int slot_index) {
     }
 
     SlotInfo info = backend->get_slot_info(slot_index);
-
-    if (info.nozzle_temp_min > 0) {
-        return info.nozzle_temp_min;
-    }
-
-    if (!info.material.empty()) {
-        auto mat = filament::find_material(info.material);
-        if (mat.has_value()) {
-            return mat->nozzle_min;
-        }
-    }
-
-    return AppConstants::Ams::DEFAULT_LOAD_PREHEAT_TEMP;
+    auto active = helix::build_active_material(info);
+    return active.material_info.nozzle_min;
 }
 
 void AmsOperationSidebar::handle_load_with_preheat(int slot_index) {
