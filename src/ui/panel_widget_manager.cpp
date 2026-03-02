@@ -383,13 +383,26 @@ PanelWidgetManager::populate_widgets(const std::string& panel_id, lv_obj_t* cont
         max_row_used = 1; // At least 1 row if any widgets placed
     }
 
+    // Use the cached row count as a floor so the grid starts at the right size
+    // even before all hardware-gated widgets have been detected. This prevents
+    // the grid from starting as e.g. 3 rows then jumping to 4 when hardware
+    // gates fire. The cache is updated whenever the row count increases.
+    auto* cfg = Config::get_instance();
+    std::string cache_key_rows = "/ui/cached_grid/" + panel_id + "/rows";
+    int cached_rows = cfg->get(cache_key_rows, 0);
+    int grid_rows = std::max(max_row_used, cached_rows);
+    if (max_row_used != cached_rows) {
+        cfg->set(cache_key_rows, max_row_used);
+        cfg->save();
+    }
+
     // Generate grid descriptors sized to actual content
     // Columns: use breakpoint column count (fills available width)
-    // Rows: only create rows that are actually occupied (avoids empty rows stealing space)
+    // Rows: use max of current and cached row count for stable sizing
     auto& dsc = grid_descriptors_[panel_id];
     dsc.col_dsc = GridLayout::make_col_dsc(breakpoint);
     dsc.row_dsc.clear();
-    for (int r = 0; r < max_row_used; ++r) {
+    for (int r = 0; r < grid_rows; ++r) {
         dsc.row_dsc.push_back(LV_GRID_FR(1));
     }
     dsc.row_dsc.push_back(LV_GRID_TEMPLATE_LAST);
@@ -400,23 +413,36 @@ PanelWidgetManager::populate_widgets(const std::string& panel_id, lv_obj_t* cont
     lv_obj_set_style_pad_column(container, theme_manager_get_spacing("space_xs"), 0);
     lv_obj_set_style_pad_row(container, theme_manager_get_spacing("space_xs"), 0);
 
-    spdlog::debug("[PanelWidgetManager] Grid layout: {}cols x {}rows (bp={}) for '{}'",
-                  GridLayout::get_cols(breakpoint), max_row_used, breakpoint, panel_id);
+    // Compute cell pixel dimensions for size callbacks and card backgrounds.
+    int cols = GridLayout::get_cols(breakpoint);
+
+    spdlog::debug("[PanelWidgetManager] Grid layout: {}cols x {}rows (bp={}, cached={}) for '{}'",
+                  cols, grid_rows, breakpoint, cached_rows, panel_id);
+    int container_w = lv_obj_get_content_width(container);
+    int container_h = lv_obj_get_content_height(container);
+    int cell_w = (cols > 0) ? container_w / cols : 0;
+    int cell_h = (grid_rows > 0) ? container_h / grid_rows : 0;
 
     // Create merged card backgrounds behind adjacent 1x1 widgets.
     // BFS flood-fill finds connected components of 1x1 cells, then a single
     // card object spans each component's bounding rectangle.
+    // Use ALL enabled config entries (not just currently-placed ones) so that
+    // cards for hardware-gated widgets appear from the first frame, preventing
+    // the grid from visually jumping when hardware gates fire.
     {
-        // Collect all placed 1x1 cells into a set for O(1) lookup
+        // Collect all enabled 1x1 cells into a set for O(1) lookup
         struct CellHash {
             size_t operator()(const std::pair<int, int>& p) const {
                 return std::hash<int>()(p.first) ^ (std::hash<int>()(p.second) << 16);
             }
         };
         std::unordered_set<std::pair<int, int>, CellHash> single_cells;
-        for (const auto& p : placed) {
-            if (p.colspan == 1 && p.rowspan == 1) {
-                single_cells.insert({p.col, p.row});
+        for (const auto& entry : widget_config.entries()) {
+            if (!entry.enabled || !entry.has_grid_position()) {
+                continue;
+            }
+            if (entry.colspan == 1 && entry.rowspan == 1) {
+                single_cells.insert({entry.col, entry.row});
             }
         }
 
@@ -462,6 +488,12 @@ PanelWidgetManager::populate_widgets(const std::string& panel_id, lv_obj_t* cont
             lv_obj_set_style_pad_all(card_bg, 0, 0);
             lv_obj_remove_flag(card_bg, LV_OBJ_FLAG_CLICKABLE);
             lv_obj_remove_flag(card_bg, LV_OBJ_FLAG_SCROLLABLE);
+            // Set initial size from cached cell dimensions so the card renders
+            // at approximately the right shape on the first frame, before the
+            // grid layout resolves. Grid STRETCH overrides once layout runs.
+            if (cell_w > 0 && cell_h > 0) {
+                lv_obj_set_size(card_bg, cell_w * card_colspan, cell_h * card_rowspan);
+            }
             lv_obj_set_grid_cell(card_bg, LV_GRID_ALIGN_STRETCH, min_col, card_colspan,
                                  LV_GRID_ALIGN_STRETCH, min_row, card_rowspan);
 
@@ -501,12 +533,6 @@ PanelWidgetManager::populate_widgets(const std::string& panel_id, lv_obj_t* cont
                 slot.instance->attach(widget, lv_scr_act());
 
                 // Notify widget of its grid allocation and approximate pixel size
-                int cols = GridLayout::get_cols(breakpoint);
-                int rows = GridLayout::get_rows(breakpoint);
-                int container_w = lv_obj_get_content_width(container);
-                int container_h = lv_obj_get_content_height(container);
-                int cell_w = (cols > 0) ? container_w / cols : 0;
-                int cell_h = (rows > 0) ? container_h / rows : 0;
                 slot.instance->on_size_changed(p.colspan, p.rowspan, cell_w * p.colspan,
                                                cell_h * p.rowspan);
 
@@ -517,9 +543,6 @@ PanelWidgetManager::populate_widgets(const std::string& panel_id, lv_obj_t* cont
             if (slot.widget_id == "ams") {
                 lv_obj_t* ams_child = lv_obj_get_child(widget, 0);
                 if (ams_child && ui_ams_mini_status_is_valid(ams_child)) {
-                    int ams_w = lv_obj_get_content_width(container);
-                    int cols = GridLayout::get_cols(breakpoint);
-                    int cell_w = (cols > 0) ? ams_w / cols : 0;
                     ui_ams_mini_status_set_width(ams_child, cell_w * p.colspan);
                 }
             }

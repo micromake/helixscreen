@@ -2337,14 +2337,6 @@ void GridEditMode::place_widget_from_catalog(const std::string& widget_id) {
     if (rebuild_cb_) {
         rebuild_cb_();
     }
-    // Reset input device to clear stale object pointers held by LVGL's
-    // indev processing — the rebuild (lv_obj_clean) destroyed tracked objects.
-    {
-        lv_indev_t* indev = lv_indev_active();
-        if (indev) {
-            lv_indev_reset(indev, nullptr);
-        }
-    }
     // Recreate dots overlay (rebuild destroys all container children)
     if (active_ && container_) {
         create_dots_overlay();
@@ -2356,6 +2348,13 @@ void GridEditMode::place_widget_from_catalog(const std::string& widget_id) {
         if (new_widget) {
             select_widget(new_widget);
         }
+    }
+
+    // Reset input device AFTER all UI changes complete — the rebuild
+    // (lv_obj_clean) destroyed tracked objects held by LVGL's indev processing.
+    lv_indev_t* indev = lv_indev_active();
+    if (indev) {
+        lv_indev_reset(indev, nullptr);
     }
 }
 
