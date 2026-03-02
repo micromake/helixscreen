@@ -4,20 +4,14 @@
 
 #include "ams_state.h"
 #include "app_globals.h"
-#include "config.h"
 #include "moonraker_api.h"
 #include "moonraker_error.h"
 #include "panel_widget_config.h"
+#include "panel_widget_manager.h"
 
 #include <spdlog/spdlog.h>
 
 namespace {
-
-helix::PanelWidgetConfig& get_widget_config_ref() {
-    static helix::PanelWidgetConfig config("home", *helix::Config::get_instance());
-    config.load();
-    return config;
-}
 
 ClogDetectionConfigModal* get_modal(lv_event_t* e) {
     auto* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
@@ -29,8 +23,9 @@ ClogDetectionConfigModal* get_modal(lv_event_t* e) {
 
 } // namespace
 
-ClogDetectionConfigModal::ClogDetectionConfigModal(const std::string& widget_id)
-    : widget_id_(widget_id) {
+ClogDetectionConfigModal::ClogDetectionConfigModal(const std::string& widget_id,
+                                                   const std::string& panel_id)
+    : widget_id_(widget_id), panel_id_(panel_id) {
     // Register callbacks before show() parses the XML
     lv_xml_register_event_cb(nullptr, "on_clog_source_auto", on_source_auto);
     lv_xml_register_event_cb(nullptr, "on_clog_source_encoder", on_source_encoder);
@@ -106,7 +101,7 @@ void ClogDetectionConfigModal::on_show() {
         lv_obj_set_user_data(dialog(), this);
 
     // Load current config
-    auto& wc = get_widget_config_ref();
+    auto& wc = helix::PanelWidgetManager::instance().get_widget_config(panel_id_);
     auto config = wc.get_widget_config(widget_id_);
 
     if (config.contains("source") && config["source"].is_number_integer())
@@ -175,7 +170,7 @@ void ClogDetectionConfigModal::on_ok() {
     config["source"] = source_;
     config["danger_threshold"] = danger_threshold_;
 
-    auto& wc = get_widget_config_ref();
+    auto& wc = helix::PanelWidgetManager::instance().get_widget_config(panel_id_);
     wc.set_widget_config(widget_id_, config);
 
     auto& ams = AmsState::instance();

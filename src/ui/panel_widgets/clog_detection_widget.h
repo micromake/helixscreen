@@ -20,6 +20,7 @@ class ClogDetectionWidget : public PanelWidget {
     ClogDetectionWidget() = default;
     ~ClogDetectionWidget() override;
 
+    void set_config(const nlohmann::json& config) override;
     void attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) override;
     void detach() override;
     void on_size_changed(int colspan, int rowspan, int width_px, int height_px) override;
@@ -33,10 +34,10 @@ class ClogDetectionWidget : public PanelWidget {
   private:
     void apply_config();
 
+    nlohmann::json config_;
     lv_obj_t* widget_obj_ = nullptr;
     std::unique_ptr<ui::UiClogMeter> clog_meter_;
     std::unique_ptr<ClogDetectionConfigModal> config_modal_;
-    std::string widget_id_{"clog_detection"};
 };
 
 } // namespace helix

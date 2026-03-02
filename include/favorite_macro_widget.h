@@ -27,6 +27,7 @@ class FavoriteMacroWidget : public PanelWidget {
     explicit FavoriteMacroWidget(const std::string& widget_id);
     ~FavoriteMacroWidget() override;
 
+    void set_config(const nlohmann::json& config) override;
     void attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) override;
     void detach() override;
     void on_size_changed(int colspan, int rowspan, int width_px, int height_px) override;
@@ -64,7 +65,6 @@ class FavoriteMacroWidget : public PanelWidget {
     MoonrakerAPI* get_api() const;
 
     void update_display();
-    void load_config();
     void save_config();
 
     void fetch_and_execute();

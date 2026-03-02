@@ -26,7 +26,7 @@
  */
 class ClogDetectionConfigModal : public Modal {
   public:
-    explicit ClogDetectionConfigModal(const std::string& widget_id);
+    ClogDetectionConfigModal(const std::string& widget_id, const std::string& panel_id);
     ~ClogDetectionConfigModal() override;
 
     const char* get_name() const override { return "Clog Detection Config"; }
@@ -56,6 +56,7 @@ class ClogDetectionConfigModal : public Modal {
     static void on_det_length_changed(lv_event_t* e);
 
     std::string widget_id_;
+    std::string panel_id_;
     int source_ = 0;             // 0=auto, 1=encoder, 2=flowguard, 3=afc
     int detection_mode_ = 2;     // 0=off, 1=manual, 2=auto
     int danger_threshold_ = 0;   // 0=use computed default

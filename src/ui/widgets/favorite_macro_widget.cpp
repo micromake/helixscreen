@@ -11,12 +11,10 @@
 #include "ui_utils.h"
 
 #include "app_globals.h"
-#include "config.h"
 #include "device_display_name.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "macro_param_modal.h"
 #include "moonraker_api.h"
-#include "panel_widget_config.h"
 #include "panel_widget_registry.h"
 #include "theme_manager.h"
 
@@ -45,12 +43,6 @@ void register_favorite_macro_widgets() {
 } // namespace helix
 
 namespace {
-// File-local helper: get the shared PanelWidgetConfig instance
-helix::PanelWidgetConfig& get_widget_config_ref() {
-    static helix::PanelWidgetConfig config("home", *helix::Config::get_instance());
-    config.load();
-    return config;
-}
 // File-local helper: single shared MacroParamModal instance.
 // Using one instance avoids s_active_instance_ stomping when two widget slots
 // both try to open param modals (the old code had two separate static locals).
@@ -74,6 +66,15 @@ FavoriteMacroWidget::~FavoriteMacroWidget() {
     detach();
 }
 
+void FavoriteMacroWidget::set_config(const nlohmann::json& config) {
+    if (config.contains("macro") && config["macro"].is_string()) {
+        macro_name_ = config["macro"].get<std::string>();
+        params_cached_ = false;
+        cached_params_.clear();
+        spdlog::debug("[FavoriteMacroWidget] Config: {}={}", widget_id_, macro_name_);
+    }
+}
+
 void FavoriteMacroWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     widget_obj_ = widget_obj;
     parent_screen_ = parent_screen;
@@ -94,8 +95,6 @@ void FavoriteMacroWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) 
     icon_label_ = lv_obj_find_by_name(widget_obj_, "fav_macro_icon");
     name_label_ = lv_obj_find_by_name(widget_obj_, "fav_macro_name");
 
-    // Load saved macro from config
-    load_config();
     update_display();
 
     spdlog::debug("[FavoriteMacroWidget] Attached {} (macro: {})", widget_id_,
@@ -183,22 +182,10 @@ void FavoriteMacroWidget::update_display() {
     }
 }
 
-void FavoriteMacroWidget::load_config() {
-    auto& wc = get_widget_config_ref();
-    auto config = wc.get_widget_config(widget_id_);
-    if (config.contains("macro") && config["macro"].is_string()) {
-        macro_name_ = config["macro"].get<std::string>();
-        spdlog::debug("[FavoriteMacroWidget] Loaded config: {}={}", widget_id_, macro_name_);
-    }
-}
-
 void FavoriteMacroWidget::save_config() {
     nlohmann::json config;
     config["macro"] = macro_name_;
-
-    auto& wc = get_widget_config_ref();
-    wc.set_widget_config(widget_id_, config);
-
+    save_widget_config(config);
     spdlog::debug("[FavoriteMacroWidget] Saved config: {}={}", widget_id_, macro_name_);
 }
 

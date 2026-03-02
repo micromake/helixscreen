@@ -9,11 +9,8 @@
 #include "ui_utils.h"
 
 #include "app_globals.h"
-#include "config.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "observer_factory.h"
-#include "panel_widget_config.h"
-#include "panel_widget_manager.h"
 #include "panel_widget_registry.h"
 #include "printer_state.h"
 #include "temperature_sensor_manager.h"
@@ -50,13 +47,6 @@ static void strip_temperature_suffix(std::string& name) {
     }
 }
 
-// File-local helper: get the shared PanelWidgetConfig instance
-static helix::PanelWidgetConfig& get_widget_config_ref() {
-    static helix::PanelWidgetConfig config("home", *Config::get_instance());
-    config.load();
-    return config;
-}
-
 ThermistorWidget::ThermistorWidget(PrinterState& /*printer_state*/) {
     std::strcpy(temp_buffer_, "--\xC2\xB0"
                               "C"); // "--°C"
@@ -79,10 +69,7 @@ void ThermistorWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     temp_label_ = lv_obj_find_by_name(widget_obj_, "thermistor_temp");
     name_label_ = lv_obj_find_by_name(widget_obj_, "thermistor_name");
 
-    // Load saved sensor selection from config
-    load_config();
-
-    // If no sensor saved, auto-select first available
+    // If no sensor saved (set_config provided none), auto-select first available
     if (selected_sensor_.empty()) {
         auto& tsm = helix::sensors::TemperatureSensorManager::instance();
         auto sensors = tsm.get_sensors_sorted();
@@ -133,6 +120,18 @@ void ThermistorWidget::handle_clicked() {
     show_sensor_picker();
 }
 
+void ThermistorWidget::resolve_display_name() {
+    auto& tsm = helix::sensors::TemperatureSensorManager::instance();
+    display_name_ = selected_sensor_; // fallback
+    for (const auto& s : tsm.get_sensors_sorted()) {
+        if (s.klipper_name == selected_sensor_) {
+            display_name_ = s.display_name;
+            break;
+        }
+    }
+    strip_temperature_suffix(display_name_);
+}
+
 void ThermistorWidget::select_sensor(const std::string& klipper_name) {
     if (klipper_name == selected_sensor_) {
         return;
@@ -142,21 +141,10 @@ void ThermistorWidget::select_sensor(const std::string& klipper_name) {
     temp_observer_.reset();
 
     selected_sensor_ = klipper_name;
-
-    // Look up display name from sensor config
-    auto& tsm = helix::sensors::TemperatureSensorManager::instance();
-    auto sensors = tsm.get_sensors_sorted();
-    display_name_ = klipper_name; // fallback
-    for (const auto& s : sensors) {
-        if (s.klipper_name == klipper_name) {
-            display_name_ = s.display_name;
-            break;
-        }
-    }
-
-    strip_temperature_suffix(display_name_);
+    resolve_display_name();
 
     // Subscribe to this sensor's temperature subject
+    auto& tsm = helix::sensors::TemperatureSensorManager::instance();
     SubjectLifetime lifetime;
     lv_subject_t* subject = tsm.get_temp_subject(klipper_name, lifetime);
     if (subject) {
@@ -219,25 +207,11 @@ void ThermistorWidget::update_display() {
     }
 }
 
-void ThermistorWidget::load_config() {
-    auto& wc = get_widget_config_ref();
-    auto config = wc.get_widget_config("thermistor");
+void ThermistorWidget::set_config(const nlohmann::json& config) {
     if (config.contains("sensor") && config["sensor"].is_string()) {
         selected_sensor_ = config["sensor"].get<std::string>();
-
-        // Resolve display name
-        auto& tsm = helix::sensors::TemperatureSensorManager::instance();
-        auto sensors = tsm.get_sensors_sorted();
-        display_name_ = selected_sensor_;
-        for (const auto& s : sensors) {
-            if (s.klipper_name == selected_sensor_) {
-                display_name_ = s.display_name;
-                break;
-            }
-        }
-
-        strip_temperature_suffix(display_name_);
-        spdlog::debug("[ThermistorWidget] Loaded config: sensor={}", selected_sensor_);
+        resolve_display_name();
+        spdlog::debug("[ThermistorWidget] Config: sensor={}", selected_sensor_);
     }
 }
 
@@ -247,10 +221,7 @@ void ThermistorWidget::save_config() {
     }
     nlohmann::json config;
     config["sensor"] = selected_sensor_;
-
-    auto& wc = get_widget_config_ref();
-    wc.set_widget_config("thermistor", config);
-
+    save_widget_config(config);
     spdlog::debug("[ThermistorWidget] Saved config: sensor={}", selected_sensor_);
 }
 
@@ -311,11 +282,7 @@ void ThermistorWidget::show_sensor_picker() {
         lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
 
         // Highlight selected row
-        if (is_selected) {
-            lv_obj_set_style_bg_opa(row, 30, 0);
-        } else {
-            lv_obj_set_style_bg_opa(row, 0, 0);
-        }
+        lv_obj_set_style_bg_opa(row, is_selected ? 30 : 0, 0);
 
         // Sensor display name
         lv_obj_t* name = lv_label_create(row);
@@ -353,11 +320,6 @@ void ThermistorWidget::show_sensor_picker() {
                 if (!name_ptr)
                     return;
 
-                // Walk up to find the backdrop, which has the ThermistorWidget pointer
-                // The picker_backdrop's parent screen has the widget via
-                // get_global_home_panel But simpler: use static active instance
-                // pattern Actually, just use a static pointer set before showing
-                // picker
                 if (ThermistorWidget::s_active_picker_ &&
                     *ThermistorWidget::s_active_picker_->alive_) {
                     std::string sensor_name = *name_ptr;

@@ -16,7 +16,6 @@
 
 #include "app_globals.h"
 #include "observer_factory.h"
-#include "panel_widget_config.h"
 #include "panel_widget_manager.h"
 #include "panel_widget_registry.h"
 #include "printer_state.h"
@@ -45,7 +44,7 @@ void register_temp_stack_widget() {
 
 namespace {
 // Make all children of a page pass events through (not clickable, bubble to parent)
-static void make_children_passthrough(lv_obj_t* parent) {
+void make_children_passthrough(lv_obj_t* parent) {
     if (!parent)
         return;
     uint32_t count = lv_obj_get_child_count(parent);
@@ -93,8 +92,7 @@ bool TempStackWidget::on_edit_configure() {
     }
     spdlog::info("[TempStackWidget] Toggling display_mode: {} → {}",
                  was_carousel ? "carousel" : "stack", was_carousel ? "stack" : "carousel");
-    PanelWidgetManager::instance().get_widget_config("home").set_widget_config("temp_stack",
-                                                                               new_config);
+    save_widget_config(new_config);
     return true;
 }
 

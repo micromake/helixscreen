@@ -11,10 +11,8 @@
 #include <string>
 
 namespace helix {
-class PrinterState;
-}
 
-namespace helix {
+class PrinterState;
 
 /// Home widget displaying a user-selected temperature sensor reading.
 /// Click opens a context menu to choose which sensor to monitor.
@@ -24,6 +22,7 @@ class ThermistorWidget : public PanelWidget {
     explicit ThermistorWidget(PrinterState& printer_state);
     ~ThermistorWidget() override;
 
+    void set_config(const nlohmann::json& config) override;
     void attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) override;
     void detach() override;
     const char* id() const override {
@@ -55,9 +54,9 @@ class ThermistorWidget : public PanelWidget {
     // Sensor picker context menu
     lv_obj_t* picker_backdrop_ = nullptr;
 
+    void resolve_display_name();
     void on_temp_changed(int centidegrees);
     void update_display();
-    void load_config();
     void save_config();
     void show_sensor_picker();
     void dismiss_sensor_picker();

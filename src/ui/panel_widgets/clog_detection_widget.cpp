@@ -4,8 +4,6 @@
 
 #include "ams_state.h"
 #include "clog_detection_config_modal.h"
-#include "config.h"
-#include "panel_widget_config.h"
 #include "panel_widget_registry.h"
 #include "ui_clog_meter.h"
 
@@ -53,22 +51,22 @@ void ClogDetectionWidget::on_size_changed(int /*colspan*/, int /*rowspan*/, int 
 
 bool ClogDetectionWidget::on_edit_configure() {
     spdlog::info("[ClogDetectionWidget] Configure requested - showing config modal");
-    config_modal_ = std::make_unique<ClogDetectionConfigModal>(widget_id_);
+    config_modal_ = std::make_unique<ClogDetectionConfigModal>(id(), panel_id());
     config_modal_->show(lv_screen_active());
     return false;
 }
 
-void ClogDetectionWidget::apply_config() {
-    static helix::PanelWidgetConfig wc("home", *helix::Config::get_instance());
-    wc.load();
-    auto config = wc.get_widget_config(widget_id_);
+void ClogDetectionWidget::set_config(const nlohmann::json& config) {
+    config_ = config;
+}
 
+void ClogDetectionWidget::apply_config() {
     int source = 0;
     int threshold = 0;
-    if (config.contains("source") && config["source"].is_number_integer())
-        source = config["source"].get<int>();
-    if (config.contains("danger_threshold") && config["danger_threshold"].is_number_integer())
-        threshold = config["danger_threshold"].get<int>();
+    if (config_.contains("source") && config_["source"].is_number_integer())
+        source = config_["source"].get<int>();
+    if (config_.contains("danger_threshold") && config_["danger_threshold"].is_number_integer())
+        threshold = config_["danger_threshold"].get<int>();
 
     auto& ams = AmsState::instance();
     ams.set_source_override(source);
