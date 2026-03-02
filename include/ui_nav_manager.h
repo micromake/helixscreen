@@ -4,6 +4,7 @@
 #pragma once
 
 #include "ui_observer_guard.h"
+#include "ui_printer_switch_menu.h"
 
 #include "lvgl/lvgl.h"
 #include "subject_managed_panel.h"
@@ -308,6 +309,21 @@ class NavigationManager {
      */
     void set_backdrop_visible(bool visible);
 
+    /// Callback type for printer switch/add actions from the navbar badge menu
+    using PrinterSwitchCallback = std::function<void(const std::string& printer_id)>;
+    using AddPrinterCallback = std::function<void()>;
+
+    /**
+     * @brief Register callbacks for printer switching from navbar badge menu
+     *
+     * Application registers these during init so NavigationManager can trigger
+     * printer switch and add-printer actions without depending on Application directly.
+     *
+     * @param switch_cb Called with printer_id when user selects a different printer
+     * @param add_cb Called when user clicks "Add Printer" in the menu
+     */
+    void set_printer_callbacks(PrinterSwitchCallback switch_cb, AddPrinterCallback add_cb);
+
   private:
     // Private constructor/destructor for singleton
     NavigationManager() = default;
@@ -406,4 +422,10 @@ class NavigationManager {
 
     // Shutdown flag — overlays should skip destructive actions (e.g. ABORT)
     bool shutting_down_ = false;
+
+    // Printer badge menu
+    helix::ui::PrinterSwitchMenu printer_switch_menu_;
+    void on_printer_badge_clicked();
+    PrinterSwitchCallback printer_switch_cb_;
+    AddPrinterCallback add_printer_cb_;
 };

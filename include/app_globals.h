@@ -6,6 +6,7 @@
 #include "lvgl.h"
 #include "subject_managed_panel.h"
 
+#include <functional>
 #include <string>
 
 // Forward declarations
@@ -222,6 +223,16 @@ bool is_wizard_active();
  * @param active true when wizard starts, false when it completes
  */
 void set_wizard_active(bool active);
+
+/**
+ * @brief Register a callback invoked when wizard completes (transitions false)
+ *
+ * Used by Application to clear add-printer recovery state on successful wizard completion.
+ * Only one callback is supported; setting a new one replaces the previous.
+ *
+ * @param cb Callback to invoke, or nullptr to clear
+ */
+void set_wizard_completion_callback(std::function<void()> cb);
 
 /**
  * @brief Get appropriate cache directory for temp files

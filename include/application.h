@@ -104,6 +104,7 @@ class Application {
 
     // Soft restart (printer switching)
     void switch_printer(const std::string& printer_id);
+    void add_printer_via_wizard();
     void tear_down_printer_state();
     void init_printer_state();
 
@@ -168,6 +169,9 @@ class Application {
     bool m_running = false;
     bool m_wizard_active = false;
     bool m_shutdown_complete = false;
+
+    // Tracks previous printer when adding a new one via wizard (for cancel recovery)
+    std::string m_wizard_previous_printer_id;
 
     // Splash screen lifecycle manager
     helix::application::SplashScreenManager m_splash_manager;

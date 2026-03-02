@@ -892,6 +892,15 @@ void NavigationManager::wire_events(lv_obj_t* navbar) {
         get_printer_state().get_klippy_state_subject(), this,
         [](NavigationManager* mgr, int value) { mgr->handle_klippy_state_change(value); });
 
+    // Printer badge click handler
+    lv_obj_t* printer_badge = lv_obj_find_by_name(navbar, "nav_printer_badge");
+    if (printer_badge) {
+        lv_obj_add_event_cb(
+            printer_badge,
+            [](lv_event_t*) { NavigationManager::instance().on_printer_badge_clicked(); },
+            LV_EVENT_CLICKED, nullptr);
+    }
+
     spdlog::trace(
         "[NavigationManager] Navigation button events wired (with connection/klippy gating)");
 }
@@ -1454,6 +1463,46 @@ void NavigationManager::set_backdrop_visible(bool visible) {
 
     lv_subject_set_int(&overlay_backdrop_visible_subject_, visible ? 1 : 0);
     spdlog::trace("[NavigationManager] Overlay backdrop visibility set to: {}", visible);
+}
+
+void NavigationManager::set_printer_callbacks(PrinterSwitchCallback switch_cb,
+                                              AddPrinterCallback add_cb) {
+    printer_switch_cb_ = std::move(switch_cb);
+    add_printer_cb_ = std::move(add_cb);
+}
+
+void NavigationManager::on_printer_badge_clicked() {
+    if (printer_switch_menu_.is_visible()) {
+        printer_switch_menu_.hide();
+        return;
+    }
+
+    lv_obj_t* badge = lv_obj_find_by_name(navbar_widget_, "nav_printer_badge");
+    if (!badge) return;
+
+    lv_obj_t* screen = lv_obj_get_screen(navbar_widget_);
+
+    printer_switch_menu_.set_switch_callback(
+        [this](helix::ui::PrinterSwitchMenu::MenuAction action, const std::string& printer_id) {
+            switch (action) {
+                case helix::ui::PrinterSwitchMenu::MenuAction::SWITCH:
+                    spdlog::info("[Nav] Switching to printer '{}'", printer_id);
+                    if (printer_switch_cb_) {
+                        printer_switch_cb_(printer_id);
+                    }
+                    break;
+                case helix::ui::PrinterSwitchMenu::MenuAction::ADD_PRINTER:
+                    spdlog::info("[Nav] Adding new printer via wizard");
+                    if (add_printer_cb_) {
+                        add_printer_cb_();
+                    }
+                    break;
+                case helix::ui::PrinterSwitchMenu::MenuAction::CANCELLED:
+                    break;
+            }
+        });
+
+    printer_switch_menu_.show(screen, badge);
 }
 
 void NavigationManager::deinit_subjects() {

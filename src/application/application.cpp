@@ -448,6 +448,15 @@ int Application::run(int argc, char** argv) {
         modal->show_modal(lv_screen_active());
     }
 
+    // Register wizard completion callback for add-printer recovery
+    set_wizard_completion_callback([this]() {
+        if (!m_wizard_previous_printer_id.empty()) {
+            spdlog::info("[Application] Wizard completed — clearing add-printer recovery state");
+            m_wizard_previous_printer_id.clear();
+        }
+        m_wizard_active = false;
+    });
+
     // Phase 12: Run wizard if needed
     if (run_wizard()) {
         // Wizard is active - it handles its own flow
@@ -1144,6 +1153,11 @@ bool Application::init_ui() {
 
     // Wire navigation
     NavigationManager::instance().wire_events(navbar);
+
+    // Register printer switch/add callbacks so navbar badge menu can trigger actions
+    NavigationManager::instance().set_printer_callbacks(
+        [this](const std::string& printer_id) { switch_printer(printer_id); },
+        [this]() { add_printer_via_wizard(); });
 
     // Find panel container
     lv_obj_t* panel_container = lv_obj_find_by_name(content_area, "panel_container");
@@ -2509,6 +2523,28 @@ void Application::switch_printer(const std::string& printer_id) {
     NavigationManager::instance().set_active(PanelId::Home);
 
     spdlog::info("[Application] Switched to printer '{}'", printer_id);
+}
+
+void Application::add_printer_via_wizard() {
+    // Generate a unique ID for the new printer entry
+    std::string new_id = "printer-" + std::to_string(m_config->get_printer_ids().size() + 1);
+    std::string previous_id = m_config->get_active_printer_id();
+
+    // Create empty printer entry and switch to it
+    m_config->add_printer(new_id, nlohmann::json::object());
+    m_config->set_active_printer(new_id);
+    m_config->save();
+
+    // Store previous ID so wizard cancellation can recover
+    m_wizard_previous_printer_id = previous_id;
+
+    spdlog::info("[Application] Adding new printer '{}' via wizard (previous: '{}')", new_id,
+                 previous_id);
+
+    // Soft restart into wizard (new printer has no config, so wizard_required triggers)
+    tear_down_printer_state();
+    init_printer_state();
+    NavigationManager::instance().set_active(PanelId::Home);
 }
 
 void Application::tear_down_printer_state() {

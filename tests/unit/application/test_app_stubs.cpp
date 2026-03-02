@@ -31,3 +31,8 @@ bool is_wizard_active() {
 void set_wizard_active(bool active) {
     g_test_wizard_active = active;
 }
+
+#include <functional>
+void set_wizard_completion_callback(std::function<void()> /*cb*/) {
+    // No-op in tests
+}
