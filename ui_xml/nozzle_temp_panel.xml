@@ -104,6 +104,10 @@
           <ui_button name="preset_abs" width="48%" text="ABS" translation_tag="ABS">
             <event_cb trigger="clicked" callback="on_nozzle_preset_abs_clicked"/>
           </ui_button>
+          <!-- Dynamic spool preset (hidden by default, shown when active spool has novel material) -->
+          <ui_button name="preset_spool" width="100%" text="" flag_hidden="true">
+            <event_cb trigger="clicked" callback="on_nozzle_preset_spool_clicked"/>
+          </ui_button>
         </lv_obj>
         <ui_button name="btn_custom" width="100%" text="Custom..." translation_tag="Custom..." variant="secondary">
           <event_cb trigger="clicked" callback="on_nozzle_custom_clicked"/>
