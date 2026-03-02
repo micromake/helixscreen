@@ -130,7 +130,18 @@ void LedWidget::bind_led() {
                 self->update_light_icon();
             });
 
-        spdlog::info("[LedWidget] Bound to LED: {}", strips.front());
+        // Sync light_on_ from current subject value immediately rather than
+        // waiting for the deferred observer callback chain.  This ensures
+        // LedController::light_on_ reflects the actual hardware state as soon
+        // as the widget binds, so the very first toggle sends the right command.
+        if (led_ctrl.light_state_trackable()) {
+            int current_state = lv_subject_get_int(printer_state_.get_led_state_subject());
+            light_on_ = (current_state != 0);
+            led_ctrl.sync_light_state(light_on_);
+        }
+
+        spdlog::info("[LedWidget] Bound to LED: {} (initial state: {})", strips.front(),
+                     light_on_ ? "ON" : "OFF");
     } else {
         printer_state_.set_tracked_led("");
         spdlog::debug("[LedWidget] LED binding cleared (no strips selected)");
@@ -147,6 +158,20 @@ void LedWidget::handle_light_toggle() {
     if (strips.empty()) {
         spdlog::warn("[LedWidget] Light toggle called but no LED configured");
         return;
+    }
+
+    // Sync light_on_ from the actual subject value right before toggling.
+    // This ensures the toggle sends the correct command even if the deferred
+    // observer callback hasn't fired yet (e.g., status arrived but the
+    // ui_queue_update chain hasn't fully drained).
+    if (led_ctrl.light_state_trackable()) {
+        int current_state = lv_subject_get_int(printer_state_.get_led_state_subject());
+        bool actual_on = (current_state != 0);
+        if (led_ctrl.light_is_on() != actual_on) {
+            spdlog::debug("[LedWidget] Pre-toggle sync: light_on_ {} -> {}", led_ctrl.light_is_on(),
+                          actual_on);
+            led_ctrl.sync_light_state(actual_on);
+        }
     }
 
     led_ctrl.light_toggle();
