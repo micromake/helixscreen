@@ -312,6 +312,7 @@ void register_xml_components() {
     register_xml("components/panel_widget_firmware_restart.xml");
     register_xml("components/panel_widget_ams.xml");
     register_xml("components/panel_widget_camera.xml");
+    register_xml("components/camera_fullscreen.xml");
     register_xml("components/panel_widget_temperature.xml");
     register_xml("components/panel_widget_temp_stack.xml");
     register_xml("components/panel_widget_temp_carousel.xml");

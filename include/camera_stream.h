@@ -115,12 +115,14 @@ class CameraStream {
     // State
     std::atomic<bool> running_{false};
     std::atomic<bool> frame_pending_{false};
+    std::atomic<bool> got_stream_data_{false}; // Set by http_cb when data arrives
     int stream_fail_count_ = 0;
     std::thread stream_thread_;
 
     static constexpr int kMaxStreamFailures = 3;
     static constexpr int kSnapshotIntervalMs = 2000;
-    static constexpr int kStreamTimeoutSec = 30;
+    static constexpr int kStreamConnectTimeoutSec = 5;   // Initial connection attempt
+    static constexpr int kStreamTimeoutSec = 300;       // Active stream — reconnects on timeout
 };
 
 } // namespace helix

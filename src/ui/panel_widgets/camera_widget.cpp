@@ -12,6 +12,7 @@
 #include "printer_state.h"
 #include "static_subject_registry.h"
 #include "subject_debug_registry.h"
+#include "ui/ui_cleanup_helpers.h"
 #include "ui_nav_manager.h"
 #include "ui_update_queue.h"
 
@@ -52,14 +53,34 @@ static helix::CameraWidget* s_fullscreen_owner = nullptr;
 
 static void on_camera_clicked(lv_event_t* e) {
     auto* self = helix::panel_widget_from_event<helix::CameraWidget>(e);
-    if (self) {
-        self->open_fullscreen();
-    }
+    if (!self) return;
+    self->open_fullscreen();
 }
 
 static void on_camera_fullscreen_close(lv_event_t* /*e*/) {
     if (s_fullscreen_owner) {
         s_fullscreen_owner->close_fullscreen();
+    }
+}
+
+/// Extract "http://HOST" from "http://HOST:PORT/path", dropping port and path.
+static std::string extract_web_base(const std::string& base_url) {
+    auto scheme_end = base_url.find("://");
+    if (scheme_end == std::string::npos) {
+        return base_url;
+    }
+    auto host_start = scheme_end + 3;
+    auto port_pos = base_url.find(':', host_start);
+    if (port_pos != std::string::npos) {
+        return base_url.substr(0, port_pos);
+    }
+    return base_url;
+}
+
+/// Resolve a relative URL (starting with '/') against the web frontend base.
+static void resolve_relative_url(std::string& url, const std::string& web_base) {
+    if (!url.empty() && url[0] == '/') {
+        url = web_base + url;
     }
 }
 
@@ -87,6 +108,7 @@ void CameraWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     widget_obj_ = widget_obj;
     parent_screen_ = parent_screen;
     camera_image_ = lv_obj_find_by_name(widget_obj_, "camera_image");
+    camera_overlay_ = lv_obj_find_by_name(widget_obj_, "camera_overlay");
 
     lv_obj_set_user_data(widget_obj_, this);
 
@@ -116,10 +138,9 @@ void CameraWidget::detach() {
         return; // Already detached or never attached
     }
 
-    // Close fullscreen if open before detaching
-    if (fullscreen_overlay_) {
-        close_fullscreen();
-    }
+    // Synchronously destroy fullscreen overlay. Cannot use close_fullscreen()
+    // because go_back() is deferred and 'this' may be destroyed before it fires.
+    destroy_fullscreen();
 
     // Lightweight detach: release observer and LVGL pointers but preserve
     // the camera stream. alive_ is intentionally NOT invalidated here
@@ -132,6 +153,7 @@ void CameraWidget::detach() {
     widget_obj_ = nullptr;
     parent_screen_ = nullptr;
     camera_image_ = nullptr;
+    camera_overlay_ = nullptr;
 
     spdlog::debug("[CameraWidget] Detached (stream preserved)");
 }
@@ -143,13 +165,15 @@ void CameraWidget::on_activate() {
 
 void CameraWidget::on_deactivate() {
     active_ = false;
-    stop_stream();
+    // Don't stop the stream if fullscreen is open — we're still showing frames
+    if (!fullscreen_overlay_) {
+        stop_stream();
+    }
 }
 
 void CameraWidget::on_size_changed(int /*colspan*/, int /*rowspan*/, int /*width_px*/,
                                    int /*height_px*/) {
-    // Image scales automatically via XML width="100%" height="100%"
-    // If we need scale-to-cover, we'd adjust lv_image_set_inner_align here
+    // Ensure scale-to-cover after any resize
     if (camera_image_) {
         lv_image_set_inner_align(camera_image_, LV_IMAGE_ALIGN_COVER);
     }
@@ -171,36 +195,16 @@ void CameraWidget::start_stream() {
 
     // Resolve relative URLs against the web frontend (nginx on port 80).
     // Moonraker's webcam URLs are relative paths meant for the nginx reverse
-    // proxy, NOT the Moonraker API port (7125). Extract the host from the
-    // Moonraker HTTP base URL and use port 80.
+    // proxy, NOT the Moonraker API port (7125).
     auto* api = get_moonraker_api();
     if (api) {
         const auto& base = api->get_http_base_url();
         spdlog::debug("[CameraWidget] HTTP base URL: '{}'", base);
         if (!base.empty()) {
-            // Extract host from base URL: "http://HOST:PORT" -> "http://HOST"
-            std::string web_base;
-            auto scheme_end = base.find("://");
-            if (scheme_end != std::string::npos) {
-                auto host_start = scheme_end + 3;
-                auto port_pos = base.find(':', host_start);
-                if (port_pos != std::string::npos) {
-                    web_base = base.substr(0, port_pos); // "http://HOST"
-                } else {
-                    web_base = base; // Already no port
-                }
-            }
-            if (web_base.empty()) {
-                web_base = base; // Fallback
-            }
+            std::string web_base = extract_web_base(base);
             spdlog::debug("[CameraWidget] Web frontend base: '{}'", web_base);
-
-            if (!stream_url.empty() && stream_url[0] == '/') {
-                stream_url = web_base + stream_url;
-            }
-            if (!snapshot_url.empty() && snapshot_url[0] == '/') {
-                snapshot_url = web_base + snapshot_url;
-            }
+            resolve_relative_url(stream_url, web_base);
+            resolve_relative_url(snapshot_url, web_base);
         }
     } else {
         spdlog::warn("[CameraWidget] No MoonrakerAPI available for URL resolution");
@@ -230,11 +234,8 @@ void CameraWidget::start_stream() {
                     lv_image_set_src(target, frame);
                     set_status_text("");
                     // Hide spinner overlay on first frame
-                    if (widget_obj_) {
-                        lv_obj_t* overlay = lv_obj_find_by_name(widget_obj_, "camera_overlay");
-                        if (overlay && !lv_obj_has_flag(overlay, LV_OBJ_FLAG_HIDDEN)) {
-                            lv_obj_add_flag(overlay, LV_OBJ_FLAG_HIDDEN);
-                        }
+                    if (camera_overlay_ && !lv_obj_has_flag(camera_overlay_, LV_OBJ_FLAG_HIDDEN)) {
+                        lv_obj_add_flag(camera_overlay_, LV_OBJ_FLAG_HIDDEN);
                     }
                 }
 
@@ -295,6 +296,10 @@ void CameraWidget::open_fullscreen() {
     if (fullscreen_overlay_ || !parent_screen_ || !stream_) {
         return;
     }
+    // Only one fullscreen camera at a time across all instances
+    if (s_fullscreen_owner) {
+        return;
+    }
 
     // Create overlay as child of active screen (standard overlay pattern)
     lv_obj_t* screen = lv_display_get_screen_active(nullptr);
@@ -318,20 +323,35 @@ void CameraWidget::open_fullscreen() {
 
     if (fullscreen_image_) {
         lv_image_set_inner_align(fullscreen_image_, LV_IMAGE_ALIGN_COVER);
+
+        // Copy the current frame to the fullscreen image immediately
+        if (camera_image_) {
+            const void* src = lv_image_get_src(camera_image_);
+            if (src) {
+                lv_image_set_src(fullscreen_image_, src);
+            }
+        }
     }
 
-    // Register close callback so NavigationManager cleanup works
+    // Register with NavigationManager for lifecycle and cleanup.
+    // The close callback handles both explicit close (close button) and
+    // NavigationManager-initiated close (backdrop click, back gesture).
+    NavigationManager::instance().register_overlay_instance(overlay, nullptr);
     NavigationManager::instance().register_overlay_close_callback(overlay, [this]() {
-        fullscreen_overlay_ = nullptr;
+        // Clear image source before deletion to prevent dangling draw buf reference
+        if (fullscreen_image_) {
+            lv_image_set_src(fullscreen_image_, nullptr);
+        }
         fullscreen_image_ = nullptr;
         s_fullscreen_owner = nullptr;
-        spdlog::debug("[CameraWidget] Fullscreen overlay closed via navigation");
+
+        // Delete the overlay widget tree
+        helix::ui::safe_delete_obj(fullscreen_overlay_);
+
+        spdlog::debug("[CameraWidget] Fullscreen overlay closed");
     });
 
-    // Use zoom animation from the widget's position
-    lv_area_t source_rect;
-    lv_obj_get_coords(widget_obj_, &source_rect);
-    NavigationManager::instance().push_overlay_zoom_from(overlay, source_rect);
+    NavigationManager::instance().push_overlay(overlay);
 
     spdlog::info("[CameraWidget] Opened fullscreen camera");
 }
@@ -341,10 +361,28 @@ void CameraWidget::close_fullscreen() {
         return;
     }
 
-    // go_back() triggers the registered close callback which clears our pointers
+    // go_back() fires the registered close callback which handles all cleanup
     NavigationManager::instance().go_back();
+}
 
-    spdlog::debug("[CameraWidget] Closed fullscreen camera");
+void CameraWidget::destroy_fullscreen() {
+    if (!fullscreen_overlay_) {
+        return;
+    }
+
+    // Synchronous cleanup — used by detach() when 'this' may be destroyed
+    // before deferred go_back() callbacks fire.
+    if (fullscreen_image_) {
+        lv_image_set_src(fullscreen_image_, nullptr);
+    }
+    fullscreen_image_ = nullptr;
+    s_fullscreen_owner = nullptr;
+
+    NavigationManager::instance().unregister_overlay_close_callback(fullscreen_overlay_);
+    NavigationManager::instance().unregister_overlay_instance(fullscreen_overlay_);
+    helix::ui::safe_delete_obj(fullscreen_overlay_);
+
+    spdlog::debug("[CameraWidget] Fullscreen overlay destroyed (synchronous)");
 }
 
 } // namespace helix

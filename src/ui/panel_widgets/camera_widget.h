@@ -34,10 +34,12 @@ class CameraWidget : public PanelWidget {
     void start_stream();
     void stop_stream();
     void set_status_text(const char* text);
+    void destroy_fullscreen(); // Synchronous cleanup of fullscreen overlay
 
     lv_obj_t* widget_obj_ = nullptr;
     lv_obj_t* parent_screen_ = nullptr;
     lv_obj_t* camera_image_ = nullptr;
+    lv_obj_t* camera_overlay_ = nullptr; // Spinner overlay, hidden on first frame
 
     // Fullscreen overlay state
     lv_obj_t* fullscreen_overlay_ = nullptr;
