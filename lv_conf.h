@@ -845,8 +845,16 @@
 #define LV_USE_TJPGD 0
 
 /* libjpeg-turbo decoder library.
- * Supports complete JPEG specifications and high-performance JPEG decoding. */
+ * Supports complete JPEG specifications and high-performance JPEG decoding.
+ * Enabled on Pi/desktop, disabled on constrained embedded platforms. */
+#if !defined(HELIX_PLATFORM_AD5M) && !defined(HELIX_PLATFORM_CC1) && \
+    !defined(HELIX_PLATFORM_MIPS) && !defined(HELIX_PLATFORM_K1) && \
+    !defined(HELIX_PLATFORM_AD5X) && !defined(HELIX_PLATFORM_K2) && \
+    !defined(HELIX_PLATFORM_SNAPMAKER_U1)
+#define LV_USE_LIBJPEG_TURBO 1
+#else
 #define LV_USE_LIBJPEG_TURBO 0
+#endif
 
 /*GIF decoder library*/
 #define LV_USE_GIF 0

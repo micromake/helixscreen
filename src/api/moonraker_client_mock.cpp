@@ -587,7 +587,8 @@ void MoonrakerClientMock::discover_printer(
 
             // Set webcam availability during discovery (matches real Moonraker behavior)
             // Real client queries server.webcams.list during discovery
-            get_printer_state().set_webcam_available(true);
+            get_printer_state().set_webcam_available(true, "/webcam/?action=stream",
+                                                     "/webcam/?action=snapshot");
             spdlog::debug("[MoonrakerClientMock] Webcam available: true (mock always has webcam)");
 
             // Set power device count during discovery (matches real Moonraker behavior)

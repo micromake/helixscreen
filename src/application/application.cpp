@@ -866,6 +866,12 @@ bool Application::init_theme() {
 
 bool Application::init_assets() {
     AssetManager::register_all();
+
+#if LV_USE_LIBJPEG_TURBO
+    lv_libjpeg_turbo_init();
+    spdlog::debug("[Application] libjpeg-turbo decoder registered");
+#endif
+
     spdlog::debug("[Application] Assets registered");
     helix::MemoryMonitor::log_now("after_fonts_loaded");
     return true;

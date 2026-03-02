@@ -125,11 +125,19 @@ void PrinterCapabilitiesState::set_spoolman_available(bool available) {
     });
 }
 
-void PrinterCapabilitiesState::set_webcam_available(bool available) {
-    // Thread-safe: Use ui_queue_update to update LVGL subject from any thread
-    helix::ui::queue_update([this, available]() {
+void PrinterCapabilitiesState::set_webcam_available(bool available, const std::string& stream_url,
+                                                    const std::string& snapshot_url,
+                                                    bool flip_h, bool flip_v) {
+    // Store URLs before queuing (captured by value for thread safety)
+    helix::ui::queue_update([this, available, stream_url, snapshot_url, flip_h, flip_v]() {
+        webcam_stream_url_ = available ? stream_url : "";
+        webcam_snapshot_url_ = available ? snapshot_url : "";
+        webcam_flip_h_ = flip_h;
+        webcam_flip_v_ = flip_v;
         lv_subject_set_int(&printer_has_webcam_, available ? 1 : 0);
-        spdlog::debug("[PrinterCapabilitiesState] Webcam availability set: {}", available);
+        spdlog::debug("[PrinterCapabilitiesState] Webcam: available={}, stream_url={}, flip_h={}, "
+                      "flip_v={}",
+                      available, stream_url, flip_h, flip_v);
     });
 }
 

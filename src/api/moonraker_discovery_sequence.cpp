@@ -242,17 +242,27 @@ void MoonrakerDiscoverySequence::continue_discovery_objects() {
                     "server.webcams.list", json::object(),
                     [](json response) {
                         bool has_webcam = false;
+                        std::string stream_url;
+                        std::string snapshot_url;
+                        bool flip_h = false;
+                        bool flip_v = false;
                         if (response.contains("result") && response["result"].contains("webcams")) {
                             for (const auto& cam : response["result"]["webcams"]) {
                                 if (cam.value("enabled", true)) {
                                     has_webcam = true;
+                                    stream_url = cam.value("stream_url", "");
+                                    snapshot_url = cam.value("snapshot_url", "");
+                                    flip_h = cam.value("flip_horizontal", false);
+                                    flip_v = cam.value("flip_vertical", false);
                                     break;
                                 }
                             }
                         }
-                        spdlog::info("[Moonraker Client] Webcam detection: {}",
-                                     has_webcam ? "found" : "none");
-                        get_printer_state().set_webcam_available(has_webcam);
+                        spdlog::info("[Moonraker Client] Webcam detection: {}{}",
+                                     has_webcam ? "found" : "none",
+                                     has_webcam ? " stream=" + stream_url : "");
+                        get_printer_state().set_webcam_available(has_webcam, stream_url, snapshot_url,
+                                                                 flip_h, flip_v);
                     },
                     [](const MoonrakerError& err) {
                         spdlog::warn("[Moonraker Client] Webcam detection failed: {}", err.message);

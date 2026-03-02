@@ -81,8 +81,12 @@ class PrinterCapabilitiesState {
      * Thread-safe: Uses helix::ui::queue_update() for main-thread execution.
      *
      * @param available True if at least one enabled webcam is configured
+     * @param stream_url MJPEG stream URL of first enabled webcam (empty if none)
+     * @param snapshot_url Snapshot URL of first enabled webcam (empty if none)
      */
-    void set_webcam_available(bool available);
+    void set_webcam_available(bool available, const std::string& stream_url = "",
+                              const std::string& snapshot_url = "",
+                              bool flip_h = false, bool flip_v = false);
 
     /**
      * @brief Set timelapse plugin availability (async update)
@@ -225,6 +229,16 @@ class PrinterCapabilitiesState {
         return const_cast<lv_subject_t*>(&printer_has_webcam_);
     }
 
+    /// MJPEG stream URL of first enabled webcam (empty if none)
+    const std::string& get_webcam_stream_url() const { return webcam_stream_url_; }
+
+    /// Snapshot URL of first enabled webcam (empty if none)
+    const std::string& get_webcam_snapshot_url() const { return webcam_snapshot_url_; }
+
+    /// Webcam flip flags from Moonraker config
+    bool get_webcam_flip_horizontal() const { return webcam_flip_h_; }
+    bool get_webcam_flip_vertical() const { return webcam_flip_v_; }
+
     /// 1 if printer has controllable fans beyond part cooling (generic fans, exhaust, etc.)
     lv_subject_t* get_printer_has_extra_fans_subject() const {
         return const_cast<lv_subject_t*>(&printer_has_extra_fans_);
@@ -276,6 +290,10 @@ class PrinterCapabilitiesState {
     lv_subject_t printer_has_chamber_heater_{};      // active chamber heater (heater_generic)
     lv_subject_t printer_has_screws_tilt_{};         // screws_tilt_adjust
     lv_subject_t printer_has_webcam_{};              // enabled webcam configured
+    std::string webcam_stream_url_;                   // MJPEG stream URL
+    std::string webcam_snapshot_url_;                  // snapshot URL
+    bool webcam_flip_h_ = false;                      // flip horizontal
+    bool webcam_flip_v_ = false;                      // flip vertical
     lv_subject_t printer_has_extra_fans_{};          // extra controllable fans beyond part cooling
     lv_subject_t power_device_count_{};              // number of power devices (0 = none)
 };

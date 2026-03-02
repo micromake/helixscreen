@@ -1,0 +1,44 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#pragma once
+
+#include "lvgl.h"
+
+#if LV_USE_LIBJPEG_TURBO
+
+#include "camera_stream.h"
+#include "panel_widget.h"
+
+#include <memory>
+
+namespace helix {
+
+class CameraWidget : public PanelWidget {
+  public:
+    CameraWidget();
+    ~CameraWidget() override;
+
+    void attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) override;
+    void detach() override;
+    const char* id() const override { return "camera"; }
+
+    void on_activate() override;
+    void on_deactivate() override;
+    void on_size_changed(int colspan, int rowspan, int width_px, int height_px) override;
+
+  private:
+    void start_stream();
+    void stop_stream();
+    void set_status_text(const char* text);
+
+    lv_obj_t* widget_obj_ = nullptr;
+    lv_obj_t* camera_image_ = nullptr;
+
+    std::unique_ptr<CameraStream> stream_;
+
+    // Alive guard — prevents use-after-free in queued callbacks
+    std::shared_ptr<bool> alive_;
+};
+
+} // namespace helix
+
+#endif // LV_USE_LIBJPEG_TURBO
