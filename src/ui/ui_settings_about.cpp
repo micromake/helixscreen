@@ -345,6 +345,12 @@ void AboutSettingsOverlay::fetch_print_hours() {
 // ============================================================================
 
 void AboutSettingsOverlay::show_update_download_modal() {
+    // Ensure callbacks are registered (modal may be shown before the overlay)
+    if (!subjects_initialized_) {
+        init_subjects();
+        register_callbacks();
+    }
+
     if (!update_download_modal_) {
         update_download_modal_ = helix::ui::modal_show("update_download_modal");
     }
