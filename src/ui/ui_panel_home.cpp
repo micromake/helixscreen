@@ -120,7 +120,15 @@ void HomePanel::setup_widget_gate_observers() {
     // skip-if-unchanged optimization. Config changes and grid edit mode
     // always need a real rebuild (positions/config may change without
     // changing the widget ID list).
-    mgr.setup_gate_observers("home", [this]() { populate_widgets(/*force=*/false); });
+    mgr.setup_gate_observers("home", [this]() {
+        // Skip gate-triggered rebuilds during edit mode — lv_obj_clean would
+        // destroy overlay objects whose pointers GridEditMode still holds.
+        if (grid_edit_mode_.is_active()) {
+            spdlog::debug("[{}] Skipping gate rebuild during edit mode", get_name());
+            return;
+        }
+        populate_widgets(/*force=*/false);
+    });
 }
 
 void HomePanel::populate_widgets(bool force) {
@@ -226,8 +234,13 @@ void HomePanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
     setup_widget_gate_observers();
 
     // Register rebuild callback so settings overlay toggle changes take effect immediately
-    helix::PanelWidgetManager::instance().register_rebuild_callback(
-        "home", [this]() { populate_widgets(); });
+    helix::PanelWidgetManager::instance().register_rebuild_callback("home", [this]() {
+        if (grid_edit_mode_.is_active()) {
+            spdlog::debug("[{}] Skipping settings rebuild during edit mode", get_name());
+            return;
+        }
+        populate_widgets();
+    });
 
     // Set grid edit mode rebuild callback once (used when edit mode rearranges widgets)
     grid_edit_mode_.set_rebuild_callback([this]() { populate_widgets(); });
