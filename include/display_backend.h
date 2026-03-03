@@ -341,6 +341,21 @@ class DisplayBackend {
     }
 
     /**
+     * @brief Check if hardware can rotate without software fallback
+     *
+     * Returns true if the backend can handle the requested rotation
+     * without CPU-based pixel manipulation. Used by DisplayManager
+     * to decide whether to fall back to a different backend.
+     *
+     * @param rot Requested rotation
+     * @return true if hardware rotation is supported, false if software needed
+     */
+    virtual bool supports_hardware_rotation(lv_display_rotation_t rot) const {
+        (void)rot;
+        return true; // Most backends handle rotation natively
+    }
+
+    /**
      * @brief Detect panel orientation from DRM connector properties
      *
      * Queries the kernel's DRM connector "panel orientation" property to

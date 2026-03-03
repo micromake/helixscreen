@@ -934,7 +934,7 @@ Located in the `safety` section:
 ```json
 {
   "safety": {
-    "estop_require_confirmation": false,
+    "estop_require_confirmation": true,
     "cancel_escalation_enabled": false,
     "cancel_escalation_timeout_seconds": 30
   }
@@ -943,8 +943,8 @@ Located in the `safety` section:
 
 ### `estop_require_confirmation`
 **Type:** boolean
-**Default:** `false`
-**Description:** Require confirmation dialog before emergency stop. When `false`, E-Stop triggers immediately. Default is `false` for faster emergency response.
+**Default:** `true`
+**Description:** Require confirmation dialog before emergency stop. When `false`, E-Stop triggers immediately. Default is `true` to prevent accidental emergency stops.
 
 ### `cancel_escalation_enabled`
 **Type:** boolean
@@ -1433,7 +1433,7 @@ Environment="HELIX_TOUCH_DEVICE=/dev/input/event0"
   },
 
   "safety": {
-    "estop_require_confirmation": false
+    "estop_require_confirmation": true
   },
 
   "filament_sensors": {

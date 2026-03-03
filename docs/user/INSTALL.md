@@ -543,7 +543,7 @@ HelixScreen should detect and use these automatically.
 
 ### Screen Rotation
 
-To rotate the display, add to your `helixconfig.json` (typically at `~/helixscreen/config/helixconfig.json`):
+To rotate the display (e.g., if your screen is mounted upside-down), add to your `helixconfig.json` (typically at `~/helixscreen/config/helixconfig.json`):
 
 ```json
 {
@@ -553,18 +553,26 @@ To rotate the display, add to your `helixconfig.json` (typically at `~/helixscre
 }
 ```
 
-Valid values: `0`, `90`, `180`, `270`
+Valid values: `0`, `90`, `180`, `270`. Restart HelixScreen after changing.
+
+Touch coordinates are automatically adjusted to match the rotation — no separate touch configuration is needed.
+
+**Rotation and display backends:** When rotation is configured on Raspberry Pi, HelixScreen checks whether your display hardware supports rotating the image directly. Most DSI/HDMI displays on Pi do not support hardware rotation. In that case, HelixScreen automatically switches from the DRM (GPU) backend to the framebuffer backend, which handles software rotation without any screen flicker. This switch is transparent — no manual configuration needed.
+
+If you experience any display issues with rotation, you can also force the framebuffer backend manually by setting `HELIX_DISPLAY_BACKEND=fbdev` (see below).
 
 ### GPU Rendering (Experimental)
 
-By default, HelixScreen uses CPU-based software rendering (`fbdev` backend), which works on all hardware. On supported boards, you can enable GPU-accelerated rendering for lower CPU usage and smoother animations.
+By default, HelixScreen uses GPU-accelerated rendering via DRM/KMS when available. On boards where DRM is not supported, it falls back to CPU-based software rendering (`fbdev` backend).
 
-**Supported hardware:**
+**When rotation is configured**, HelixScreen may automatically switch to the fbdev backend if the display hardware doesn't support hardware rotation. This is normal and provides flicker-free rotation.
+
+**Supported DRM hardware:**
 - Raspberry Pi 3B+, Pi 4, Pi 5
 - BTT CB1 (and other Allwinner H616 boards)
 - Display must be connected via HDMI or DSI (SPI displays are not supported)
 
-**How to enable:**
+**To force a specific backend:**
 
 Edit your systemd service override:
 ```bash
@@ -574,7 +582,7 @@ sudo systemctl edit helixscreen
 Add the following lines:
 ```ini
 [Service]
-Environment="HELIX_DISPLAY_BACKEND=drm"
+Environment="HELIX_DISPLAY_BACKEND=fbdev"
 ```
 
 Then restart:
@@ -582,15 +590,15 @@ Then restart:
 sudo systemctl restart helixscreen
 ```
 
-**How to revert:**
+Valid backends: `drm` (GPU-accelerated), `fbdev` (CPU rendering, maximum compatibility).
 
-If the display does not work after enabling GPU rendering, SSH into your Pi and remove the override:
+**How to revert to auto-detection:**
+
+Remove the override and restart:
 ```bash
 sudo systemctl revert helixscreen
 sudo systemctl restart helixscreen
 ```
-
-This switches back to the default CPU rendering, which works on all displays.
 
 > **Note:** On Raspberry Pi 5, you may also need to specify the correct display device if auto-detection picks the wrong one. Add `Environment="HELIX_DRM_DEVICE=/dev/dri/card1"` for DSI displays or `Environment="HELIX_DRM_DEVICE=/dev/dri/card2"` for HDMI. See [CONFIGURATION.md](CONFIGURATION.md#display-settings) for details.
 

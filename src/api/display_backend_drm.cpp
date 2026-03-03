@@ -461,6 +461,39 @@ void DisplayBackendDRM::set_display_rotation(lv_display_rotation_t rot, int phys
     }
 }
 
+bool DisplayBackendDRM::supports_hardware_rotation(lv_display_rotation_t rot) const {
+    if (rot == LV_DISPLAY_ROTATION_0) {
+        return true;
+    }
+
+    if (display_ == nullptr) {
+        return false;
+    }
+
+    uint64_t drm_rot = DRM_MODE_ROTATE_0;
+    switch (rot) {
+    case LV_DISPLAY_ROTATION_90:
+        drm_rot = DRM_MODE_ROTATE_90;
+        break;
+    case LV_DISPLAY_ROTATION_180:
+        drm_rot = DRM_MODE_ROTATE_180;
+        break;
+    case LV_DISPLAY_ROTATION_270:
+        drm_rot = DRM_MODE_ROTATE_270;
+        break;
+    default:
+        return true;
+    }
+
+#ifdef HELIX_ENABLE_OPENGLES
+    return false;
+#else
+    uint64_t supported_mask =
+        lv_linux_drm_get_plane_rotation_mask(const_cast<lv_display_t*>(display_));
+    return choose_drm_rotation_strategy(drm_rot, supported_mask) == DrmRotationStrategy::HARDWARE;
+#endif
+}
+
 bool DisplayBackendDRM::clear_framebuffer(uint32_t color) {
     // For DRM, we can try to clear via /dev/fb0 if it exists (legacy fbdev emulation)
     // Many DRM systems provide /dev/fb0 as a compatibility layer

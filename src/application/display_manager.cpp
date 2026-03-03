@@ -253,6 +253,35 @@ bool DisplayManager::init(const Config& config) {
             int phys_h = m_height;
 
             lv_display_rotation_t lv_rot = degrees_to_lv_rotation(rotation_degrees);
+
+            // If DRM backend can't do hardware rotation, fall back to fbdev
+            // which handles software rotation flicker-free via LVGL's native path.
+            if (m_backend->type() == DisplayBackendType::DRM &&
+                !m_backend->supports_hardware_rotation(lv_rot)) {
+                spdlog::warn("[DisplayManager] DRM lacks hardware rotation for {}°, "
+                             "falling back to fbdev (flicker-free software rotation)",
+                             rotation_degrees);
+                lv_display_delete(m_display);
+                m_display = nullptr;
+                m_backend.reset();
+                m_backend = DisplayBackend::create(DisplayBackendType::FBDEV);
+                if (m_backend && m_backend->is_available()) {
+                    if (config.splash_active) {
+                        m_backend->set_splash_active(true);
+                    }
+                    m_display = m_backend->create_display(m_width, m_height);
+                }
+                if (!m_display) {
+                    spdlog::error("[DisplayManager] Fbdev fallback for rotation also failed");
+                    m_backend.reset();
+                    lv_xml_deinit();
+                    lv_deinit();
+                    return false;
+                }
+                spdlog::info("[DisplayManager] Fbdev fallback succeeded at {}x{}", m_width,
+                             m_height);
+            }
+
             lv_display_set_rotation(m_display, lv_rot);
 
             // Update tracked dimensions to match rotated resolution

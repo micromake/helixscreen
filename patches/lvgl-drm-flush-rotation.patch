@@ -1,5 +1,5 @@
 diff --git a/src/drivers/display/drm/lv_linux_drm.c b/src/drivers/display/drm/lv_linux_drm.c
-index 2a6ca6ed0..3c986c8ee 100644
+index 2a6ca6ed0..6b3ec0614 100644
 --- a/src/drivers/display/drm/lv_linux_drm.c
 +++ b/src/drivers/display/drm/lv_linux_drm.c
 @@ -78,6 +78,7 @@ typedef struct {
@@ -10,7 +10,24 @@ index 2a6ca6ed0..3c986c8ee 100644
  #if LV_USE_LINUX_DRM_GBM_BUFFERS
      struct gbm_device * gbm_device;
  #endif
-@@ -256,6 +257,43 @@ void lv_linux_drm_set_mode_cb(lv_display_t * disp, lv_linux_drm_select_mode_cb_t
+@@ -112,6 +113,7 @@ static uint32_t tick_get_cb(void);
+ #endif
+ 
+ static int drm_setup_buffers(drm_dev_t * drm_dev);
++static int drm_legacy_set_crtc(drm_dev_t * drm_dev, drm_buffer_t * buf);
+ static int drm_dmabuf_set_plane(drm_dev_t * drm_dev, drm_buffer_t * buf);
+ static void drm_flush_wait(lv_display_t * drm_dev);
+ static void drm_flush(lv_display_t * disp, const lv_area_t * area, uint8_t * px_map);
+@@ -121,6 +123,8 @@ static void drm_del_event_cb(lv_event_t * event);
+ /**********************
+  *  STATIC VARIABLES
+  **********************/
++static int use_legacy_flip = 0;        /* 1 = atomic failed, use drmModeSetCrtc */
++static int atomic_fail_count = 0;      /* consecutive atomic commit failures */
+ 
+ /**********************
+  *      MACROS
+@@ -256,6 +260,43 @@ void lv_linux_drm_set_mode_cb(lv_display_t * disp, lv_linux_drm_select_mode_cb_t
      LV_UNUSED(callback);
      LV_LOG_WARN("DRM without EGL support doesn't currently support setting a mode selection callback");
  }
@@ -54,7 +71,28 @@ index 2a6ca6ed0..3c986c8ee 100644
  /**********************
   *   STATIC FUNCTIONS
   **********************/
-@@ -482,6 +520,10 @@ static int drm_dmabuf_set_plane(drm_dev_t * drm_dev, drm_buffer_t * buf)
+@@ -440,6 +481,20 @@ static int drm_add_conn_property(drm_dev_t * drm_dev, const char * name, uint64_
+     return 0;
+ }
+ 
++/**
++ * Legacy page flip via drmModeSetCrtc - fallback when atomic modesetting
++ * fails (e.g. EACCES on some Pi 4 configurations).
++ */
++static int drm_legacy_set_crtc(drm_dev_t * drm_dev, drm_buffer_t * buf)
++{
++    int ret = drmModeSetCrtc(drm_dev->fd, drm_dev->crtc_id, buf->fb_handle,
++                              0, 0, &drm_dev->conn_id, 1, &drm_dev->mode);
++    if(ret) {
++        LV_LOG_ERROR("drmModeSetCrtc fallback failed: %s (%d)", strerror(errno), errno);
++    }
++    return ret;
++}
++
+ static int drm_dmabuf_set_plane(drm_dev_t * drm_dev, drm_buffer_t * buf)
+ {
+     int ret;
+@@ -482,10 +537,46 @@ static int drm_dmabuf_set_plane(drm_dev_t * drm_dev, drm_buffer_t * buf)
      drm_add_plane_property(drm_dev, "CRTC_W", drm_dev->width);
      drm_add_plane_property(drm_dev, "CRTC_H", drm_dev->height);
  
@@ -62,10 +100,48 @@ index 2a6ca6ed0..3c986c8ee 100644
 +        drm_add_plane_property(drm_dev, "rotation", drm_dev->plane_rotation);
 +    }
 +
++    /* If atomic modesetting previously failed, skip to legacy path.
++     * Only after the first frame (initial modeset must go through atomic). */
++    if(use_legacy_flip && !first) {
++        if(drm_dev->req) {
++            drmModeAtomicFree(drm_dev->req);
++            drm_dev->req = NULL;
++        }
++        return drm_legacy_set_crtc(drm_dev, buf);
++    }
++
      ret = drmModeAtomicCommit(drm_dev->fd, drm_dev->req, flags, drm_dev);
      if(ret) {
-         LV_LOG_ERROR("drmModeAtomicCommit failed: %s (%d)", strerror(errno), errno);
-@@ -508,7 +550,10 @@ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane
+-        LV_LOG_ERROR("drmModeAtomicCommit failed: %s (%d)", strerror(errno), errno);
+-        drmModeAtomicFree(drm_dev->req);
++        int err = errno;
++        atomic_fail_count++;
++
++        if(err == EACCES || err == EPERM) {
++            if(atomic_fail_count == 1) {
++                LV_LOG_ERROR("drmModeAtomicCommit: Permission denied. "
++                             "Trying legacy drmModeSetCrtc fallback. "
++                             "If issues persist, try HELIX_DISPLAY_BACKEND=fbdev");
++            }
++        }
++        else {
++            LV_LOG_ERROR("drmModeAtomicCommit failed: %s (%d)", strerror(err), err);
++        }
++
++        /* Try legacy fallback */
++        if(drm_dev->req) {
++            drmModeAtomicFree(drm_dev->req);
++            drm_dev->req = NULL;
++        }
++        ret = drm_legacy_set_crtc(drm_dev, buf);
++        if(ret == 0) {
++            LV_LOG_INFO("Legacy drmModeSetCrtc succeeded, using legacy path for future frames");
++            use_legacy_flip = 1;
++        }
+         return ret;
+     }
+ 
+@@ -508,7 +599,10 @@ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane
          return -1;
      }
  
@@ -77,7 +153,7 @@ index 2a6ca6ed0..3c986c8ee 100644
  
      for(i = 0; i < planes->count_planes; ++i) {
          plane = drmModeGetPlane(drm_dev->fd, planes->planes[i]);
-@@ -519,6 +564,8 @@ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane
+@@ -519,6 +613,8 @@ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane
          }
  
          if(!(plane->possible_crtcs & (1 << crtc_idx))) {
@@ -86,7 +162,7 @@ index 2a6ca6ed0..3c986c8ee 100644
              drmModeFreePlane(plane);
              continue;
          }
-@@ -529,6 +576,8 @@ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane
+@@ -529,6 +625,8 @@ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane
          }
  
          if(j == plane->count_formats) {
@@ -95,7 +171,7 @@ index 2a6ca6ed0..3c986c8ee 100644
              drmModeFreePlane(plane);
              continue;
          }
-@@ -536,7 +585,7 @@ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane
+@@ -536,7 +634,7 @@ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane
          *plane_id = plane->plane_id;
          drmModeFreePlane(plane);
  
@@ -104,7 +180,7 @@ index 2a6ca6ed0..3c986c8ee 100644
  
          /* Success */
          goto out;
-@@ -579,16 +628,16 @@ static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id)
+@@ -579,16 +677,16 @@ static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id)
          }
  
          if(conn->connection == DRM_MODE_CONNECTED) {
@@ -125,7 +201,7 @@ index 2a6ca6ed0..3c986c8ee 100644
          }
  
          if(conn->connection == DRM_MODE_CONNECTED && conn->count_modes > 0)
-@@ -604,7 +653,7 @@ static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id)
+@@ -604,7 +702,7 @@ static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id)
      }
  
      drm_dev->conn_id = conn->connector_id;
@@ -134,7 +210,7 @@ index 2a6ca6ed0..3c986c8ee 100644
      drm_dev->mmWidth = conn->mmWidth;
      drm_dev->mmHeight = conn->mmHeight;
  
-@@ -635,9 +684,8 @@ static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id)
+@@ -635,9 +733,8 @@ static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id)
  
      if(enc) {
          drm_dev->enc_id = enc->encoder_id;
@@ -145,7 +221,7 @@ index 2a6ca6ed0..3c986c8ee 100644
          drmModeFreeEncoder(enc);
          enc = NULL;
      }
-@@ -698,7 +746,7 @@ static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id)
+@@ -698,7 +795,7 @@ static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id)
          goto free_res;
      }
  
@@ -154,7 +230,7 @@ index 2a6ca6ed0..3c986c8ee 100644
      ret = 0;
  
  free_res:
-@@ -1074,6 +1122,36 @@ static void drm_flush(lv_display_t * disp, const lv_area_t * area, uint8_t * px_
+@@ -1074,6 +1171,36 @@ static void drm_flush(lv_display_t * disp, const lv_area_t * area, uint8_t * px_
  
      LV_ASSERT(drm_dev->act_buf != NULL);
  

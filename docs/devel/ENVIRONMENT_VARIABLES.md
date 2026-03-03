@@ -88,6 +88,13 @@ sudo systemctl restart helixscreen
 
 **Supported hardware for `drm`:** Raspberry Pi 3B+, Pi 4, Pi 5, BTT CB1 (and other Allwinner H616 boards). Requires a display connected via HDMI or DSI — SPI displays are not supported with `drm`. If the `drm` backend fails to initialize, HelixScreen falls back to `fbdev` automatically.
 
+**Automatic fbdev fallback for rotation:** When display rotation is configured (e.g., `"rotate": 180`) and the DRM plane does not support hardware rotation (common on Pi DSI displays where the plane rotation mask is `0x0`), HelixScreen automatically switches from `drm` to `fbdev` before applying rotation. The fbdev backend uses LVGL's native software rotation which is flicker-free — unlike the DRM path which must do CPU pixel reversal in the flush callback, risking visible tearing. This fallback is transparent and logged as:
+```
+DRM lacks hardware rotation for 180°, falling back to fbdev (flicker-free software rotation)
+```
+
+**Legacy DRM fallback:** If `drmModeAtomicCommit` fails (e.g., `EACCES` on some Pi 4 configurations), the DRM driver automatically falls back to legacy `drmModeSetCrtc` page flips. If the legacy path also fails, a log message suggests using `HELIX_DISPLAY_BACKEND=fbdev`.
+
 ### `HELIX_DRM_DEVICE`
 
 Specify which DRM device to use when the DRM backend is active. Needed when multiple GPU/display controllers are present (common on Pi 5).
@@ -170,6 +177,8 @@ HELIX_DISPLAY_ROTATION=180 ./build/bin/helix-screen
 4. Default: `0` (no rotation)
 
 **Note:** Software rotation is only supported on embedded backends (fbdev/DRM). On SDL (desktop dev), rotation is logged as a warning and skipped due to LVGL's DIRECT render mode limitation.
+
+**Automatic backend switching:** When rotation is configured and the DRM backend cannot do hardware rotation, `DisplayManager` automatically switches to the fbdev backend before applying rotation. This means users get flicker-free rotation without needing to manually set `HELIX_DISPLAY_BACKEND=fbdev`. The DRM software rotation path (CPU pixel reversal in `drm_flush()`) still exists as a last resort if fbdev is unavailable.
 
 **Touch auto-rotation:** On fbdev, touch coordinates are automatically rotated to match the display rotation for non-USB-HID devices (e.g., Goodix, sun4i_ts). USB HID touchscreens (e.g., BTT HDMI) report logical coordinates natively and are not transformed. `HELIX_TOUCH_SWAP_AXES` is still available as a manual override for edge cases.
 

@@ -65,6 +65,9 @@ class DisplayBackendDRM : public DisplayBackend {
     // Display rotation via DRM plane property
     void set_display_rotation(lv_display_rotation_t rot, int phys_w, int phys_h) override;
 
+    /// Check if DRM plane supports hardware rotation for the given angle
+    bool supports_hardware_rotation(lv_display_rotation_t rot) const override;
+
     // Backend info
     DisplayBackendType type() const override {
         return DisplayBackendType::DRM;
