@@ -84,6 +84,9 @@ static bool language_step_skipped = false;
 // Track if WiFi step (2) is being skipped - Android manages WiFi natively
 static bool wifi_step_skipped = false;
 
+// Track if connection step (3) is being skipped - preset mode, already connected
+static bool connection_step_skipped = false;
+
 // Track if AMS step (7) is being skipped - no AMS detected
 static bool ams_step_skipped = false;
 
@@ -415,6 +418,7 @@ static helix::WizardSkipFlags get_current_skip_flags() {
         .touch_cal = touch_cal_step_skipped,
         .language = language_step_skipped,
         .wifi = wifi_step_skipped,
+        .connection = connection_step_skipped,
         .printer_identify = printer_identify_step_skipped,
         .heater_select = heater_select_step_skipped,
         .fan_select = fan_select_step_skipped,
@@ -454,6 +458,7 @@ void ui_wizard_navigate_to_step(int step) {
         touch_cal_step_skipped = false;
         language_step_skipped = false;
         wifi_step_skipped = false;
+        connection_step_skipped = false;
         printer_identify_step_skipped = false;
         heater_select_step_skipped = false;
         fan_select_step_skipped = false;
@@ -632,7 +637,8 @@ static void ui_wizard_precalculate_skips() {
     }
 
     int total_skipped = (touch_cal_step_skipped ? 1 : 0) + (language_step_skipped ? 1 : 0) +
-                        (wifi_step_skipped ? 1 : 0) + (printer_identify_step_skipped ? 1 : 0) +
+                        (wifi_step_skipped ? 1 : 0) + (connection_step_skipped ? 1 : 0) +
+                        (printer_identify_step_skipped ? 1 : 0) +
                         (heater_select_step_skipped ? 1 : 0) +
                         (fan_select_step_skipped ? 1 : 0) + (ams_step_skipped ? 1 : 0) +
                         (led_step_skipped ? 1 : 0) + (filament_step_skipped ? 1 : 0) +
@@ -1048,77 +1054,14 @@ static void on_back_clicked(lv_event_t* e) {
         min_step = 3;
 
     if (current > min_step) {
-        int prev_step = current - 1;
-
-        // Skip telemetry step (13) when going back if it was skipped
-        if (prev_step == 13 && telemetry_step_skipped) {
-            prev_step = 12;
-        }
-
-        // Skip summary step (12) when going back if it was skipped
-        if (prev_step == 12 && summary_step_skipped) {
-            prev_step = 11;
-        }
-
-        // Skip input shaper step (11) when going back if it was skipped
-        if (prev_step == 11 && input_shaper_step_skipped) {
-            prev_step = 10;
-        }
-
-        // Skip probe sensor step (10) when going back if it was skipped
-        if (prev_step == 10 && probe_step_skipped) {
-            prev_step = 9;
-        }
-
-        // Skip filament sensor step (9) when going back if it was skipped
-        if (prev_step == 9 && filament_step_skipped) {
-            prev_step = 8;
-        }
-
-        // Skip LED step (8) when going back if it was skipped
-        if (prev_step == 8 && led_step_skipped) {
-            prev_step = 7;
-        }
-
-        // Skip AMS step (7) when going back if it was skipped
-        if (prev_step == 7 && ams_step_skipped) {
-            prev_step = 6;
-        }
-
-        // Skip fan select step (6) when going back if it was skipped
-        if (prev_step == 6 && fan_select_step_skipped) {
-            prev_step = 5;
-        }
-
-        // Skip heater select step (5) when going back if it was skipped
-        if (prev_step == 5 && heater_select_step_skipped) {
-            prev_step = 4;
-        }
-
-        // Skip printer identify step (4) when going back if it was skipped
-        if (prev_step == 4 && printer_identify_step_skipped) {
-            prev_step = 3;
-        }
-
-        // Skip WiFi step (2) when going back if it was skipped
-        if (prev_step == 2 && wifi_step_skipped) {
-            prev_step = 1;
-        }
-
-        // Skip language step (1) when going back if it was skipped
-        if (prev_step == 1 && language_step_skipped) {
-            prev_step = 0;
-        }
-
-        // Skip touch calibration step (0) when going back if it was skipped
-        if (prev_step == 0 && touch_cal_step_skipped) {
-            // Can't go back further - touch cal was skipped
+        auto flags = get_current_skip_flags();
+        int prev_step = helix::wizard_prev_step(current, flags);
+        if (prev_step >= 0) {
+            ui_wizard_navigate_to_step(prev_step);
+            spdlog::debug("[Wizard] Back button clicked, step: {}", prev_step);
+        } else {
             navigating = false;
-            return;
         }
-
-        ui_wizard_navigate_to_step(prev_step);
-        spdlog::debug("[Wizard] Back button clicked, step: {}", prev_step);
     } else {
         navigating = false;
     }
@@ -1165,6 +1108,7 @@ static void on_next_clicked(lv_event_t* e) {
         MoonrakerClient* client = get_moonraker_client();
         if (client && client->get_connection_state() == ConnectionState::CONNECTED) {
             spdlog::info("[Wizard] Preset mode: already connected, skipping connection step");
+            connection_step_skipped = true;
             // Trigger precalculate since we're skipping step 3's exit
             ui_wizard_precalculate_skips();
             auto flags = get_current_skip_flags();
@@ -1186,13 +1130,22 @@ static void on_next_clicked(lv_event_t* e) {
         ui_wizard_precalculate_skips();
     }
 
-    // Preset mode: skip hardware config steps 4-6
-    if (preset_mode && next_step >= 4 && next_step <= 6) {
-        printer_identify_step_skipped = true;
-        heater_select_step_skipped = true;
-        fan_select_step_skipped = true;
+    // Skip printer identify step (4) if skipped (preset mode)
+    if (next_step == 4 && printer_identify_step_skipped) {
+        next_step = 5;
+        spdlog::debug("[Wizard] Skipping printer identify step");
+    }
+
+    // Skip heater select step (5) if skipped (preset mode)
+    if (next_step == 5 && heater_select_step_skipped) {
+        next_step = 6;
+        spdlog::debug("[Wizard] Skipping heater select step");
+    }
+
+    // Skip fan select step (6) if skipped (preset mode)
+    if (next_step == 6 && fan_select_step_skipped) {
         next_step = 7;
-        spdlog::info("[Wizard] Preset mode: skipping hardware config steps 4-6");
+        spdlog::debug("[Wizard] Skipping fan select step");
     }
 
     // Skip AMS step (7) if no AMS detected

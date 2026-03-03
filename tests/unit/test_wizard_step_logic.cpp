@@ -111,3 +111,23 @@ TEST_CASE("Preset mode: prev_step works", "[wizard][step_logic][preset]") {
     REQUIRE(helix::wizard_prev_step(1, flags) == 0);
     REQUIRE(helix::wizard_prev_step(0, flags) == -1);
 }
+
+TEST_CASE("Preset mode: connection also skipped", "[wizard][step_logic][preset]") {
+    helix::WizardSkipFlags flags{};
+    flags.wifi = true;
+    flags.connection = true;  // auto-validated
+    flags.printer_identify = true;
+    flags.heater_select = true;
+    flags.fan_select = true;
+    flags.ams = true;
+    flags.led = true;
+    flags.filament = true;
+    flags.probe = true;
+    flags.input_shaper = true;
+    flags.summary = true;
+    // telemetry NOT skipped
+
+    // Steps: 0(touch), 1(lang), 13(telemetry) = 3
+    REQUIRE(helix::wizard_calculate_display_total(flags) == 3);
+    REQUIRE(helix::wizard_next_step(1, flags) == 13);  // lang -> telemetry (skip conn + all hw)
+}

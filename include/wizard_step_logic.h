@@ -8,6 +8,7 @@ struct WizardSkipFlags {
     bool touch_cal = false;        // step 0
     bool language = false;         // step 1
     bool wifi = false;             // step 2
+    bool connection = false;       // step 3
     bool printer_identify = false; // step 4
     bool heater_select = false;    // step 5
     bool fan_select = false;       // step 6

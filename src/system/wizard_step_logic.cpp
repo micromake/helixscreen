@@ -15,6 +15,8 @@ static bool is_step_skipped(int step, const WizardSkipFlags& skips) {
         return skips.language;
     case 2:
         return skips.wifi;
+    case 3:
+        return skips.connection;
     case 4:
         return skips.printer_identify;
     case 5:
