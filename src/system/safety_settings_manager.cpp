@@ -32,8 +32,8 @@ void SafetySettingsManager::init_subjects() {
 
     Config* config = Config::get_instance();
 
-    // E-Stop confirmation (default: false = immediate action)
-    bool estop_confirm = config->get<bool>("/safety/estop_require_confirmation", false);
+    // E-Stop confirmation (default: true = require confirmation)
+    bool estop_confirm = config->get<bool>("/safety/estop_require_confirmation", true);
     UI_MANAGED_SUBJECT_INT(estop_require_confirmation_subject_, estop_confirm ? 1 : 0,
                            "settings_estop_confirm", subjects_);
 

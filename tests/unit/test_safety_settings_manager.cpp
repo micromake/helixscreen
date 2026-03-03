@@ -18,8 +18,8 @@ TEST_CASE_METHOD(LVGLTestFixture, "SafetySettingsManager default values after in
     Config::get_instance();
     SafetySettingsManager::instance().init_subjects();
 
-    SECTION("estop_require_confirmation defaults to false") {
-        REQUIRE(SafetySettingsManager::instance().get_estop_require_confirmation() == false);
+    SECTION("estop_require_confirmation defaults to true") {
+        REQUIRE(SafetySettingsManager::instance().get_estop_require_confirmation() == true);
     }
 
     SECTION("cancel_escalation_enabled defaults to false") {
