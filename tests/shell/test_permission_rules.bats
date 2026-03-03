@@ -160,41 +160,50 @@ SUDOEOF
 # Polkit NetworkManager rule (.pkla format)
 # =============================================================================
 
-@test "install_permission_rules: installs polkit pkla rule when pkla dir exists" {
+@test "install_permission_rules: generates valid pkla inline when pkla dir exists" {
+    # Inline generation (heredoc) — no template copy+sed involved
     local pkla_dir="$BATS_TEST_TMPDIR/etc/polkit-1/localauthority/50-local.d"
     mkdir -p "$pkla_dir"
 
-    # We need to override the function to use test paths since the dirs are hardcoded
-    # Test the pkla template directly instead
-    local pkla_src="$INSTALL_DIR/config/helixscreen-network.pkla"
+    local helix_user="biqu"
     local pkla_dest="$pkla_dir/helixscreen-network.pkla"
-    cp "$pkla_src" "$pkla_dest"
-    sed -i '' "s|@@HELIX_USER@@|biqu|g" "$pkla_dest" 2>/dev/null || \
-    sed -i "s|@@HELIX_USER@@|biqu|g" "$pkla_dest" 2>/dev/null || true
+    cat > "$pkla_dest" << PKLA_EOF
+# SPDX-License-Identifier: GPL-3.0-or-later
+[HelixScreen NetworkManager access]
+Identity=unix-user:${helix_user}
+Action=org.freedesktop.NetworkManager.*
+ResultAny=yes
+ResultInactive=yes
+ResultActive=yes
+PKLA_EOF
 
     [ -f "$pkla_dest" ]
     grep -q "unix-user:biqu" "$pkla_dest"
     grep -q "org.freedesktop.NetworkManager" "$pkla_dest"
     grep -q "ResultAny=yes" "$pkla_dest"
+    # Inline generation can NEVER produce @@HELIX_USER@@
+    ! grep -q "@@HELIX_USER@@" "$pkla_dest"
 }
 
-@test "install_permission_rules: pkla template has @@HELIX_USER@@ placeholder" {
-    local pkla_src="$INSTALL_DIR/config/helixscreen-network.pkla"
-    [ -f "$pkla_src" ]
-    grep -q "@@HELIX_USER@@" "$pkla_src"
-}
+@test "install_permission_rules: pkla generates correctly for different users" {
+    local pkla_dir="$BATS_TEST_TMPDIR/pkla-users"
+    mkdir -p "$pkla_dir"
 
-@test "install_permission_rules: pkla templates correctly for different users" {
-    local pkla_src="$INSTALL_DIR/config/helixscreen-network.pkla"
-    local pkla_dest="$BATS_TEST_TMPDIR/test.pkla"
-
-    for user in biqu mks pi klipper; do
-        cp "$pkla_src" "$pkla_dest"
-        sed -i '' "s|@@HELIX_USER@@|${user}|g" "$pkla_dest" 2>/dev/null || \
-        sed -i "s|@@HELIX_USER@@|${user}|g" "$pkla_dest" 2>/dev/null || true
+    for user in biqu mks pi klipper sonic; do
+        local helix_user="$user"
+        local pkla_dest="$pkla_dir/${user}.pkla"
+        cat > "$pkla_dest" << PKLA_EOF
+[HelixScreen NetworkManager access]
+Identity=unix-user:${helix_user}
+Action=org.freedesktop.NetworkManager.*
+ResultAny=yes
+ResultInactive=yes
+ResultActive=yes
+PKLA_EOF
         grep -q "unix-user:${user}" "$pkla_dest"
-        # Ensure no leftover template placeholders
+        # Inline heredoc expansion CANNOT leave template placeholders
         ! grep -q "@@HELIX_USER@@" "$pkla_dest"
+        ! grep -q "@@" "$pkla_dest"
     done
 }
 
@@ -286,28 +295,53 @@ POLKIT_EOF
 }
 
 # =============================================================================
-# Regression: pkla template must not be deployed untemplated
+# Regression: @@HELIX_USER@@ must NEVER appear in deployed polkit files
 # =============================================================================
 
-@test "install_permission_rules: pkla source file contains placeholder (not a real username)" {
-    # The .pkla file in config/ is a TEMPLATE — it must have the placeholder.
-    # If someone accidentally replaces the placeholder with a real user,
-    # the installer will deploy it for all users with the wrong identity.
-    local pkla_src="$INSTALL_DIR/config/helixscreen-network.pkla"
-    [ -f "$pkla_src" ]
-    grep -q "@@HELIX_USER@@" "$pkla_src"
-    # Must NOT contain any hardcoded real usernames
-    ! grep -q "unix-user:biqu" "$pkla_src"
-    ! grep -q "unix-user:root" "$pkla_src"
-    ! grep -q "unix-user:pi" "$pkla_src"
+@test "install_permission_rules: inline generation cannot produce @@HELIX_USER@@" {
+    # Both JS rules and PKLA are generated via heredoc with shell expansion.
+    # Shell variable expansion in heredocs is guaranteed — @@HELIX_USER@@
+    # can only appear if someone re-introduces a copy+sed pattern.
+    # This test validates the approach by generating both formats.
+    for user in biqu mks pi klipper sonic; do
+        local helix_user="$user"
+
+        # JS rules format
+        local js_dest="$BATS_TEST_TMPDIR/inline-${user}.rules"
+        cat > "$js_dest" << POLKIT_EOF
+polkit.addRule(function(action, subject) {
+    if (action.id.indexOf("org.freedesktop.NetworkManager.") === 0 &&
+        subject.user === "${helix_user}") {
+        return polkit.Result.YES;
+    }
+});
+POLKIT_EOF
+        ! grep -q "@@" "$js_dest"
+        grep -q "\"${user}\"" "$js_dest"
+
+        # PKLA format
+        local pkla_dest="$BATS_TEST_TMPDIR/inline-${user}.pkla"
+        cat > "$pkla_dest" << PKLA_EOF
+[HelixScreen NetworkManager access]
+Identity=unix-user:${helix_user}
+Action=org.freedesktop.NetworkManager.*
+ResultAny=yes
+ResultInactive=yes
+ResultActive=yes
+PKLA_EOF
+        ! grep -q "@@" "$pkla_dest"
+        grep -q "unix-user:${user}" "$pkla_dest"
+    done
 }
 
-@test "install_permission_rules: pkla deployed without templating would be broken" {
-    # Regression guard: deploying the raw .pkla template without sed would match
-    # no real user ("@@HELIX_USER@@" is not a valid username)
-    local pkla_src="$INSTALL_DIR/config/helixscreen-network.pkla"
-    # The raw template must match the literal placeholder
-    grep -q "Identity=unix-user:@@HELIX_USER@@" "$pkla_src"
+@test "install_permission_rules: permissions.sh has no copy+sed pkla pattern" {
+    # Regression guard: ensure nobody re-introduces the fragile copy+sed pattern
+    # that caused @@HELIX_USER@@ to leak into deployed files.
+    local script="$WORKTREE_ROOT/scripts/lib/installer/permissions.sh"
+    # Must NOT copy the template file to the deploy destination
+    ! grep -q 'cp.*pkla_src.*pkla_dest' "$script"
+    # Must NOT sed @@HELIX_USER@@ in pkla files (inline generation doesn't need it)
+    ! grep -q 'sed.*@@HELIX_USER@@.*pkla_dest' "$script"
 }
 
 # =============================================================================
@@ -353,7 +387,7 @@ POLKIT_EOF
 
 @test "install_permission_rules: installs pkla via SUDO on restricted parent dir" {
     # Simulate the Debian 11 scenario: parent dir exists but is only
-    # traversable by the SUDO wrapper
+    # traversable by the SUDO wrapper (no rules.d → falls to pkla path)
     local polkit_root="$BATS_TEST_TMPDIR/etc/polkit-1"
     local auth_dir="$polkit_root/localauthority"
     local pkla_dir="$auth_dir/50-local.d"
@@ -388,10 +422,11 @@ SUDOEOF
     run install_permission_rules "pi"
     [ "$status" -eq 0 ]
 
-    # The pkla file should have been installed and templated
+    # The pkla file should have been generated inline with the correct user
     [ -f "$pkla_dir/helixscreen-network.pkla" ]
     grep -q "unix-user:biqu" "$pkla_dir/helixscreen-network.pkla"
     ! grep -q "@@HELIX_USER@@" "$pkla_dir/helixscreen-network.pkla"
+    ! grep -q "@@" "$pkla_dir/helixscreen-network.pkla"
 }
 
 @test "install_permission_rules: prefers JS rules when rules.d exists" {
@@ -434,6 +469,51 @@ SUDOEOF
     grep -q '"biqu"' "$rules_dir/50-helixscreen-network.rules"
     # pkla should NOT be installed (JS takes priority)
     [ ! -f "$pkla_dir/helixscreen-network.pkla" ]
+}
+
+@test "install_permission_rules: cleans up stale pkla when installing JS rules" {
+    # Simulate upgrade from Debian 11→12: old broken pkla exists, rules.d now available
+    local polkit_root="$BATS_TEST_TMPDIR/etc/polkit-1"
+    local rules_dir="$polkit_root/rules.d"
+    local pkla_dir="$polkit_root/localauthority/50-local.d"
+    mkdir -p "$rules_dir"
+    mkdir -p "$pkla_dir"
+
+    # Plant a stale/broken pkla file from the old install
+    echo 'Identity=unix-user:@@HELIX_USER@@' > "$pkla_dir/helixscreen-network.pkla"
+
+    # SUDO wrapper
+    local wrapper="$BATS_TEST_TMPDIR/bin/mock_sudo"
+    mkdir -p "$(dirname "$wrapper")"
+    cat > "$wrapper" << 'SUDOEOF'
+#!/bin/sh
+new_args=""
+for arg in "$@"; do
+    case "$arg" in
+        /etc/polkit-1/*)
+            suffix="${arg#/etc/polkit-1/}"
+            arg="${BATS_TEST_TMPDIR}/etc/polkit-1/${suffix}"
+            ;;
+    esac
+    new_args="$new_args \"$arg\""
+done
+eval $new_args
+SUDOEOF
+    chmod +x "$wrapper"
+    export SUDO="$wrapper"
+
+    mock_command "nmcli" ""
+    mock_command "udevadm" ""
+
+    run install_permission_rules "pi"
+    [ "$status" -eq 0 ]
+
+    # JS rules installed
+    [ -f "$rules_dir/50-helixscreen-network.rules" ]
+    grep -q '"biqu"' "$rules_dir/50-helixscreen-network.rules"
+    # Stale pkla must be removed
+    [ ! -f "$pkla_dir/helixscreen-network.pkla" ]
+    [[ "$output" == *"Removed stale .pkla"* ]]
 }
 
 @test "install_permission_rules: warns when neither polkit dir exists" {

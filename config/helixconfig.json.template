@@ -188,8 +188,8 @@
     "_spool_style_comment": "Filament spool visualization style. Options: '3d' (Bambu-style pseudo-3D canvas with gradients), 'flat' (concentric rings). Default is '3d'."
   },
   "safety": {
-    "estop_require_confirmation": false,
-    "_estop_require_confirmation_comment": "Require confirmation dialog before emergency stop. When false, E-Stop triggers immediately. Default: false (immediate action)."
+    "estop_require_confirmation": true,
+    "_estop_require_confirmation_comment": "Require confirmation dialog before emergency stop. When false, E-Stop triggers immediately. Default: true (confirmation required)."
   },
   "filament_sensors": {
     "master_enabled": true,
