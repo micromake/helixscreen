@@ -5,7 +5,7 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.97.0] - 2026-03-02
+## [0.96.1] - 2026-03-02
 
 This release adds a GCode console with full command history, Mainsail-style per-field macro parameter editing with Klipper variable support, spool temperature presets on filament and temperature panels, and a preset-aware setup wizard. Grid edit mode stability received major crash fixes.
 
@@ -1497,7 +1497,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
-[0.97.0]: https://github.com/prestonbrown/helixscreen/compare/v0.96.0...v0.97.0
+[0.96.1]: https://github.com/prestonbrown/helixscreen/compare/v0.96.0...v0.96.1
 [0.96.0]: https://github.com/prestonbrown/helixscreen/compare/v0.95.3...v0.96.0
 [0.95.3]: https://github.com/prestonbrown/helixscreen/compare/v0.95.2...v0.95.3
 [0.95.2]: https://github.com/prestonbrown/helixscreen/compare/v0.95.1...v0.95.2
