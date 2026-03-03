@@ -88,7 +88,7 @@ void PrinterSwitchMenu::populate_printer_list() {
     const char* body_font_name = lv_xml_get_const(nullptr, "font_body");
     const lv_font_t* body_font =
         body_font_name ? lv_xml_get_font(nullptr, body_font_name) : lv_font_get_default();
-    const char* icon_font_name = lv_xml_get_const(nullptr, "icon_font_sm");
+    const char* icon_font_name = lv_xml_get_const(nullptr, "icon_font_xs");
     const lv_font_t* icon_font =
         icon_font_name ? lv_xml_get_font(nullptr, icon_font_name) : body_font;
 
@@ -116,16 +116,15 @@ void PrinterSwitchMenu::populate_printer_list() {
         lv_obj_set_style_bg_opa(row, 30, LV_STATE_PRESSED);
         lv_obj_set_style_bg_color(row, accent, LV_STATE_PRESSED);
 
-        // Checkmark icon (active) or spacer (inactive)
+        // Checkmark icon (active) or spacer (inactive) — fixed width for alignment
         lv_obj_t* indicator = lv_label_create(row);
+        lv_obj_set_style_text_font(indicator, icon_font, 0);
+        lv_obj_set_style_min_width(indicator, 16, 0);
         if (is_active && check_codepoint) {
             lv_label_set_text(indicator, check_codepoint);
-            lv_obj_set_style_text_font(indicator, icon_font, 0);
-            lv_obj_set_style_text_color(indicator, accent, 0);
+            lv_obj_set_style_text_color(indicator, text_color, 0);
         } else {
             lv_label_set_text(indicator, "");
-            lv_obj_set_style_min_width(indicator, 16, 0);
-            lv_obj_set_style_text_font(indicator, icon_font, 0);
         }
         lv_obj_remove_flag(indicator, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(indicator, LV_OBJ_FLAG_EVENT_BUBBLE);
