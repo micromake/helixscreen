@@ -303,6 +303,13 @@ void KeyboardManager::textarea_focus_event_cb(lv_event_t* e) {
     lv_obj_t* textarea = lv_event_get_target_obj(e);
 
     if (code == LV_EVENT_FOCUSED) {
+        // Suppress keyboard when focus is a side effect of scrolling — LVGL fires
+        // FOCUSED on whatever the finger lands on, even during a swipe gesture.
+        lv_indev_t* indev = lv_indev_active();
+        if (indev && lv_indev_get_scroll_obj(indev)) {
+            spdlog::debug("[KeyboardManager] Suppressed keyboard — input device is scrolling");
+            return;
+        }
         spdlog::debug("[KeyboardManager] Textarea focused: {}", (void*)textarea);
         mgr.context_textarea_ = textarea;
         mgr.show(textarea);
