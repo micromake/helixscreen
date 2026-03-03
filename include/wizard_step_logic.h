@@ -5,14 +5,19 @@ namespace helix {
 
 /// Flags indicating which wizard steps are skipped
 struct WizardSkipFlags {
-    bool touch_cal = false;
-    bool language = false;
-    bool wifi = false;
-    bool ams = false;
-    bool led = false;
-    bool filament = false;
-    bool probe = false;
-    bool input_shaper = false;
+    bool touch_cal = false;        // step 0
+    bool language = false;         // step 1
+    bool wifi = false;             // step 2
+    bool printer_identify = false; // step 4
+    bool heater_select = false;    // step 5
+    bool fan_select = false;       // step 6
+    bool ams = false;              // step 7
+    bool led = false;              // step 8
+    bool filament = false;         // step 9
+    bool probe = false;            // step 10
+    bool input_shaper = false;     // step 11
+    bool summary = false;          // step 12
+    bool telemetry = false;        // step 13
 };
 
 /// Calculate display step number from internal step, accounting for skips.
