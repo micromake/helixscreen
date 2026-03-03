@@ -61,6 +61,7 @@ struct PromptButton {
     std::string label;      ///< Display text for the button
     std::string gcode;      ///< G-code to execute when clicked (empty = use label)
     std::string color;      ///< Color hint: primary/secondary/info/warning/error (empty = default)
+    std::string hex_color;  ///< Raw hex color override (e.g., "7c4b00"), takes priority over color
     bool is_footer = false; ///< True if this is a footer button
     int group_id = -1;      ///< Group ID for button grouping (-1 = not grouped)
 };
