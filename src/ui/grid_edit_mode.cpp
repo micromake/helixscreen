@@ -27,6 +27,17 @@ namespace helix {
 // MDI icon_xmark glyph (U+F0156)
 static constexpr const char* ICON_XMARK = "\xF3\xB0\x85\x96";
 
+// Safe deferred deletion for objects that may be children of a container
+// about to be cleaned via lv_obj_clean(). Reparenting to lv_layer_top()
+// removes the object from the container's child list, preventing double-free
+// when lv_obj_clean runs before the async delete fires.  Hiding prevents
+// the reparented object from being visible in lv_layer_top().
+static void safe_deferred_delete(lv_obj_t* obj) {
+    lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_parent(obj, lv_layer_top());
+    lv_obj_delete_async(obj);
+}
+
 // Drag visual constants
 static constexpr int GHOST_BORDER_WIDTH = 2;
 static constexpr lv_opa_t GHOST_BORDER_OPA = LV_OPA_50;
@@ -499,16 +510,20 @@ void GridEditMode::destroy_selection_chrome() {
     }
     auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
     helix::ui::UpdateQueue::instance().drain();
+    // Reparent to lv_layer_top() + async delete.  This is called during
+    // input event processing where synchronous lv_obj_delete corrupts
+    // LVGL's child iteration.  Reparenting ensures lv_obj_clean(container_)
+    // in a subsequent rebuild won't double-free these objects.
     if (configure_btn_) {
-        lv_obj_delete(configure_btn_);
+        safe_deferred_delete(configure_btn_);
         configure_btn_ = nullptr;
     }
     if (remove_btn_) {
-        lv_obj_delete(remove_btn_);
+        safe_deferred_delete(remove_btn_);
         remove_btn_ = nullptr;
     }
     if (selection_overlay_) {
-        lv_obj_delete(selection_overlay_);
+        safe_deferred_delete(selection_overlay_);
         selection_overlay_ = nullptr;
     }
 }
@@ -1986,7 +2001,7 @@ void GridEditMode::destroy_drag_ghost() {
     if (drag_ghost_) {
         auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
         helix::ui::UpdateQueue::instance().drain();
-        lv_obj_delete(drag_ghost_);
+        safe_deferred_delete(drag_ghost_);
         drag_ghost_ = nullptr;
     }
 }
@@ -2043,7 +2058,7 @@ void GridEditMode::destroy_snap_preview() {
     if (snap_preview_) {
         auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
         helix::ui::UpdateQueue::instance().drain();
-        lv_obj_delete(snap_preview_);
+        safe_deferred_delete(snap_preview_);
         snap_preview_ = nullptr;
     }
     snap_preview_col_ = -1;
@@ -2073,7 +2088,7 @@ void GridEditMode::cleanup_drag_state() {
     drag_orig_rowspan_ = 1;
     drag_offset_ = {0, 0};
     if (resize_preview_) {
-        lv_obj_delete(resize_preview_);
+        safe_deferred_delete(resize_preview_);
         resize_preview_ = nullptr;
     }
 }
@@ -2146,7 +2161,7 @@ void GridEditMode::destroy_dots_overlay() {
     if (dots_overlay_) {
         auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
         helix::ui::UpdateQueue::instance().drain();
-        lv_obj_delete(dots_overlay_);
+        safe_deferred_delete(dots_overlay_);
         dots_overlay_ = nullptr;
     }
 }

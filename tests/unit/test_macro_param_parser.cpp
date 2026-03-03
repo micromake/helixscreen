@@ -210,6 +210,59 @@ TEST_CASE("parse_macro_params - in params mixed with dot access", "[macro_params
     CHECK(param_map.count("CHAMBER_TEMP") == 1);
 }
 
+// ============================================================================
+// parse_raw_macro_params Tests
+// ============================================================================
+
+TEST_CASE("parse_raw_macro_params - basic", "[macro_params]") {
+    auto result = helix::parse_raw_macro_params("TEMP=200 SPEED=50");
+    REQUIRE(result.size() == 2);
+    CHECK(result["TEMP"] == "200");
+    CHECK(result["SPEED"] == "50");
+}
+
+TEST_CASE("parse_raw_macro_params - empty input", "[macro_params]") {
+    auto result = helix::parse_raw_macro_params("");
+    CHECK(result.empty());
+}
+
+TEST_CASE("parse_raw_macro_params - whitespace only", "[macro_params]") {
+    auto result = helix::parse_raw_macro_params("   ");
+    CHECK(result.empty());
+}
+
+TEST_CASE("parse_raw_macro_params - skips missing equals", "[macro_params]") {
+    auto result = helix::parse_raw_macro_params("JUSTVALUE TEMP=200");
+    REQUIRE(result.size() == 1);
+    CHECK(result["TEMP"] == "200");
+}
+
+TEST_CASE("parse_raw_macro_params - extra whitespace", "[macro_params]") {
+    auto result = helix::parse_raw_macro_params("  TEMP=200   SPEED=50  ");
+    REQUIRE(result.size() == 2);
+    CHECK(result["TEMP"] == "200");
+    CHECK(result["SPEED"] == "50");
+}
+
+TEST_CASE("parse_raw_macro_params - uppercases keys", "[macro_params]") {
+    auto result = helix::parse_raw_macro_params("temp=200 speed=50");
+    REQUIRE(result.size() == 2);
+    CHECK(result["TEMP"] == "200");
+    CHECK(result["SPEED"] == "50");
+}
+
+TEST_CASE("parse_raw_macro_params - preserves value case", "[macro_params]") {
+    auto result = helix::parse_raw_macro_params("NAME=MyVariable");
+    REQUIRE(result.size() == 1);
+    CHECK(result["NAME"] == "MyVariable");
+}
+
+TEST_CASE("parse_raw_macro_params - skips equals at start", "[macro_params]") {
+    auto result = helix::parse_raw_macro_params("=value TEMP=200");
+    REQUIRE(result.size() == 1);
+    CHECK(result["TEMP"] == "200");
+}
+
 TEST_CASE("parse_macro_params - no default value", "[macro_params]") {
     auto result = parse_macro_params("{% set temp = params.TEMP %}\n"
                                      "M104 S{temp}");
