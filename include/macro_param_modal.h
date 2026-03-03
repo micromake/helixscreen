@@ -23,6 +23,11 @@ struct MacroParam {
 /// extracts |default(VALUE) when present. Deduplicates by name.
 [[nodiscard]] std::vector<MacroParam> parse_macro_params(const std::string& gcode_template);
 
+/// Parse raw "KEY=VALUE KEY2=VALUE2" text into a parameter map.
+/// Keys are uppercased to match Klipper convention.
+[[nodiscard]] std::map<std::string, std::string>
+parse_raw_macro_params(const std::string& raw_text);
+
 /// Callback invoked when user confirms macro execution with parameters
 using MacroExecuteCallback = std::function<void(const std::map<std::string, std::string>& params)>;
 
@@ -69,7 +74,7 @@ class MacroParamModal : public Modal {
     std::vector<MacroParam> params_;
     MacroExecuteCallback on_execute_;
     std::vector<lv_obj_t*> textareas_; ///< One textarea per param, in order
-    bool raw_mode_ = false;       ///< True when showing raw text input
+    bool raw_mode_ = false;            ///< True when showing raw text input (UNKNOWN macros)
     lv_obj_t* raw_textarea_ = nullptr; ///< Textarea for raw param input
 
     void show_common(lv_obj_t* parent);

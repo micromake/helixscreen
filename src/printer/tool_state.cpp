@@ -14,6 +14,7 @@
 #include "ui_update_queue.h"
 
 #include "ams_state.h"
+#include "json_utils.h"
 #include "moonraker_api.h"
 #include "printer_discovery.h"
 #include "state/subject_macros.h"
@@ -24,6 +25,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 
@@ -475,9 +477,9 @@ nlohmann::json ToolState::spool_assignments_to_json() const {
         nlohmann::json entry;
         entry["spoolman_id"] = tool.spoolman_id;
         entry["spool_name"] = tool.spool_name;
-        if (tool.remaining_weight_g >= 0)
+        if (std::isfinite(tool.remaining_weight_g) && tool.remaining_weight_g >= 0)
             entry["remaining_weight_g"] = tool.remaining_weight_g;
-        if (tool.total_weight_g >= 0)
+        if (std::isfinite(tool.total_weight_g) && tool.total_weight_g >= 0)
             entry["total_weight_g"] = tool.total_weight_g;
 
         result[std::to_string(tool.index)] = entry;
@@ -501,8 +503,8 @@ void ToolState::apply_spool_assignments(const nlohmann::json& data) {
         const auto& entry = data[key];
         tool.spoolman_id = entry.value("spoolman_id", 0);
         tool.spool_name = entry.value("spool_name", std::string{});
-        tool.remaining_weight_g = entry.value("remaining_weight_g", -1.0f);
-        tool.total_weight_g = entry.value("total_weight_g", -1.0f);
+        tool.remaining_weight_g = json_util::safe_float(entry, "remaining_weight_g", -1.0f);
+        tool.total_weight_g = json_util::safe_float(entry, "total_weight_g", -1.0f);
 
         if (tool.spoolman_id > 0) {
             spdlog::debug("[ToolState] Loaded spool {} ({}) for tool {}", tool.spoolman_id,

@@ -38,13 +38,14 @@
 #include <spdlog/fmt/fmt.h>
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
 #include <cstring>
 #include <memory>
 
 using namespace helix;
 
 // Preset material names (indexed by material ID: 0=PLA, 1=PETG, 2=ABS, 3=TPU)
-// Temperatures are now looked up from filament_database.h
+// Temperatures looked up from filament_database.h
 static constexpr const char* PRESET_MATERIAL_NAMES[] = {"PLA", "PETG", "ABS", "TPU"};
 static constexpr int PRESET_COUNT = 4;
 
@@ -91,6 +92,7 @@ FilamentPanel::FilamentPanel(PrinterState& printer_state, MoonrakerAPI* api)
         {"on_filament_preset_petg", on_preset_petg_clicked},
         {"on_filament_preset_abs", on_preset_abs_clicked},
         {"on_filament_preset_tpu", on_preset_tpu_clicked},
+        {"on_filament_preset_spool", on_preset_spool_clicked},
         // Temperature tap targets
         {"on_filament_nozzle_temp_tap", on_nozzle_temp_tap_clicked},
         {"on_filament_bed_temp_tap", on_bed_temp_tap_clicked},
@@ -208,6 +210,16 @@ void FilamentPanel::init_subjects() {
         UI_MANAGED_SUBJECT_INT(purge_25mm_active_subject_, 0, "filament_purge_25mm_active",
                                subjects_);
 
+        // Preset button temperature label subjects (populated from filament DB in setup)
+        static constexpr const char* preset_subject_names[] = {
+            "filament_preset_pla_temps", "filament_preset_petg_temps",
+            "filament_preset_abs_temps", "filament_preset_tpu_temps"};
+        for (int i = 0; i < PRESET_COUNT; i++) {
+            preset_temps_bufs_[i][0] = '\0';
+            UI_MANAGED_SUBJECT_STRING(preset_temps_subjects_[i], preset_temps_bufs_[i],
+                                      preset_temps_bufs_[i], preset_subject_names[i], subjects_);
+        }
+
         // Card title subject (dynamic: "Multi-Filament" or "External Spool")
         std::strncpy(card_title_buf_, lv_tr("Multi-Filament"), sizeof(card_title_buf_) - 1);
         UI_MANAGED_SUBJECT_STRING(card_title_subject_, card_title_buf_, card_title_buf_,
@@ -270,8 +282,17 @@ void FilamentPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
     external_spool_material_label_ = lv_obj_find_by_name(panel_, "external_spool_material_label");
     external_spool_color_label_ = lv_obj_find_by_name(panel_, "external_spool_color_label");
 
+    // Find spool preset widgets
+    spool_preset_row_ = lv_obj_find_by_name(panel_, "spool_preset_row");
+    spool_preset_button_ = lv_obj_find_by_name(panel_, "preset_spool");
+    spool_preset_label_ = lv_obj_find_by_name(panel_, "spool_preset_label");
+    spool_preset_temps_ = lv_obj_find_by_name(panel_, "spool_preset_temps");
+
     // Setup external spool display (creates canvas, wires observer)
     setup_external_spool_display();
+
+    // Setup spool preset button (show if active material doesn't match standard presets)
+    update_spool_preset();
 
     // Populate extruder dropdown and set card visibility
     populate_extruder_dropdown();
@@ -307,6 +328,9 @@ void FilamentPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
             // Update card row visibility (AMS state changed)
             self->update_multi_filament_card_visibility();
         });
+
+    // Populate preset button temperature labels from filament database
+    update_preset_button_temps();
 
     // Initialize visual state
     update_preset_buttons_visual();
@@ -355,6 +379,19 @@ void FilamentPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
 // ============================================================================
 // PRIVATE HELPERS
 // ============================================================================
+
+void FilamentPanel::update_preset_button_temps() {
+    for (int i = 0; i < PRESET_COUNT; i++) {
+        auto mat = filament::find_material(PRESET_MATERIAL_NAMES[i]);
+        if (mat) {
+            std::snprintf(preset_temps_bufs_[i], sizeof(preset_temps_bufs_[i]), "%d°C / %d°C",
+                          mat->nozzle_recommended(), mat->bed_temp);
+        } else {
+            std::snprintf(preset_temps_bufs_[i], sizeof(preset_temps_bufs_[i]), "---");
+        }
+        lv_subject_copy_string(&preset_temps_subjects_[i], preset_temps_bufs_[i]);
+    }
+}
 
 void FilamentPanel::update_temp_display() {
     std::snprintf(temp_display_buf_, sizeof(temp_display_buf_), "%d / %d°C", nozzle_current_,
@@ -414,15 +451,18 @@ void FilamentPanel::update_safety_state() {
 
 void FilamentPanel::update_preset_buttons_visual() {
     for (int i = 0; i < 4; i++) {
-        if (preset_buttons_[i]) {
-            if (i == selected_material_) {
-                // Selected state - theme handles colors
-                lv_obj_add_state(preset_buttons_[i], LV_STATE_CHECKED);
-            } else {
-                // Unselected state - theme handles colors
-                lv_obj_remove_state(preset_buttons_[i], LV_STATE_CHECKED);
-            }
+        if (!preset_buttons_[i])
+            continue;
+
+        if (i == selected_material_) {
+            lv_obj_add_state(preset_buttons_[i], LV_STATE_CHECKED);
+        } else {
+            lv_obj_remove_state(preset_buttons_[i], LV_STATE_CHECKED);
         }
+    }
+    // Deselect spool preset when a standard preset is selected
+    if (spool_preset_button_ && selected_material_ >= 0) {
+        lv_obj_remove_state(spool_preset_button_, LV_STATE_CHECKED);
     }
 }
 
@@ -493,34 +533,11 @@ void FilamentPanel::update_all_temps() {
 // ============================================================================
 
 void FilamentPanel::handle_preset_button(int material_id) {
-    if (material_id < 0 || material_id >= PRESET_COUNT) {
-        spdlog::error("[{}] Invalid preset ID {} (valid: 0-{})", get_name(), material_id,
-                      PRESET_COUNT - 1);
-        return;
-    }
-
-    auto mat = filament::find_material(PRESET_MATERIAL_NAMES[material_id]);
-    if (!mat) {
-        spdlog::error("[{}] Material '{}' not found in database", get_name(),
-                      PRESET_MATERIAL_NAMES[material_id]);
-        return;
-    }
-
-    selected_material_ = material_id;
-    nozzle_target_ = mat->nozzle_recommended();
-    bed_target_ = mat->bed_temp;
-
-    lv_subject_set_int(&material_selected_subject_, selected_material_);
-    update_preset_buttons_visual();
-    update_temp_display();
-    update_material_temp_display();
-    update_status();
-
-    spdlog::info("[{}] Material selected: {} (nozzle={}°C, bed={}°C)", get_name(),
-                 PRESET_MATERIAL_NAMES[material_id], nozzle_target_, bed_target_);
+    // Delegate state update and display refresh to the public API
+    set_material(material_id);
 
     // Send temperature commands to printer (both nozzle and bed)
-    if (api_) {
+    if (api_ && selected_material_ == material_id) {
         api_->set_temperature(
             printer_state_.active_extruder_name(), static_cast<double>(nozzle_target_),
             [target = nozzle_target_]() { NOTIFY_SUCCESS("Nozzle target set to {}°C", target); },
@@ -801,8 +818,22 @@ void FilamentPanel::handle_purge_button() {
         spdlog::info("[{}] Using StandardMacros purge: {}", get_name(), info.get_macro());
         NOTIFY_INFO("Purging nozzle...");
 
+        // Auto-pass PURGE_TEMP from active material if available.
+        // Safe even if the macro doesn't use this param — Klipper ignores unknown params.
+        std::map<std::string, std::string> params;
+        auto active = helix::get_active_material();
+        if (active) {
+            int recommended = active->material_info.nozzle_recommended();
+            if (recommended > 0) {
+                params["PURGE_TEMP"] = std::to_string(recommended);
+                spdlog::info("[{}] Passing PURGE_TEMP={} from active material: {}", get_name(),
+                             recommended, active->display_name);
+            }
+        }
+
         StandardMacros::instance().execute(
-            StandardMacroSlot::Purge, api_, []() { NOTIFY_SUCCESS("Purge complete"); },
+            StandardMacroSlot::Purge, api_, params,
+            []() { NOTIFY_SUCCESS("Purge complete"); },
             [](const MoonrakerError& error) {
                 NOTIFY_ERROR("Purge failed: {}", error.user_message());
             });
@@ -954,7 +985,10 @@ void FilamentPanel::setup_external_spool_display() {
     // Observe external spool color changes to reactively update display
     external_spool_observer_ = observe_int_sync<FilamentPanel>(
         AmsState::instance().get_external_spool_color_subject(), this,
-        [](FilamentPanel* self, int /*color_int*/) { self->update_external_spool_from_state(); });
+        [](FilamentPanel* self, int /*color_int*/) {
+            self->update_external_spool_from_state();
+            self->update_spool_preset();
+        });
 
     spdlog::debug("[{}] External spool display initialized", get_name());
 }
@@ -1202,6 +1236,102 @@ void FilamentPanel::on_preset_tpu_clicked(lv_event_t* e) {
     LV_UNUSED(e);
     get_global_filament_panel().handle_preset_button(3);
     LVGL_SAFE_EVENT_CB_END();
+}
+
+void FilamentPanel::on_preset_spool_clicked(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[FilamentPanel] on_preset_spool_clicked");
+    get_global_filament_panel().handle_spool_preset_button();
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void FilamentPanel::handle_spool_preset_button() {
+    if (!cached_active_material_.has_value())
+        return;
+
+    const auto& mat = cached_active_material_->material_info;
+    nozzle_target_ = mat.nozzle_recommended();
+    bed_target_ = mat.bed_temp;
+
+    // Deselect all fixed presets
+    selected_material_ = -1;
+    lv_subject_set_int(&material_selected_subject_, -1);
+    update_preset_buttons_visual();
+
+    // Highlight spool preset
+    if (spool_preset_button_) {
+        lv_obj_add_state(spool_preset_button_, LV_STATE_CHECKED);
+    }
+
+    update_temp_display();
+    update_material_temp_display();
+    update_status();
+
+    // Send temperature commands
+    if (api_) {
+        api_->set_temperature(
+            printer_state_.active_extruder_name(), static_cast<double>(nozzle_target_),
+            [t = nozzle_target_]() { NOTIFY_SUCCESS("Nozzle target set to {}°C", t); },
+            [](const MoonrakerError& err) {
+                NOTIFY_ERROR("Failed to set nozzle temp: {}", err.user_message());
+            });
+        api_->set_temperature(
+            "heater_bed", static_cast<double>(bed_target_),
+            [t = bed_target_]() { NOTIFY_SUCCESS("Bed target set to {}°C", t); },
+            [](const MoonrakerError& err) {
+                NOTIFY_ERROR("Failed to set bed temp: {}", err.user_message());
+            });
+    }
+
+    spdlog::info("[{}] Spool preset applied: {} (nozzle={}°C, bed={}°C)", get_name(),
+                 cached_active_material_->display_name, nozzle_target_, bed_target_);
+}
+
+void FilamentPanel::update_spool_preset() {
+    cached_active_material_ = helix::get_active_material();
+
+    if (!spool_preset_row_)
+        return;
+
+    if (!cached_active_material_.has_value()) {
+        lv_obj_add_flag(spool_preset_row_, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+
+    const auto& active = *cached_active_material_;
+
+    // Check if material matches an existing preset — if so, don't show spool button
+    for (int i = 0; i < PRESET_COUNT; i++) {
+        std::string preset_lower(PRESET_MATERIAL_NAMES[i]);
+        std::string mat_lower(active.material_name);
+        std::transform(preset_lower.begin(), preset_lower.end(), preset_lower.begin(), ::tolower);
+        std::transform(mat_lower.begin(), mat_lower.end(), mat_lower.begin(), ::tolower);
+        if (preset_lower == mat_lower) {
+            lv_obj_add_flag(spool_preset_row_, LV_OBJ_FLAG_HIDDEN);
+            return;
+        }
+    }
+
+    // Novel material — show spool preset button.
+    // Using lv_label_set_text directly: text is dynamic (material name + computed temps)
+    // so subject binding is not practical here.
+    lv_obj_remove_flag(spool_preset_row_, LV_OBJ_FLAG_HIDDEN);
+
+    if (spool_preset_label_) {
+        lv_label_set_text(spool_preset_label_, active.material_name.c_str());
+    }
+    if (spool_preset_temps_) {
+        auto text = fmt::format("{} / {}°C", active.material_info.nozzle_recommended(),
+                                active.material_info.bed_temp);
+        lv_label_set_text(spool_preset_temps_, text.c_str());
+    }
+
+    // Deselect spool button initially (user must tap)
+    if (spool_preset_button_) {
+        lv_obj_remove_state(spool_preset_button_, LV_STATE_CHECKED);
+    }
+
+    spdlog::debug("[{}] Spool preset shown: {} ({}°C / {}°C)", get_name(), active.display_name,
+                  active.material_info.nozzle_recommended(), active.material_info.bed_temp);
 }
 
 // Temperature tap callbacks (XML event_cb - use global singleton)

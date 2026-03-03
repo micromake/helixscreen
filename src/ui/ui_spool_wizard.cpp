@@ -6,7 +6,6 @@
 #include "ui_callback_helpers.h"
 #include "ui_color_picker.h"
 #include "ui_global_panel_helper.h"
-#include "ui_keyboard_manager.h"
 #include "ui_modal.h"
 #include "ui_nav_manager.h"
 #include "ui_panel_common.h"
@@ -394,24 +393,6 @@ void SpoolWizardOverlay::navigate_to_step(Step step) {
     can_proceed_ = false;
     update_step_label();
     sync_subjects();
-
-    // Register keyboards for text inputs on each step
-    if (step == Step::VENDOR && overlay_root_) {
-        lv_obj_t* search = lv_obj_find_by_name(overlay_root_, "vendor_search");
-        if (search) {
-            KeyboardManager::instance().register_textarea(search);
-        }
-    }
-
-    if (step == Step::SPOOL_DETAILS && overlay_root_) {
-        const char* fields[] = {"remaining_weight", "spool_price", "spool_lot", "spool_notes"};
-        for (const char* name : fields) {
-            lv_obj_t* input = lv_obj_find_by_name(overlay_root_, name);
-            if (input) {
-                KeyboardManager::instance().register_textarea(input);
-            }
-        }
-    }
 
     spdlog::debug("[{}] Navigated to step {}", get_name(), static_cast<int>(step));
 }

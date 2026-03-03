@@ -10,7 +10,6 @@
 
 #include "ui_callback_helpers.h"
 #include "ui_event_safety.h"
-#include "ui_keyboard_manager.h"
 #include "ui_led_chip_factory.h"
 #include "ui_nav_manager.h"
 #include "ui_toast_manager.h"
@@ -431,7 +430,6 @@ void LedSettingsOverlay::rebuild_macro_edit_controls(lv_obj_t* container, int in
     auto* name_ta = lv_obj_find_by_name(name_row, "input");
     lv_obj_set_name(name_ta, "macro_name_input");
     lv_textarea_set_text(name_ta, macro.display_name.c_str());
-    KeyboardManager::instance().register_textarea(name_ta);
 
     // --- Type dropdown ---
     const char* type_attrs[] = {"label", "Type:", nullptr};

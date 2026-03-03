@@ -304,8 +304,15 @@ class TempControlPanel {
     HeaterTempPanelLifecycle chamber_lifecycle_{this, helix::HeaterType::Chamber,
                                                 "Chamber Temperature"};
 
+    // ── Spool preset helpers ────────────────────────────────────────────
+    void setup_spool_preset(helix::HeaterType type, lv_obj_t* overlay_content);
+
     // ── Static preset button data (LVGL holds raw pointers) ─────────────
     // 4 presets per heater × 3 heater types = 12 slots
     static constexpr int PRESETS_PER_HEATER = 4;
     std::array<PresetButtonData, helix::HEATER_TYPE_COUNT * PRESETS_PER_HEATER> preset_data_{};
+
+    // Spool preset data (one per heater type: nozzle, bed)
+    std::array<PresetButtonData, helix::HEATER_TYPE_COUNT> spool_preset_data_{};
+    std::array<std::array<char, 48>, helix::HEATER_TYPE_COUNT> spool_preset_label_bufs_{};
 };

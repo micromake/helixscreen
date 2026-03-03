@@ -312,6 +312,8 @@ void register_xml_components() {
     register_xml("components/panel_widget_notifications.xml");
     register_xml("components/panel_widget_firmware_restart.xml");
     register_xml("components/panel_widget_ams.xml");
+    register_xml("components/panel_widget_camera.xml");
+    register_xml("components/camera_fullscreen.xml");
     register_xml("components/panel_widget_temperature.xml");
     register_xml("components/panel_widget_temp_stack.xml");
     register_xml("components/panel_widget_temp_carousel.xml");
@@ -323,13 +325,16 @@ void register_xml_components() {
     register_xml("components/panel_widget_thermistor.xml");
     register_xml("components/panel_widget_fan_stack.xml");
     register_xml("components/panel_widget_fan_carousel.xml");
-    register_xml("components/panel_widget_favorite_macro_1.xml");
-    register_xml("components/panel_widget_favorite_macro_2.xml");
+    register_xml("components/panel_widget_favorite_macro.xml");
     register_xml("components/panel_widget_clock.xml");
     register_xml("components/panel_widget_tips.xml");
     register_xml("components/panel_widget_print_status.xml");
     register_xml("components/panel_widget_shutdown.xml");
     register_xml("components/panel_widget_job_queue.xml");
+    register_xml("components/panel_widget_clog_detection.xml");
+    register_xml("components/panel_widget_print_stats.xml");
+    register_xml("components/panel_widget_gcode_console.xml");
+    register_xml("components/clog_detection_config_modal.xml");
     register_xml("job_queue_modal.xml");
     register_xml("thermistor_sensor_picker.xml");
     register_xml("favorite_macro_picker.xml");
@@ -354,6 +359,7 @@ void register_xml_components() {
                              TempGraphOverlay::on_temp_graph_preset_clicked);
     lv_xml_register_event_cb(nullptr, "on_temp_graph_custom_clicked",
                              TempGraphOverlay::on_temp_graph_custom_clicked);
+    register_xml("fan_arc_core.xml");
     register_xml("fan_dial.xml");
     register_fan_dial_callbacks(); // Register FanDial event callbacks
     register_xml("fan_status_card.xml");
@@ -491,6 +497,7 @@ register_xml("sound_settings_overlay.xml");
     register_xml("wizard_input_shaper.xml");
     register_xml("wizard_language_chooser.xml");
     register_xml("wizard_summary.xml");
+    register_xml("wizard_telemetry.xml");
     register_xml("telemetry_info_modal.xml");
 
     spdlog::trace("[XML Registration] XML component registration complete");

@@ -5,6 +5,63 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.96.0] - 2026-03-02
+
+This release adds camera streaming and fullscreen view, TMC stepper driver temperature monitoring, and smarter macro parameter handling. Widget stability and Android support received significant improvements, along with fixes for several crash reports.
+
+### Added
+- Camera fullscreen view with MJPEG streaming, separate connect/active timeouts, and data arrival tracking
+- TMC stepper driver temperature support with corrected display names
+- Macro parameter pre-parsing during discovery for faster parameter dialogs
+
+### Fixed
+- Home screen startup jumpiness from uncached grid rows and deferred card backgrounds
+- Widget config loss from duplicate PanelWidgetConfig instances during rebuilds
+- Edit mode long-press triggering during scroll/swipe on home screen
+- Newly added widgets not auto-selected in grid edit catalog
+- AD5M crash loops and stream exceptions with unwind tables enabled (#280, #281)
+- Binary backlights that only support on/off now handled correctly (#276)
+- About panel version subjects not bound and marquee scroll performance (#275)
+- NaN/Inf float values in JSON responses no longer cause crashes (#277)
+- Installer self-heals un-substituted polkit pkla template (thanks @BO_Andy)
+- Android startup crash, tofu glyphs on ARM64, and shutdown crash
+- Protocol A touch release for Goodix GT9xx capacitive panels
+- Temperature graph now supports up to 16 series for TMC stepper temps
+- Invalid theme token references (text_secondary, radius_md) replaced
+- Macro config key lookup with improved error logging
+
+### Changed
+- Fan arc refactored into shared fan_arc_core component with format_fan_speed helper
+- Widget rebuilds skip redundant work with wider coalesce window for gate observers
+- Temperature carousel dot spacing now matches fan carousel
+
+## [0.95.3] - 2026-03-02
+
+### Added
+- Live webcam panel widget with snapshot polling for camera monitoring
+- Print statistics widget with 4 responsive size modes for the home dashboard
+- Macro parameter dialog — macros with parameters now prompt for values before execution
+- Dangerous macro confirmation — SAVE_CONFIG, FIRMWARE_RESTART, etc. require confirmation
+- Locale-aware date/time formatting with translation support across all languages
+- Clog detection configuration modal for tuning sensitivity and thresholds
+
+### Fixed
+- Macro parameter detection now queries Klipper configfile instead of printer objects, which always returned null
+- LED toggle state now syncs with actual hardware on bind and before toggle
+- Preparing Print overlay no longer gets stuck after print start
+- Clock widget timer restarts correctly after home screen rebuild
+- Filament preset button temperatures now pull from filament database
+- Assert handler re-entrancy and InputShaper threading violations causing crashes
+- Moonraker update detection broken by release name prefix (#270)
+- Wizard kinematics filter now supports Kalico and hybrid variants
+- Input fields inside dialogs now have proper contrasting background color
+- Camera widget initial overlay layout — full-width text and centered spinner
+
+### Changed
+- Text input widgets auto-register with software keyboard — no manual wiring needed
+- Temperature stack padding matches fan stack; enlarged carousel icons
+- Fan arc widget sizing reduced with proper padding in carousel
+
 ## [0.95.2] - 2026-03-01
 
 ### Added
@@ -1410,6 +1467,8 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.96.0]: https://github.com/prestonbrown/helixscreen/compare/v0.95.3...v0.96.0
+[0.95.3]: https://github.com/prestonbrown/helixscreen/compare/v0.95.2...v0.95.3
 [0.95.2]: https://github.com/prestonbrown/helixscreen/compare/v0.95.1...v0.95.2
 [0.95.1]: https://github.com/prestonbrown/helixscreen/compare/v0.95.0...v0.95.1
 [0.95.0]: https://github.com/prestonbrown/helixscreen/compare/v0.13.13...v0.95.0

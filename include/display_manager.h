@@ -230,6 +230,17 @@ class DisplayManager {
     bool has_backlight_control() const;
 
     /**
+     * @brief Check if backlight supports continuous dimming
+     *
+     * Binary backlights (GPIO, max_brightness=1) can only be on/off.
+     * When false, the brightness slider is hidden and the dim-before-sleep
+     * transition is skipped (Awake → Sleeping directly).
+     *
+     * @return true if brightness can be smoothly adjusted
+     */
+    bool has_dimming_control() const;
+
+    /**
      * @brief Check if hardware blanking is used for display sleep
      *
      * When true, sleep uses FBIOBLANK + backlight off (AD5M/Allwinner).

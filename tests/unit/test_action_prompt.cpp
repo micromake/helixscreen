@@ -279,6 +279,7 @@ TEST_CASE("parse_button_spec: Edge cases", "[action_prompt][button][edge]") {
         REQUIRE(button.label.empty());
         REQUIRE(button.gcode.empty());
         REQUIRE(button.color.empty());
+        REQUIRE(button.hex_color.empty());
     }
 
     SECTION("||color format with only color") {
@@ -295,11 +296,12 @@ TEST_CASE("parse_button_spec: Edge cases", "[action_prompt][button][edge]") {
         REQUIRE(button.color == "invalid_color");
     }
 
-    SECTION("Extra pipes are ignored") {
-        auto button = ActionPromptManager::parse_button_spec("OK|CONFIRM|primary|extra|data");
+    SECTION("Extra pipes beyond 4th field are ignored") {
+        auto button = ActionPromptManager::parse_button_spec("OK|CONFIRM|primary|7c4b00|extra");
         REQUIRE(button.label == "OK");
         REQUIRE(button.gcode == "CONFIRM");
         REQUIRE(button.color == "primary");
+        REQUIRE(button.hex_color == "7c4b00");
     }
 
     SECTION("Pipe in label is split incorrectly (known limitation)") {
@@ -315,6 +317,44 @@ TEST_CASE("parse_button_spec: Edge cases", "[action_prompt][button][edge]") {
         REQUIRE(button.label == " Label ");
         REQUIRE(button.gcode == " GCODE ");
         REQUIRE(button.color == " primary ");
+    }
+}
+
+// ============================================================================
+// Hex Color Parsing Tests
+// ============================================================================
+
+TEST_CASE("parse_button_spec: Hex color field (4th field)", "[action_prompt][button][hex_color]") {
+    SECTION("Full 4-field spec with hex color") {
+        auto button = ActionPromptManager::parse_button_spec("Label|GCODE|primary|7c4b00");
+        REQUIRE(button.label == "Label");
+        REQUIRE(button.gcode == "GCODE");
+        REQUIRE(button.color == "primary");
+        REQUIRE(button.hex_color == "7c4b00");
+    }
+
+    SECTION("Hex color with empty style field") {
+        auto button = ActionPromptManager::parse_button_spec("Label|GCODE||ff0000");
+        REQUIRE(button.label == "Label");
+        REQUIRE(button.gcode == "GCODE");
+        REQUIRE(button.color.empty());
+        REQUIRE(button.hex_color == "ff0000");
+    }
+
+    SECTION("3-field spec without hex color preserves backward compatibility") {
+        auto button = ActionPromptManager::parse_button_spec("Label|GCODE|primary");
+        REQUIRE(button.label == "Label");
+        REQUIRE(button.gcode == "GCODE");
+        REQUIRE(button.color == "primary");
+        REQUIRE(button.hex_color.empty());
+    }
+
+    SECTION("Empty 4th field leaves hex_color empty") {
+        auto button = ActionPromptManager::parse_button_spec("Label|GCODE|primary|");
+        REQUIRE(button.label == "Label");
+        REQUIRE(button.gcode == "GCODE");
+        REQUIRE(button.color == "primary");
+        REQUIRE(button.hex_color.empty());
     }
 }
 
@@ -944,7 +984,7 @@ TEST_CASE("ActionPromptModal: Button click fires callback with gcode",
     SECTION("Click callback receives correct gcode") {
         PromptData data;
         data.title = "Test";
-        data.buttons.push_back({"Continue", "RESUME_PRINT", "primary", false, -1});
+        data.buttons.push_back({"Continue", "RESUME_PRINT", "primary", "", false, -1});
 
         std::string received_gcode;
         // When implemented, the modal should support setting a button callback:
@@ -963,9 +1003,9 @@ TEST_CASE("ActionPromptModal: Button click fires callback with gcode",
     SECTION("Each button sends its own gcode") {
         PromptData data;
         data.title = "Choose";
-        data.buttons.push_back({"Resume", "RESUME_PRINT", "", false, -1});
-        data.buttons.push_back({"Cancel", "CANCEL_PRINT", "", false, -1});
-        data.buttons.push_back({"Retry", "RETRY_ACTION", "", false, -1});
+        data.buttons.push_back({"Resume", "RESUME_PRINT", "", "", false, -1});
+        data.buttons.push_back({"Cancel", "CANCEL_PRINT", "", "", false, -1});
+        data.buttons.push_back({"Retry", "RETRY_ACTION", "", "", false, -1});
 
         // Each button has distinct gcode
         REQUIRE(data.buttons[0].gcode == "RESUME_PRINT");
@@ -990,7 +1030,7 @@ TEST_CASE("ActionPromptModal: Modal closes after button click",
     SECTION("Default behavior: modal closes on button click") {
         PromptData data;
         data.title = "Confirm";
-        data.buttons.push_back({"OK", "CONFIRM", "primary", false, -1});
+        data.buttons.push_back({"OK", "CONFIRM", "primary", "", false, -1});
 
         // By default, clicking any button should close the modal
         // The callback fires first, then the modal closes
@@ -1044,7 +1084,7 @@ TEST_CASE("ActionPromptModal: Edge cases", "[action_prompt][modal][edge]") {
         data.title = "Many Options";
         for (int i = 0; i < 10; i++) {
             data.buttons.push_back({"Button " + std::to_string(i), "ACTION_" + std::to_string(i),
-                                    i % 2 == 0 ? "primary" : "secondary", false, -1});
+                                    i % 2 == 0 ? "primary" : "secondary", "", false, -1});
         }
 
         REQUIRE(data.buttons.size() == 10);

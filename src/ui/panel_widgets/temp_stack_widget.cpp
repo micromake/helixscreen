@@ -16,7 +16,6 @@
 
 #include "app_globals.h"
 #include "observer_factory.h"
-#include "panel_widget_config.h"
 #include "panel_widget_manager.h"
 #include "panel_widget_registry.h"
 #include "printer_state.h"
@@ -45,7 +44,7 @@ void register_temp_stack_widget() {
 
 namespace {
 // Make all children of a page pass events through (not clickable, bubble to parent)
-static void make_children_passthrough(lv_obj_t* parent) {
+void make_children_passthrough(lv_obj_t* parent) {
     if (!parent)
         return;
     uint32_t count = lv_obj_get_child_count(parent);
@@ -93,8 +92,7 @@ bool TempStackWidget::on_edit_configure() {
     }
     spdlog::info("[TempStackWidget] Toggling display_mode: {} → {}",
                  was_carousel ? "carousel" : "stack", was_carousel ? "stack" : "carousel");
-    PanelWidgetManager::instance().get_widget_config("home").set_widget_config("temp_stack",
-                                                                               new_config);
+    save_widget_config(new_config);
     return true;
 }
 
@@ -208,12 +206,12 @@ void TempStackWidget::attach_carousel(lv_obj_t* widget_obj) {
         lv_obj_add_event_cb(page, temp_carousel_page_cb, LV_EVENT_CLICKED, nullptr);
 
         // Icon
-        const char* icon_attrs[] = {"src",       icon_src, "size",    "sm",   "variant",
+        const char* icon_attrs[] = {"src",       icon_src, "size",    "md",   "variant",
                                     "secondary", "name",   icon_name, nullptr};
         lv_xml_create(page, "icon", icon_attrs);
 
         // Temp display (larger, with target shown)
-        const char* td_attrs[] = {"size",        "sm",           "show_target",
+        const char* td_attrs[] = {"size",        "md",           "show_target",
                                   "true",        "bind_current", bind_current,
                                   "bind_target", bind_target,    nullptr};
         lv_xml_create(page, "temp_display", td_attrs);
@@ -239,11 +237,11 @@ void TempStackWidget::attach_carousel(lv_obj_t* widget_obj) {
     lv_obj_add_event_cb(nozzle_page, temp_carousel_page_cb, LV_EVENT_CLICKED, nullptr);
 
     const char* nozzle_icon_attrs[] = {
-        "size", "sm", "badge_subject", "", "name", "carousel_nozzle_icon", nullptr};
+        "size", "md", "badge_subject", "", "name", "carousel_nozzle_icon", nullptr};
     lv_xml_create(nozzle_page, "nozzle_icon", nozzle_icon_attrs);
 
     const char* nozzle_td_attrs[] = {
-        "size",          "sm",          "show_target",     "true", "bind_current",
+        "size",          "md",          "show_target",     "true", "bind_current",
         "extruder_temp", "bind_target", "extruder_target", nullptr};
     lv_xml_create(nozzle_page, "temp_display", nozzle_td_attrs);
     make_children_passthrough(nozzle_page);

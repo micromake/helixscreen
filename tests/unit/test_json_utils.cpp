@@ -5,6 +5,8 @@
 
 #include "../catch_amalgamated.hpp"
 
+#include <limits>
+
 using nlohmann::json;
 
 // ============================================================================
@@ -111,6 +113,26 @@ TEST_CASE("safe_float returns default for non-numeric string", "[json_utils]") {
     CHECK(helix::json_util::safe_float(j, "density") == 0.0f);
 }
 
+TEST_CASE("safe_float returns default for NaN value", "[json_utils]") {
+    json j;
+    j["weight"] = std::numeric_limits<float>::quiet_NaN();
+    CHECK(helix::json_util::safe_float(j, "weight") == 0.0f);
+    CHECK(helix::json_util::safe_float(j, "weight", -1.0f) == -1.0f);
+}
+
+TEST_CASE("safe_float returns default for infinity value", "[json_utils]") {
+    json j;
+    j["weight"] = std::numeric_limits<float>::infinity();
+    CHECK(helix::json_util::safe_float(j, "weight") == 0.0f);
+    j["weight"] = -std::numeric_limits<float>::infinity();
+    CHECK(helix::json_util::safe_float(j, "weight") == 0.0f);
+}
+
+TEST_CASE("safe_float returns default for inf string", "[json_utils]") {
+    json j = {{"weight", "inf"}};
+    CHECK(helix::json_util::safe_float(j, "weight") == 0.0f);
+}
+
 // ============================================================================
 // safe_double tests
 // ============================================================================
@@ -129,4 +151,19 @@ TEST_CASE("safe_double returns default for null field", "[json_utils]") {
 TEST_CASE("safe_double parses string doubles", "[json_utils]") {
     json j = {{"weight", "1000.5"}};
     CHECK(helix::json_util::safe_double(j, "weight") == Catch::Approx(1000.5));
+}
+
+TEST_CASE("safe_double returns default for NaN value", "[json_utils]") {
+    json j;
+    j["weight"] = std::numeric_limits<double>::quiet_NaN();
+    CHECK(helix::json_util::safe_double(j, "weight") == 0.0);
+    CHECK(helix::json_util::safe_double(j, "weight", -1.0) == -1.0);
+}
+
+TEST_CASE("safe_double returns default for infinity value", "[json_utils]") {
+    json j;
+    j["weight"] = std::numeric_limits<double>::infinity();
+    CHECK(helix::json_util::safe_double(j, "weight") == 0.0);
+    j["weight"] = -std::numeric_limits<double>::infinity();
+    CHECK(helix::json_util::safe_double(j, "weight") == 0.0);
 }

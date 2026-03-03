@@ -204,6 +204,12 @@ class Config {
      */
     std::string get_path();
 
+    /// Check if this config was loaded from a platform preset
+    bool has_preset() const;
+
+    /// Get the preset name (e.g., "ad5m"), or empty string if no preset
+    std::string get_preset() const;
+
     /**
      * @brief Check if first-run wizard is required
      *

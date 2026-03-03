@@ -34,6 +34,16 @@ void jitter_read_cb(lv_indev_t* indev, lv_indev_data_t* data) {
     if (s_jitter_ctx.original_read_cb) {
         s_jitter_ctx.original_read_cb(indev, data);
     }
+    // Guard: On Protocol A touchscreens (e.g., Goodix GT9xx), BTN_TOUCH may
+    // arrive before MT position events in a separate SYN frame, leaving
+    // coordinates at (0,0). Suppress this premature press so LVGL doesn't
+    // anchor scroll detection at the screen corner. Only applies to the
+    // first frame of a new touch (jitter filter not yet tracking).
+    if (data->state == LV_INDEV_STATE_PRESSED && data->point.x == 0 && data->point.y == 0 &&
+        !s_jitter_ctx.jitter.tracking) {
+        data->state = LV_INDEV_STATE_RELEASED;
+        return;
+    }
     s_jitter_ctx.jitter.apply(data->state, data->point.x, data->point.y);
 }
 

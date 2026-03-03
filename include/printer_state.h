@@ -1185,8 +1185,30 @@ class PrinterState {
      * Thread-safe: Can be called from any thread, defers LVGL update to main thread.
      *
      * @param available True if at least one enabled webcam is configured
+     * @param stream_url MJPEG stream URL of first enabled webcam
+     * @param snapshot_url Snapshot URL of first enabled webcam
      */
-    void set_webcam_available(bool available);
+    void set_webcam_available(bool available, const std::string& stream_url = "",
+                              const std::string& snapshot_url = "",
+                              bool flip_h = false, bool flip_v = false);
+
+    /// Get MJPEG stream URL of first enabled webcam
+    const std::string& get_webcam_stream_url() const {
+        return capabilities_state_.get_webcam_stream_url();
+    }
+
+    /// Get snapshot URL of first enabled webcam
+    const std::string& get_webcam_snapshot_url() const {
+        return capabilities_state_.get_webcam_snapshot_url();
+    }
+
+    /// Webcam flip flags from Moonraker config
+    bool get_webcam_flip_horizontal() const {
+        return capabilities_state_.get_webcam_flip_horizontal();
+    }
+    bool get_webcam_flip_vertical() const {
+        return capabilities_state_.get_webcam_flip_vertical();
+    }
 
     /**
      * @brief Set timelapse plugin availability status

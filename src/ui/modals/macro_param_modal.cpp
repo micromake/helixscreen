@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "macro_param_modal.h"
-#include "macro_param_cache.h"
 
 #include "ui_event_safety.h"
 
@@ -78,6 +77,59 @@ std::vector<MacroParam> helix::parse_macro_params(const std::string& gcode_templ
         result.push_back({name, default_value});
     }
 
+    // Second pass: catch {% if 'NAME' in params %} / {% if "NAME" in params %}
+    // Also matches 'not in params'. Skips names already found by dot/bracket access.
+    std::regex in_params_re(
+        R"RE((?:'([A-Za-z_][A-Za-z0-9_]*)'|"([A-Za-z_][A-Za-z0-9_]*)")\s+(?:not\s+)?in\s+params)RE");
+
+    auto it2 =
+        std::sregex_iterator(gcode_template.begin(), gcode_template.end(), in_params_re);
+    for (; it2 != end; ++it2) {
+        const auto& match = *it2;
+
+        std::string name;
+        if (match[1].matched)
+            name = match[1].str();
+        else if (match[2].matched)
+            name = match[2].str();
+
+        std::transform(name.begin(), name.end(), name.begin(),
+                       [](unsigned char c) { return std::toupper(c); });
+
+        if (seen.count(name)) {
+            continue;
+        }
+        seen.insert(name);
+
+        // No default value extractable from conditional checks
+        result.push_back({name, ""});
+    }
+
+    return result;
+}
+
+std::map<std::string, std::string>
+helix::parse_raw_macro_params(const std::string& raw_text) {
+    std::map<std::string, std::string> result;
+    size_t pos = 0;
+    while (pos < raw_text.size()) {
+        while (pos < raw_text.size() && std::isspace(raw_text[pos]))
+            ++pos;
+        if (pos >= raw_text.size())
+            break;
+        size_t end = raw_text.find_first_of(" \t\n\r", pos);
+        if (end == std::string::npos)
+            end = raw_text.size();
+        std::string token = raw_text.substr(pos, end - pos);
+        pos = end;
+        auto eq = token.find('=');
+        if (eq == std::string::npos || eq == 0)
+            continue;
+        std::string key = token.substr(0, eq);
+        std::transform(key.begin(), key.end(), key.begin(),
+                       [](unsigned char c) { return std::toupper(c); });
+        result[key] = token.substr(eq + 1);
+    }
     return result;
 }
 
@@ -178,9 +230,13 @@ void MacroParamModal::populate_param_fields() {
             display_name[0] = static_cast<char>(::toupper(display_name[0]));
         }
 
+        // Show default value as placeholder hint; empty field = use macro's own default
+        std::string placeholder =
+            param.default_value.empty() ? param.name : param.default_value;
+
         // Create form_field component (label + themed text_input with keyboard wiring)
         const char* attrs[] = {"label",       display_name.c_str(),
-                               "placeholder", param.name.c_str(),
+                               "placeholder", placeholder.c_str(),
                                nullptr,       nullptr};
         lv_obj_t* field =
             static_cast<lv_obj_t*>(lv_xml_create(param_list, "form_field", attrs));
@@ -189,11 +245,7 @@ void MacroParamModal::populate_param_fields() {
             continue;
         }
 
-        // Find the text_input inside the form_field to set default value
         lv_obj_t* textarea = lv_obj_find_by_name(field, "field_input");
-        if (textarea && !param.default_value.empty()) {
-            lv_textarea_set_text(textarea, param.default_value.c_str());
-        }
 
         textareas_.push_back(textarea);
     }
@@ -205,7 +257,7 @@ std::map<std::string, std::string> MacroParamModal::collect_values() const {
     if (raw_mode_ && raw_textarea_) {
         const char* text = lv_textarea_get_text(raw_textarea_);
         if (text && text[0] != '\0') {
-            return MacroParamCache::parse_raw_params(text);
+            return parse_raw_macro_params(text);
         }
         return {};
     }

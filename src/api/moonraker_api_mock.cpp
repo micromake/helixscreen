@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <random>
@@ -117,7 +118,24 @@ void MoonrakerAPIMock::get_gcode_store(
     int /*count*/, std::function<void(const std::vector<GcodeStoreEntry>&)> on_success,
     std::function<void(const MoonrakerError&)> /*on_error*/) {
     if (on_success) {
-        on_success({}); // Empty store in mock
+        double now = static_cast<double>(std::time(nullptr));
+        std::vector<GcodeStoreEntry> entries = {
+            {"G28", now - 120, "command"},
+            {"ok", now - 119, "response"},
+            {"G29", now - 100, "command"},
+            {"ok", now - 99, "response"},
+            {"M104 S210", now - 80, "command"},
+            {"ok", now - 79, "response"},
+            {"M190 S60", now - 60, "command"},
+            {"ok B:58.2 /60.0", now - 55, "response"},
+            {"ok B:59.8 /60.0", now - 50, "response"},
+            {"ok B:60.0 /60.0", now - 45, "response"},
+            {"FIRMWARE_RESTART", now - 30, "command"},
+            {"!! Error: MCU protocol error", now - 29, "response"},
+            {"RESTART", now - 10, "command"},
+            {"ok", now - 9, "response"},
+        };
+        on_success(entries);
     }
 }
 

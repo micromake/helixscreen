@@ -12,7 +12,6 @@
 #include "static_panel_registry.h"
 #include "theme_manager.h"
 #include "ui_fonts.h"
-#include "ui_keyboard_manager.h"
 #include "ui_toast_manager.h"
 
 #include <spdlog/spdlog.h>
@@ -307,17 +306,14 @@ void MaterialTempsOverlay::show_edit_view(const std::string& material_name) {
         if (nozzle_min_input) {
             snprintf(buf, sizeof(buf), "%d", cur_nozzle_min);
             lv_textarea_set_text(nozzle_min_input, buf);
-            KeyboardManager::instance().register_textarea(nozzle_min_input);
         }
         if (nozzle_max_input) {
             snprintf(buf, sizeof(buf), "%d", cur_nozzle_max);
             lv_textarea_set_text(nozzle_max_input, buf);
-            KeyboardManager::instance().register_textarea(nozzle_max_input);
         }
         if (bed_temp_input) {
             snprintf(buf, sizeof(buf), "%d", cur_bed);
             lv_textarea_set_text(bed_temp_input, buf);
-            KeyboardManager::instance().register_textarea(bed_temp_input);
         }
     }
 

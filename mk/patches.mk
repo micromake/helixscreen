@@ -36,7 +36,10 @@ LVGL_PATCHED_FILES := \
 	src/draw/sw/lv_draw_sw_blur.c \
 	src/drivers/display/drm/lv_linux_drm.c \
 	src/drivers/display/drm/lv_linux_drm.h \
-	src/drivers/display/drm/lv_linux_drm_egl.c
+	src/drivers/display/drm/lv_linux_drm_egl.c \
+	src/drivers/evdev/lv_evdev.c \
+	src/draw/lv_draw_arc.c \
+	src/widgets/arc/lv_arc.c
 
 # Files modified by libhv patches
 LIBHV_PATCHED_FILES := \
@@ -296,6 +299,28 @@ $(PATCHES_STAMP): $(PATCH_FILES) $(LVGL_HEAD) $(LIBHV_HEAD)
 		fi \
 	else \
 		echo "$(GREEN)✓ LVGL draw_buf OOM guard patch already applied$(RESET)"; \
+	fi
+	$(Q)if git -C $(LVGL_DIR) diff --quiet src/drivers/evdev/lv_evdev.c 2>/dev/null; then \
+		echo "$(YELLOW)→ Applying LVGL evdev Protocol-A touch release patch...$(RESET)"; \
+		if git -C $(LVGL_DIR) apply --check ../../patches/lvgl-evdev-protocol-a.patch 2>/dev/null; then \
+			git -C $(LVGL_DIR) apply ../../patches/lvgl-evdev-protocol-a.patch && \
+			echo "$(GREEN)✓ Evdev Protocol-A touch release patch applied$(RESET)"; \
+		else \
+			echo "$(YELLOW)⚠ Cannot apply patch (already applied or conflicts)$(RESET)"; \
+		fi \
+	else \
+		echo "$(GREEN)✓ LVGL evdev Protocol-A touch release patch already applied$(RESET)"; \
+	fi
+	$(Q)if git -C $(LVGL_DIR) diff --quiet src/draw/lv_draw_arc.c 2>/dev/null; then \
+		echo "$(YELLOW)→ Applying LVGL arc draw guard patch...$(RESET)"; \
+		if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_arc_draw_guard.patch 2>/dev/null; then \
+			git -C $(LVGL_DIR) apply ../../patches/lvgl_arc_draw_guard.patch && \
+			echo "$(GREEN)✓ Arc draw guard patch applied$(RESET)"; \
+		else \
+			echo "$(YELLOW)⚠ Cannot apply patch (already applied or conflicts)$(RESET)"; \
+		fi \
+	else \
+		echo "$(GREEN)✓ LVGL arc draw guard patch already applied$(RESET)"; \
 	fi
 	$(ECHO) "$(CYAN)Checking libhv patches...$(RESET)"
 	$(Q)if git -C $(LIBHV_DIR) diff --quiet Makefile.in 2>/dev/null; then \

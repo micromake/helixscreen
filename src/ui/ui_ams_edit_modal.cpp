@@ -6,7 +6,6 @@
 #include "ui_button.h"
 #include "ui_callback_helpers.h"
 #include "ui_error_reporting.h"
-#include "ui_keyboard_manager.h"
 #include "ui_update_queue.h"
 
 #include "ams_state.h"
@@ -273,11 +272,6 @@ void AmsEditModal::on_show() {
     // Set initial Spoolman button state
     update_spoolman_button_state();
 
-    // Wire software keyboard to picker search input
-    lv_obj_t* picker_search = find_widget("picker_search");
-    if (picker_search) {
-        KeyboardManager::instance().register_textarea(picker_search);
-    }
 }
 
 void AmsEditModal::on_hide() {

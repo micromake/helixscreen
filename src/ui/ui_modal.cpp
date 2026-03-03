@@ -916,19 +916,9 @@ void helix::ui::modal_register_keyboard(lv_obj_t* modal, lv_obj_t* textarea) {
         return;
     }
 
-    // Position keyboard at bottom-center (default for modals)
+    // Position keyboard at bottom-center (default for modals).
+    // Registration is handled automatically by the text_input XML widget.
     KeyboardManager::instance().set_position(LV_ALIGN_BOTTOM_MID, 0, 0);
-
-    // Check if this is a password textarea
-    bool is_password = lv_textarea_get_password_mode(textarea);
-
-    if (is_password) {
-        KeyboardManager::instance().register_textarea_ex(textarea, true);
-        spdlog::debug("[Modal] Registered PASSWORD textarea with keyboard");
-    } else {
-        KeyboardManager::instance().register_textarea(textarea);
-        spdlog::debug("[Modal] Registered textarea with keyboard");
-    }
 }
 
 // ============================================================================

@@ -11,7 +11,6 @@
 #include <cstdlib>
 #include <filesystem>
 #include <lvgl.h>
-#include <src/display/lv_display_private.h>
 #include <vector>
 
 // Define the global callback pointer for LVGL assert handler
@@ -151,7 +150,10 @@ void add_system_sink(std::vector<spdlog::sink_ptr>& sinks, LogTarget target,
     }
 }
 
-/// C++ assert callback that logs via spdlog and dumps backtrace
+/// C++ assert callback that logs via spdlog and dumps backtrace.
+/// IMPORTANT: Do NOT call any LVGL functions here — this callback may fire
+/// during rendering or layout, and re-entrant LVGL calls cause cascading
+/// assertions and SIGSEGV (crash signature 0997d072).
 void lvgl_assert_spdlog_callback(const char* file, int line, const char* func) {
     // Log via spdlog for consistent logging across all outputs
     spdlog::critical("╔═══════════════════════════════════════════════════════════╗");
@@ -160,15 +162,6 @@ void lvgl_assert_spdlog_callback(const char* file, int line, const char* func) {
     spdlog::critical("║ File: {}", file);
     spdlog::critical("║ Line: {}", line);
     spdlog::critical("║ Func: {}()", func);
-
-    // Log LVGL display state if available
-    lv_display_t* disp = lv_display_get_default();
-    if (disp) {
-        spdlog::critical("║ Display rendering_in_progress: {}",
-                         disp->rendering_in_progress ? "YES (!!)" : "no");
-    } else {
-        spdlog::critical("║ Display: not initialized");
-    }
     spdlog::critical("╚═══════════════════════════════════════════════════════════╝");
 
     // Dump recent log messages that led up to this assertion

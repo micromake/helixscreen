@@ -550,6 +550,24 @@ class AmsState {
      */
     lv_subject_t* get_clog_meter_warning_subject() { return &clog_meter_warning_; }
 
+    lv_subject_t* get_clog_meter_danger_pct_subject() { return &clog_meter_danger_pct_; }
+    lv_subject_t* get_clog_meter_peak_pct_subject() { return &clog_meter_peak_pct_; }
+    lv_subject_t* get_clog_meter_center_text_subject() { return &clog_meter_center_text_; }
+    lv_subject_t* get_clog_meter_label_left_subject() { return &clog_meter_label_left_; }
+    lv_subject_t* get_clog_meter_label_right_subject() { return &clog_meter_label_right_; }
+
+    /**
+     * @brief Set source override for clog meter display
+     * @param source 0=auto (priority logic), 1=encoder, 2=flowguard, 3=afc
+     */
+    void set_source_override(int source);
+
+    /**
+     * @brief Set danger threshold override for clog meter
+     * @param pct 0=use computed default, 50-90=override danger zone percentage
+     */
+    void set_danger_threshold_override(int pct);
+
     /**
      * @brief Get current modal target temperature
      * @return Temperature in degrees C
@@ -984,6 +1002,10 @@ class AmsState {
     int modal_target_temp_c_ = DEFAULT_DRYER_TEMP_C;      ///< Modal's target temp (default PETG)
     int modal_duration_min_ = DEFAULT_DRYER_DURATION_MIN; ///< Modal's duration (default)
 
+    // Clog detection config overrides (set by ClogDetectionConfigModal)
+    int source_override_ = 0;           // 0=auto, 1=encoder, 2=flowguard, 3=afc
+    int danger_threshold_override_ = 0; // 0=use computed default
+
     // Clog detection meter subjects
     lv_subject_t clog_meter_mode_;       // 0=none, 1=encoder, 2=flowguard, 3=afc_buffer
     lv_subject_t clog_meter_value_;      // 0-100 (encoder/afc) or -100..+100 (flowguard)
@@ -992,6 +1014,14 @@ class AmsState {
     char clog_meter_value_text_buf_[16]{};
     lv_subject_t clog_meter_mode_text_;
     char clog_meter_mode_text_buf_[24]{};
+    lv_subject_t clog_meter_danger_pct_;   // 0-100, where danger zone starts
+    lv_subject_t clog_meter_peak_pct_;     // 0-100, peak-hold marker position
+    lv_subject_t clog_meter_center_text_;  // Enhanced center display
+    char clog_meter_center_text_buf_[16]{};
+    lv_subject_t clog_meter_label_left_;   // Left endpoint label
+    char clog_meter_label_left_buf_[16]{};
+    lv_subject_t clog_meter_label_right_;  // Right endpoint label
+    char clog_meter_label_right_buf_[16]{};
 
     // Currently Loaded display subjects (reactive binding for "Currently Loaded" card)
     lv_subject_t current_material_text_;

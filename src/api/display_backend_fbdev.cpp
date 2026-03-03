@@ -164,8 +164,6 @@ helix::TouchCalibration load_touch_calibration() {
     cal.d = static_cast<float>(cfg->get<double>("/input/calibration/d", 0.0));
     cal.e = static_cast<float>(cfg->get<double>("/input/calibration/e", 1.0));
     cal.f = static_cast<float>(cfg->get<double>("/input/calibration/f", 0.0));
-    cal.axes_swapped = cfg->get<bool>("/input/calibration/swap_axes", false);
-
     if (!helix::is_calibration_valid(cal)) {
         spdlog::warn("[Fbdev Backend] Stored calibration failed validation");
         cal.valid = false;
@@ -388,12 +386,30 @@ lv_indev_t* DisplayBackendFbdev::create_input_pointer() {
 
             // MT-only devices (e.g., Goodix gt9xxnew_ts) don't have legacy ABS_X/ABS_Y.
             // Fall back to ABS_MT_POSITION_X/ABS_MT_POSITION_Y for range queries.
-            if ((!got_x || !got_y) && abs_caps.has_multitouch) {
-                spdlog::info("[Fbdev Backend] ABS_X/ABS_Y not available, falling back to MT axes");
+            // Also fall back when EVIOCGABS succeeds but returns zero range — some
+            // MT-only controllers report ABS_X with all-zero data (not an error).
+            bool used_mt_fallback = false;
+            bool range_is_zero =
+                got_x && got_y && abs_x.maximum == 0 && abs_y.maximum == 0;
+            if (abs_caps.has_multitouch && (!got_x || !got_y || range_is_zero)) {
+                used_mt_fallback = true;
+                spdlog::info(
+                    "[Fbdev Backend] ABS_X/ABS_Y not available or zero-range, falling back to MT axes");
                 got_x = (ioctl(fd, EVIOCGABS(ABS_MT_POSITION_X), &abs_x) == 0);
                 got_y = (ioctl(fd, EVIOCGABS(ABS_MT_POSITION_Y), &abs_y) == 0);
             }
             close(fd);
+
+            // When MT fallback provided valid ranges, propagate them into LVGL's
+            // internal calibration so coordinate mapping works correctly even when
+            // the driver's EVIOCGABS(ABS_X) returned zeros.
+            if (used_mt_fallback && got_x && got_y && abs_x.maximum > abs_x.minimum) {
+                lv_evdev_set_calibration(touch_, abs_x.minimum, abs_y.minimum, abs_x.maximum,
+                                         abs_y.maximum);
+                spdlog::info(
+                    "[Fbdev Backend] Applied MT axis range to LVGL calibration: X({}..{}) Y({}..{})",
+                    abs_x.minimum, abs_x.maximum, abs_y.minimum, abs_y.maximum);
+            }
 
             if (got_x && got_y) {
                 spdlog::info(
@@ -465,10 +481,6 @@ lv_indev_t* DisplayBackendFbdev::create_input_pointer() {
                      "a={:.4f} b={:.4f} c={:.4f} d={:.4f} e={:.4f} f={:.4f}",
                      calibration_.a, calibration_.b, calibration_.c, calibration_.d, calibration_.e,
                      calibration_.f);
-        if (calibration_.axes_swapped && !(swap_axes && strcmp(swap_axes, "1") == 0)) {
-            spdlog::info("[Fbdev Backend] Applying auto-detected axis swap from calibration");
-            lv_evdev_set_swap_axes(touch_, true);
-        }
     } else {
         spdlog::info("[Fbdev Backend] No stored affine calibration found");
     }
@@ -848,20 +860,6 @@ bool DisplayBackendFbdev::set_calibration(const helix::TouchCalibration& cal) {
             spdlog::info("[Fbdev Backend] Calibration callback installed at runtime: "
                          "a={:.4f} b={:.4f} c={:.4f} d={:.4f} e={:.4f} f={:.4f}",
                          cal.a, cal.b, cal.c, cal.d, cal.e, cal.f);
-        }
-    }
-
-    // Apply or clear axis swap based on new calibration
-    if (touch_) {
-        bool should_swap = cal.axes_swapped;
-        // Env var always wins over auto-detection
-        const char* env_swap = std::getenv("HELIX_TOUCH_SWAP_AXES");
-        if (env_swap && strcmp(env_swap, "1") == 0) {
-            should_swap = true;
-        }
-        lv_evdev_set_swap_axes(touch_, should_swap);
-        if (should_swap) {
-            spdlog::info("[Fbdev Backend] Axis swap active at runtime");
         }
     }
 

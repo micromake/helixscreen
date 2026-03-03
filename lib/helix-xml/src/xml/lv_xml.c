@@ -457,8 +457,13 @@ static bool lv_xml_ptr_looks_valid(const void * p)
 {
     if(p == NULL) return false;
 #ifdef LV_ARCH_64
-    /* 64-bit user-space pointers have upper 16 bits clear (48-bit addressing) */
-    return ((lv_uintptr_t)p >> 48) == 0;
+    /* Mask the upper byte before checking: ARM64 TBI (Top Byte Ignore)
+     * allows the kernel/allocator to store metadata (MTE tags, HWASan)
+     * in the upper byte, e.g. 0xb400007832... on Android. */
+    lv_uintptr_t addr = (lv_uintptr_t)p & 0x00FFFFFFFFFFFFFF;
+    /* Valid user-space addresses have bits 56..47 either all-zero (low half)
+     * or all-one (high half / kernel). Reject obvious garbage. */
+    return addr != 0 && (addr >> 48) <= 0x7F;
 #else
     return true;
 #endif

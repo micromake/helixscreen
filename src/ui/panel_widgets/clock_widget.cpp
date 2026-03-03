@@ -3,6 +3,7 @@
 
 #include "clock_widget.h"
 
+#include "locale_formats.h"
 #include "panel_widget_registry.h"
 #include "static_subject_registry.h"
 #include "subject_debug_registry.h"
@@ -237,10 +238,9 @@ void ClockWidget::update_clock() {
         std::string time_str = helix::ui::format_time(tm_info);
         lv_subject_copy_string(&s_time_subject, time_str.c_str());
 
-        // Date — e.g. "Fri, Feb 28"
-        char date_buf[32];
-        strftime(date_buf, sizeof(date_buf), "%a, %b %d", tm_info);
-        lv_subject_copy_string(&s_date_subject, date_buf);
+        // Date — locale-aware formatting
+        std::string date_str = helix::ui::format_localized_date(tm_info);
+        lv_subject_copy_string(&s_date_subject, date_str.c_str());
     }
 
     // Uptime from /proc/uptime

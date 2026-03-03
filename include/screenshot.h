@@ -10,6 +10,7 @@
  */
 
 #include <cstdint>
+#include <string>
 
 namespace helix {
 
@@ -27,7 +28,8 @@ bool write_bmp(const char* filename, const uint8_t* data, int width, int height)
  * @brief Take a screenshot of the active LVGL screen and save to /tmp
  *
  * Generates a unique filename with timestamp: /tmp/ui-screenshot-<timestamp>.bmp
+ * @return The filename on success, empty string on failure
  */
-void save_screenshot();
+std::string save_screenshot();
 
 } // namespace helix

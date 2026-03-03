@@ -30,6 +30,7 @@ struct PanelWidgetDef {
     int min_rowspan = 0;                   // Minimum rows (0 = use rowspan)
     int max_colspan = 0;                   // Maximum columns (0 = use colspan, i.e. not scalable)
     int max_rowspan = 0;                   // Maximum rows (0 = use rowspan, i.e. not scalable)
+    const char* catalog_group = nullptr;   // Group multiple defs under one catalog entry
     WidgetFactory factory = nullptr;       // nullptr = pure XML or externally managed
     SubjectInitFn init_subjects = nullptr; // Called once before XML creation
 

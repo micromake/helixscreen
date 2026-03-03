@@ -31,7 +31,7 @@
         <!-- Toggle for klipper/moonraker logs -->
         <lv_obj width="100%"
                 height="content" flex_flow="row" style_pad_all="#space_sm" style_pad_gap="#space_sm"
-                style_bg_opa="cover" style_bg_color="#card_bg" style_radius="#radius_md"
+                style_bg_opa="cover" style_bg_color="#card_bg" style_radius="#border_radius"
                 style_flex_main_place="space_between" style_flex_cross_place="center">
           <text_body text="Include Klipper/Moonraker logs" translation_tag="Include Klipper/Moonraker logs"/>
           <ui_switch name="include_logs_switch" bind_checked="debug_bundle_include_logs"/>
@@ -59,7 +59,7 @@
         <!-- Large share code display -->
         <lv_obj width="100%"
                 height="content" style_pad_all="#space_md" style_bg_opa="cover" style_bg_color="#card_bg"
-                style_radius="#radius_md" style_flex_main_place="center" style_flex_cross_place="center" flex_flow="row">
+                style_radius="#border_radius" style_flex_main_place="center" style_flex_cross_place="center" flex_flow="row">
           <lv_label name="share_code_display"
                     bind_text="debug_bundle_share_code" style_text_font="noto_sans_bold_28" style_text_color="#primary"
                     style_text_align="center"/>

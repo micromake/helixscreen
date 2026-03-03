@@ -97,4 +97,15 @@ std::string format_time(const struct tm* tm_info);
  */
 const char* get_time_format_string();
 
+/**
+ * @brief Format a relative time from milliseconds elapsed
+ *
+ * Translatable via lv_tr(). Handles singular/plural forms.
+ * Examples: "Just now", "5 min ago", "1 hour ago", "3 days ago"
+ *
+ * @param elapsed_ms Milliseconds since the event
+ * @return Formatted relative time string
+ */
+std::string format_relative_time(uint64_t elapsed_ms);
+
 } // namespace helix::ui

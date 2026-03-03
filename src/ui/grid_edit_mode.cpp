@@ -3,6 +3,7 @@
 #include "grid_edit_mode.h"
 
 #include "ui_fonts.h"
+#include "ui_utils.h"
 #include "ui_widget_catalog_overlay.h"
 
 #include "app_globals.h"
@@ -26,6 +27,17 @@ namespace helix {
 // MDI icon_xmark glyph (U+F0156)
 static constexpr const char* ICON_XMARK = "\xF3\xB0\x85\x96";
 
+// Safe deferred deletion for objects that may be children of a container
+// about to be cleaned via lv_obj_clean(). Reparenting to lv_layer_top()
+// removes the object from the container's child list, preventing double-free
+// when lv_obj_clean runs before the async delete fires.  Hiding prevents
+// the reparented object from being visible in lv_layer_top().
+static void safe_deferred_delete(lv_obj_t* obj) {
+    lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_parent(obj, lv_layer_top());
+    lv_obj_delete_async(obj);
+}
+
 // Drag visual constants
 static constexpr int GHOST_BORDER_WIDTH = 2;
 static constexpr lv_opa_t GHOST_BORDER_OPA = LV_OPA_50;
@@ -38,22 +50,8 @@ static constexpr int DRAG_SHADOW_OFS = 4;
 static constexpr int EDGE_HIT_INWARD = 18;
 static constexpr int EDGE_HIT_MARGIN = 18;
 
-/// Recursively remove CLICKABLE flag from all descendants of obj.
-
-static void disable_widget_clicks_recursive(lv_obj_t* obj) {
-    if (!obj) {
-        return;
-    }
-    uint32_t count = lv_obj_get_child_count(obj);
-    for (uint32_t i = 0; i < count; ++i) {
-        lv_obj_t* child = lv_obj_get_child(obj, static_cast<int32_t>(i));
-        if (!child) {
-            continue;
-        }
-        lv_obj_remove_flag(child, LV_OBJ_FLAG_CLICKABLE);
-        disable_widget_clicks_recursive(child);
-    }
-}
+// disable_widget_clicks_recursive() is in ui_utils.h (helix::ui namespace)
+using helix::ui::disable_widget_clicks_recursive;
 
 GridEditMode::~GridEditMode() {
     if (active_) {
@@ -92,13 +90,36 @@ void GridEditMode::exit() {
         return;
     }
     active_ = false;
-    cleanup_drag_state();
-    destroy_selection_chrome();
-    selected_ = nullptr;
-    destroy_dots_overlay();
 
-    // Clickability is restored by the rebuild callback (save_cb_) which
-    // recreates all widget children fresh with their original flags.
+    // Null ALL overlay/widget pointers WITHOUT deleting.  rebuild_cb_
+    // calls populate_widgets() → lv_obj_clean(container) which destroys
+    // every container child.  Deleting them individually here first is
+    // redundant and dangerous: this path runs inside indev_proc_release,
+    // and synchronous lv_obj_delete during input processing can corrupt
+    // LVGL's child list iteration → SIGSEGV in lv_obj_get_parent.
+    //
+    // Also skip cleanup_drag_state() destroy calls for the same reason;
+    // just clear the drag/resize flags directly.
+    drag_pending_ = false;
+    if (dragging_ && selected_) {
+        lv_obj_remove_flag(selected_, LV_OBJ_FLAG_FLOATING);
+    }
+    dragging_ = false;
+    resizing_ = false;
+    drag_cfg_idx_ = -1;
+    drag_orig_col_ = -1;
+    drag_orig_row_ = -1;
+    drag_orig_colspan_ = 1;
+    drag_orig_rowspan_ = 1;
+    drag_ghost_ = nullptr;
+    snap_preview_ = nullptr;
+    snap_preview_col_ = -1;
+    snap_preview_row_ = -1;
+    selected_ = nullptr;
+    configure_btn_ = nullptr;
+    remove_btn_ = nullptr;
+    selection_overlay_ = nullptr;
+    dots_overlay_ = nullptr;
 
     lv_subject_set_int(&get_home_edit_mode_subject(), 0);
 
@@ -107,6 +128,7 @@ void GridEditMode::exit() {
     }
     // Rebuild widgets to restore normal click behavior (the dots overlay
     // absorbed all events during edit mode; rebuild creates fresh widgets).
+    // The rebuild's lv_obj_clean(container) destroys all overlay objects.
     if (rebuild_cb_) {
         rebuild_cb_();
     }
@@ -488,16 +510,20 @@ void GridEditMode::destroy_selection_chrome() {
     }
     auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
     helix::ui::UpdateQueue::instance().drain();
+    // Reparent to lv_layer_top() + async delete.  This is called during
+    // input event processing where synchronous lv_obj_delete corrupts
+    // LVGL's child iteration.  Reparenting ensures lv_obj_clean(container_)
+    // in a subsequent rebuild won't double-free these objects.
     if (configure_btn_) {
-        lv_obj_delete(configure_btn_);
+        safe_deferred_delete(configure_btn_);
         configure_btn_ = nullptr;
     }
     if (remove_btn_) {
-        lv_obj_delete(remove_btn_);
+        safe_deferred_delete(remove_btn_);
         remove_btn_ = nullptr;
     }
     if (selection_overlay_) {
-        lv_obj_delete(selection_overlay_);
+        safe_deferred_delete(selection_overlay_);
         selection_overlay_ = nullptr;
     }
 }
@@ -1975,7 +2001,7 @@ void GridEditMode::destroy_drag_ghost() {
     if (drag_ghost_) {
         auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
         helix::ui::UpdateQueue::instance().drain();
-        lv_obj_delete(drag_ghost_);
+        safe_deferred_delete(drag_ghost_);
         drag_ghost_ = nullptr;
     }
 }
@@ -2032,7 +2058,7 @@ void GridEditMode::destroy_snap_preview() {
     if (snap_preview_) {
         auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
         helix::ui::UpdateQueue::instance().drain();
-        lv_obj_delete(snap_preview_);
+        safe_deferred_delete(snap_preview_);
         snap_preview_ = nullptr;
     }
     snap_preview_col_ = -1;
@@ -2062,7 +2088,7 @@ void GridEditMode::cleanup_drag_state() {
     drag_orig_rowspan_ = 1;
     drag_offset_ = {0, 0};
     if (resize_preview_) {
-        lv_obj_delete(resize_preview_);
+        safe_deferred_delete(resize_preview_);
         resize_preview_ = nullptr;
     }
 }
@@ -2135,7 +2161,7 @@ void GridEditMode::destroy_dots_overlay() {
     if (dots_overlay_) {
         auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
         helix::ui::UpdateQueue::instance().drain();
-        lv_obj_delete(dots_overlay_);
+        safe_deferred_delete(dots_overlay_);
         dots_overlay_ = nullptr;
     }
 }
@@ -2350,17 +2376,24 @@ void GridEditMode::place_widget_from_catalog(const std::string& widget_id) {
     if (rebuild_cb_) {
         rebuild_cb_();
     }
-    // Reset input device to clear stale object pointers held by LVGL's
-    // indev processing — the rebuild (lv_obj_clean) destroyed tracked objects.
-    {
-        lv_indev_t* indev = lv_indev_active();
-        if (indev) {
-            lv_indev_reset(indev, nullptr);
-        }
-    }
     // Recreate dots overlay (rebuild destroys all container children)
     if (active_ && container_) {
         create_dots_overlay();
+    }
+
+    // Select the newly added widget so its chrome is visible immediately
+    if (active_ && container_) {
+        lv_obj_t* new_widget = lv_obj_find_by_name(container_, widget_id.c_str());
+        if (new_widget) {
+            select_widget(new_widget);
+        }
+    }
+
+    // Reset input device AFTER all UI changes complete — the rebuild
+    // (lv_obj_clean) destroyed tracked objects held by LVGL's indev processing.
+    lv_indev_t* indev = lv_indev_active();
+    if (indev) {
+        lv_indev_reset(indev, nullptr);
     }
 }
 

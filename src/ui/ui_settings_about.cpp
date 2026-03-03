@@ -276,7 +276,7 @@ void AboutSettingsOverlay::start_marquee_animation() {
     lv_anim_set_duration(&marquee_anim_, static_cast<uint32_t>(duration_ms));
     lv_anim_set_repeat_count(&marquee_anim_, LV_ANIM_REPEAT_INFINITE);
     lv_anim_set_exec_cb(&marquee_anim_, [](void* obj, int32_t val) {
-        lv_obj_set_x(static_cast<lv_obj_t*>(obj), val);
+        lv_obj_set_style_translate_x(static_cast<lv_obj_t*>(obj), val, 0);
     });
     lv_anim_start(&marquee_anim_);
 

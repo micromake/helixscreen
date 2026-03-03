@@ -100,6 +100,11 @@ PromptButton ActionPromptManager::parse_button_spec(const std::string& spec) {
         button.color = parts[2];
     }
 
+    // Field 3 = hex_color (raw hex override, e.g., "7c4b00")
+    if (parts.size() > 3 && !parts[3].empty()) {
+        button.hex_color = parts[3];
+    }
+
     return button;
 }
 

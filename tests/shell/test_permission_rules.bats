@@ -80,7 +80,7 @@ SUDOEOF
     [[ "$output" == *"running as root"* ]]
 }
 
-@test "install_permission_rules: skips under NoNewPrivileges" {
+@test "install_permission_rules: skips under NoNewPrivileges when rules OK" {
     # Mock _has_no_new_privs to simulate systemd NoNewPrivileges=true
     _has_no_new_privs() { return 0; }
     export -f _has_no_new_privs
@@ -88,6 +88,27 @@ SUDOEOF
     run install_permission_rules "pi"
     [ "$status" -eq 0 ]
     [[ "$output" == *"NoNewPrivileges"* ]]
+    # Should NOT warn about repair when no broken files exist
+    [[ "$output" != *"need repair"* ]]
+}
+
+@test "install_permission_rules: warns under NoNewPrivileges when pkla is broken" {
+    # Mock _has_no_new_privs to simulate systemd NoNewPrivileges=true
+    _has_no_new_privs() { return 0; }
+    export -f _has_no_new_privs
+
+    # Deploy a broken pkla (un-substituted template) to the real path
+    local pkla_dir="/etc/polkit-1/localauthority/50-local.d"
+    # We can't write to /etc in tests, so override the function to use a test path
+    _permission_rules_need_repair() {
+        return 0  # simulate broken pkla detected
+    }
+    export -f _permission_rules_need_repair
+
+    run install_permission_rules "pi"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"need repair"* ]]
+    [[ "$output" == *"Wi-Fi may not work"* ]]
 }
 
 # =============================================================================

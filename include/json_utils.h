@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cmath>
 #include <string>
 
 #include "hv/json.hpp"
@@ -48,17 +49,17 @@ inline float safe_float(const nlohmann::json& j, const char* key, float def = 0.
         return def;
     }
     const auto& v = j[key];
+    float result = def;
     if (v.is_number()) {
-        return v.get<float>();
-    }
-    if (v.is_string()) {
+        result = v.get<float>();
+    } else if (v.is_string()) {
         try {
-            return std::stof(v.get<std::string>());
+            result = std::stof(v.get<std::string>());
         } catch (...) {
             return def;
         }
     }
-    return def;
+    return std::isfinite(result) ? result : def;
 }
 
 /// Safely extract a double from a JSON field that may be number, string, or null.
@@ -67,17 +68,17 @@ inline double safe_double(const nlohmann::json& j, const char* key, double def =
         return def;
     }
     const auto& v = j[key];
+    double result = def;
     if (v.is_number()) {
-        return v.get<double>();
-    }
-    if (v.is_string()) {
+        result = v.get<double>();
+    } else if (v.is_string()) {
         try {
-            return std::stod(v.get<std::string>());
+            result = std::stod(v.get<std::string>());
         } catch (...) {
             return def;
         }
     }
-    return def;
+    return std::isfinite(result) ? result : def;
 }
 
 } // namespace helix::json_util

@@ -695,11 +695,12 @@ void DisplayManager::check_display_sleep() {
         }
     } else {
         // Currently awake - check if we should dim or sleep
+        bool can_dim = m_backlight && m_backlight->supports_dimming();
         if (sleep_timeout_sec > 0 && inactive_ms >= sleep_timeout_ms) {
             // Skip dim, go straight to sleep (sleep timeout <= dim timeout)
             enter_sleep(sleep_timeout_sec);
-        } else if (m_dim_timeout_sec > 0 && inactive_ms >= dim_timeout_ms) {
-            // Dim the display
+        } else if (can_dim && m_dim_timeout_sec > 0 && inactive_ms >= dim_timeout_ms) {
+            // Dim the display (only if backlight supports continuous dimming)
             m_display_dimmed = true;
 #ifdef HELIX_ENABLE_SCREENSAVER
             // Start screensaver instead of just dimming (if configured)
@@ -831,6 +832,10 @@ void DisplayManager::set_backlight_brightness(int percent) {
 
 bool DisplayManager::has_backlight_control() const {
     return m_backlight && m_backlight->is_available();
+}
+
+bool DisplayManager::has_dimming_control() const {
+    return m_backlight && m_backlight->supports_dimming();
 }
 
 // ============================================================================
@@ -1138,10 +1143,15 @@ void DisplayManager::run_rotation_probe() {
     };
 
     int confirmed_rotation = -1;
+    const int max_cycles = 3;
+    int cycle = 0;
 
     // Loop until user confirms a rotation. On real hardware, the wrong rotation
     // renders unreadable text so the user can only tap the correct one.
-    while (confirmed_rotation < 0) {
+    // Safety: give up after max_cycles full sweeps to avoid infinite loop
+    // (e.g. uncalibrated resistive touchscreen that can't register taps).
+    while (confirmed_rotation < 0 && cycle < max_cycles) {
+        cycle++;
         for (int i = 0; i < num_rotations; i++) {
             // Apply rotation (skip on SDL — DIRECT render mode can't rotate)
             if (!is_sdl) {
@@ -1201,6 +1211,14 @@ void DisplayManager::run_rotation_probe() {
             spdlog::info("[DisplayManager] Rotation probe: {}° not confirmed, continuing scan",
                          rotation_degrees[i]);
         }
+    }
+
+    // If probe timed out without confirmation, default to 0°
+    if (confirmed_rotation < 0) {
+        spdlog::warn("[DisplayManager] Rotation probe: no confirmation after {} cycles, "
+                     "defaulting to 0°",
+                     max_cycles);
+        confirmed_rotation = 0;
     }
 
     // Save confirmed rotation

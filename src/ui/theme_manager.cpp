@@ -362,6 +362,9 @@ static void init_extra_styles(const theme_palette_t* palette, int border_radius)
     extra_styles_initialized = true;
 }
 
+// Forward declaration — full definition is below with palette apply functions
+static bool is_on_elevated_surface(lv_obj_t* obj);
+
 /**
  * @brief HelixScreen theme apply callback - applies styles based on widget type
  *
@@ -398,6 +401,11 @@ static void helix_theme_apply(lv_theme_t* theme, lv_obj_t* obj) {
     if (lv_obj_check_type(obj, &lv_textarea_class)) {
         lv_obj_add_style(obj, tm.get_style(StyleRole::InputBg), LV_PART_MAIN);
         lv_obj_add_style(obj, tm.get_style(StyleRole::Focused), LV_STATE_FOCUSED);
+
+        // On elevated surfaces (dialogs, raised cards), override to overlay_bg for contrast
+        if (is_on_elevated_surface(obj)) {
+            lv_obj_set_style_bg_color(obj, tm.current_palette().overlay_bg, LV_PART_MAIN);
+        }
     }
 #endif
 
@@ -406,6 +414,11 @@ static void helix_theme_apply(lv_theme_t* theme, lv_obj_t* obj) {
         lv_obj_add_style(obj, tm.get_style(StyleRole::InputBg), LV_PART_MAIN);
         lv_obj_add_style(obj, &dropdown_indicator_style, LV_PART_INDICATOR);
         lv_obj_add_style(obj, tm.get_style(StyleRole::Focused), LV_STATE_FOCUSED);
+
+        // On elevated surfaces (dialogs, raised cards), override to overlay_bg for contrast
+        if (is_on_elevated_surface(obj)) {
+            lv_obj_set_style_bg_color(obj, tm.current_palette().overlay_bg, LV_PART_MAIN);
+        }
     }
     if (lv_obj_check_type(obj, &lv_dropdownlist_class)) {
         lv_obj_add_style(obj, tm.get_style(StyleRole::InputBg), LV_PART_MAIN);
@@ -441,6 +454,11 @@ static void helix_theme_apply(lv_theme_t* theme, lv_obj_t* obj) {
 #if LV_USE_SPINBOX
     if (lv_obj_check_type(obj, &lv_spinbox_class)) {
         lv_obj_add_style(obj, tm.get_style(StyleRole::InputBg), LV_PART_MAIN);
+
+        // On elevated surfaces (dialogs, raised cards), override to overlay_bg for contrast
+        if (is_on_elevated_surface(obj)) {
+            lv_obj_set_style_bg_color(obj, tm.current_palette().overlay_bg, LV_PART_MAIN);
+        }
     }
 #endif
 
@@ -980,12 +998,10 @@ static void theme_manager_register_theme_properties(lv_xml_component_scope_t* sc
                                                     const helix::ThemeData& theme) {
     char buf[32];
 
-    // Register button_radius and card_radius - theme-specific corner radii
-    // Separate from border_radius which controls general UI elements like dropdowns/inputs
-    // Both currently use the same theme value, but may be split later
+    // Register border_radius and button_radius as XML constants from theme
     snprintf(buf, sizeof(buf), "%d", theme.properties.border_radius);
+    lv_xml_register_const(scope, "border_radius", buf);
     lv_xml_register_const(scope, "button_radius", buf);
-    lv_xml_register_const(scope, "card_radius", buf);
 
     // Register border_width
     snprintf(buf, sizeof(buf), "%d", theme.properties.border_width);
@@ -1538,16 +1554,28 @@ static bool is_muted_text_font(const lv_font_t* font) {
 }
 
 /**
- * @brief Check if an object is inside a dialog container
+ * @brief Check if an object is on an elevated background surface
  *
- * Dialogs are marked with LV_OBJ_FLAG_USER_1 in ui_dialog_xml_create().
- * Inputs inside dialogs need overlay_bg for contrast against elevated_bg dialog background.
+ * Detects two cases where inputs need overlay_bg for contrast:
+ * 1. Inside a dialog (marked with LV_OBJ_FLAG_USER_1 in ui_dialog_xml_create())
+ * 2. Inside any container whose opaque background matches elevated_bg
+ *
+ * This allows text_input, dropdowns, etc. to auto-contrast on raised cards
+ * without manual style_bg_color overrides in XML.
  */
-static bool is_inside_dialog(lv_obj_t* obj) {
+static bool is_on_elevated_surface(lv_obj_t* obj) {
+    auto& tm = ThemeManager::instance();
+    lv_color_t elevated = tm.current_palette().elevated_bg;
     lv_obj_t* parent = lv_obj_get_parent(obj);
     while (parent) {
         if (lv_obj_has_flag(parent, LV_OBJ_FLAG_USER_1))
             return true;
+        lv_opa_t opa = lv_obj_get_style_bg_opa(parent, LV_PART_MAIN);
+        if (opa > LV_OPA_50) {
+            lv_color_t bg = lv_obj_get_style_bg_color(parent, LV_PART_MAIN);
+            if (color_eq(bg, elevated))
+                return true;
+        }
         parent = lv_obj_get_parent(parent);
     }
     return false;
@@ -1675,9 +1703,9 @@ void theme_apply_palette_to_widget(lv_obj_t* obj, const helix::ModePalette& pale
     }
 
     // Dropdowns - background, border, text
-    // Inside dialogs (elevated_bg background), use overlay_bg for contrast
+    // On elevated surfaces (dialogs, raised cards), use overlay_bg for contrast
     if (lv_obj_check_type(obj, &lv_dropdown_class)) {
-        lv_color_t bg = is_inside_dialog(obj) ? overlay_bg : elevated_bg;
+        lv_color_t bg = is_on_elevated_surface(obj) ? overlay_bg : elevated_bg;
         lv_obj_set_style_bg_color(obj, bg, LV_PART_MAIN);
         lv_obj_set_style_border_color(obj, border, LV_PART_MAIN);
         lv_obj_set_style_text_color(obj, text_primary, LV_PART_MAIN);
@@ -1685,9 +1713,18 @@ void theme_apply_palette_to_widget(lv_obj_t* obj, const helix::ModePalette& pale
     }
 
     // Textareas - background, text
-    // Inside dialogs (elevated_bg background), use overlay_bg for contrast
+    // On elevated surfaces (dialogs, raised cards), use overlay_bg for contrast
     if (lv_obj_check_type(obj, &lv_textarea_class)) {
-        lv_color_t bg = is_inside_dialog(obj) ? overlay_bg : elevated_bg;
+        lv_color_t bg = is_on_elevated_surface(obj) ? overlay_bg : elevated_bg;
+        lv_obj_set_style_bg_color(obj, bg, LV_PART_MAIN);
+        lv_obj_set_style_text_color(obj, text_primary, LV_PART_MAIN);
+        return;
+    }
+
+    // Spinboxes - background, text
+    // On elevated surfaces (dialogs, raised cards), use overlay_bg for contrast
+    if (lv_obj_check_type(obj, &lv_spinbox_class)) {
+        lv_color_t bg = is_on_elevated_surface(obj) ? overlay_bg : elevated_bg;
         lv_obj_set_style_bg_color(obj, bg, LV_PART_MAIN);
         lv_obj_set_style_text_color(obj, text_primary, LV_PART_MAIN);
         return;

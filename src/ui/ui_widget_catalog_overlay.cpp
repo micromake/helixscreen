@@ -11,9 +11,13 @@
 #include "theme_manager.h"
 
 #include <lvgl/lvgl.h>
+#include "lvgl/src/others/translation/lv_translation.h"
 #include <spdlog/spdlog.h>
 
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 namespace helix {
 
@@ -136,7 +140,7 @@ lv_obj_t* WidgetCatalogOverlay::create_row(lv_obj_t* parent, const char* name, c
 
     if (already_placed) {
         lv_obj_t* placed_label = lv_label_create(right_group);
-        lv_label_set_text(placed_label, "Placed");
+        lv_label_set_text(placed_label, lv_tr("Placed"));
         lv_obj_set_style_text_font(placed_label, &noto_sans_12, 0);
         lv_obj_set_style_text_color(placed_label, theme_manager_get_color("text_muted"), 0);
     }
@@ -173,53 +177,126 @@ void WidgetCatalogOverlay::populate_rows(lv_obj_t* scroll, const PanelWidgetConf
                                          WidgetSelectedCallback /*on_select*/) {
     const auto& defs = get_all_widget_defs();
 
+    // Pre-pass: count placed/total per catalog_group
+    std::unordered_map<std::string, int> group_placed_count;
+    std::unordered_map<std::string, int> group_total_count;
+    // Collect the first non-enabled member ID per group for click handler
+    std::unordered_map<std::string, const char*> group_next_id;
+
     for (const auto& def : defs) {
-        // Determine if already placed (enabled in config)
-        bool already_placed = config.is_enabled(def.id);
+        if (!def.catalog_group)
+            continue;
+        std::string group(def.catalog_group);
+        group_total_count[group]++;
+        if (config.is_enabled(def.id)) {
+            group_placed_count[group]++;
+        } else if (group_next_id.find(group) == group_next_id.end()) {
+            group_next_id[group] = def.id;
+        }
+    }
 
-        const char* display_name = def.display_name ? def.display_name : def.id;
+    std::unordered_set<std::string> group_seen;
 
-        // Check hardware gate
-        bool hardware_gated = false;
-        if (def.hardware_gate_subject) {
-            lv_subject_t* gate = lv_xml_get_subject(nullptr, def.hardware_gate_subject);
-            if (gate && lv_subject_get_int(gate) == 0) {
-                hardware_gated = true;
+    for (const auto& def : defs) {
+        if (def.catalog_group) {
+            // Grouped widget — show one catalog row per group
+            std::string group(def.catalog_group);
+            if (!group_seen.insert(group).second)
+                continue; // already emitted this group's row
+
+            int placed = group_placed_count[group];
+            int total = group_total_count[group];
+            bool all_placed = (placed >= total);
+
+            const char* display_name = def.display_name ? lv_tr(def.display_name) : def.id;
+
+            // Build status suffix showing placement count
+            std::string name_str(display_name);
+            if (placed > 0) {
+                char buf[32];
+                snprintf(buf, sizeof(buf), " (%d/%d %s)", placed, total, lv_tr("Placed"));
+                name_str += buf;
             }
-        }
 
-        // Build display name with "(not detected)" suffix if hardware-gated
-        std::string name_str(display_name);
-        if (hardware_gated) {
-            name_str += " (not detected)";
-        }
+            const char* desc = def.description ? lv_tr(def.description) : nullptr;
+            lv_obj_t* row = create_row(scroll, name_str.c_str(), def.icon, desc,
+                                       def.colspan, def.rowspan, all_placed,
+                                       /*hardware_gated=*/false);
 
-        lv_obj_t* row = create_row(scroll, name_str.c_str(), def.icon, def.description,
-                                   def.colspan, def.rowspan, already_placed, hardware_gated);
+            if (!all_placed) {
+                // Find the first non-enabled member to assign on click
+                const char* next_id = group_next_id[group];
+                if (next_id) {
+                    lv_obj_add_event_cb(
+                        row,
+                        [](lv_event_t* ev) {
+                            auto* widget_id =
+                                static_cast<const char*>(lv_event_get_user_data(ev));
+                            if (!widget_id)
+                                return;
+                            spdlog::info("[WidgetCatalog] Selected grouped widget: {}",
+                                         widget_id);
+                            auto cb = g_catalog_state.on_select;
+                            std::string id_copy(widget_id);
+                            close_catalog();
+                            if (cb) {
+                                cb(id_copy);
+                            }
+                        },
+                        LV_EVENT_CLICKED, const_cast<char*>(next_id));
+                }
+            }
+        } else {
+            // Non-grouped widget — existing single-widget logic
+            bool already_placed = config.is_enabled(def.id);
 
-        if (!already_placed && !hardware_gated) {
-            // Store widget ID in user data for the click handler.
-            // The ID string comes from the static widget def table, so the pointer is stable.
-            lv_obj_set_user_data(row, const_cast<char*>(def.id));
+            const char* display_name = def.display_name ? lv_tr(def.display_name) : def.id;
 
-            // Widget pool recycling exception: dynamic row click handler
-            lv_obj_add_event_cb(
-                row,
-                [](lv_event_t* ev) {
-                    auto* widget_id = static_cast<const char*>(lv_event_get_user_data(ev));
-                    if (!widget_id) {
-                        return;
-                    }
-                    spdlog::info("[WidgetCatalog] Selected widget: {}", widget_id);
-                    // Copy callback and ID before closing (close resets state)
-                    auto cb = g_catalog_state.on_select;
-                    std::string id_copy(widget_id);
-                    close_catalog();
-                    if (cb) {
-                        cb(id_copy);
-                    }
-                },
-                LV_EVENT_CLICKED, const_cast<char*>(def.id));
+            // Check hardware gate
+            bool hardware_gated = false;
+            if (def.hardware_gate_subject) {
+                lv_subject_t* gate = lv_xml_get_subject(nullptr, def.hardware_gate_subject);
+                if (gate && lv_subject_get_int(gate) == 0) {
+                    hardware_gated = true;
+                }
+            }
+
+            // Build display name with "(not detected)" suffix if hardware-gated
+            std::string name_str(display_name);
+            if (hardware_gated) {
+                name_str += std::string(" (") + lv_tr("not detected") + ")";
+            }
+
+            const char* desc = def.description ? lv_tr(def.description) : nullptr;
+            lv_obj_t* row = create_row(scroll, name_str.c_str(), def.icon, desc,
+                                       def.colspan, def.rowspan, already_placed, hardware_gated);
+
+            if (!already_placed && !hardware_gated) {
+                // Store widget ID in user data for the click handler.
+                // The ID string comes from the static widget def table, so the pointer is
+                // stable.
+                lv_obj_set_user_data(row, const_cast<char*>(def.id));
+
+                // Widget pool recycling exception: dynamic row click handler
+                lv_obj_add_event_cb(
+                    row,
+                    [](lv_event_t* ev) {
+                        auto* widget_id =
+                            static_cast<const char*>(lv_event_get_user_data(ev));
+                        if (!widget_id) {
+                            return;
+                        }
+                        spdlog::info("[WidgetCatalog] Selected widget: {}", widget_id);
+                        // Copy callback and ID before closing (close resets state)
+                        auto cb = g_catalog_state.on_select;
+                        std::string id_copy(widget_id);
+                        close_catalog();
+                        if (cb) {
+                            cb(id_copy);
+                        }
+                    },
+                    LV_EVENT_CLICKED, const_cast<char*>(def.id));
+            }
         }
     }
 }

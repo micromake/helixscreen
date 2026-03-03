@@ -16,6 +16,7 @@
 
 #include "ui_fonts.h"
 #include "ui_icon_codepoints.h"
+#include "ui_keyboard_manager.h"
 
 #include "helix-xml/src/xml/lv_xml.h"
 #include "helix-xml/src/xml/lv_xml_parser.h"
@@ -235,6 +236,9 @@ static void* ui_text_input_create(lv_xml_parser_state_t* state, const char** att
     lv_obj_set_user_data(
         textarea,
         reinterpret_cast<void*>(TEXT_INPUT_MAGIC | static_cast<uintptr_t>(KeyboardHint::TEXT)));
+
+    // Auto-register with keyboard manager for software keyboard support
+    KeyboardManager::instance().register_textarea(textarea);
 
     return textarea;
 }

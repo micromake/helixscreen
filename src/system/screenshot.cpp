@@ -63,7 +63,7 @@ bool write_bmp(const char* filename, const uint8_t* data, int width, int height)
     return true;
 }
 
-void save_screenshot() {
+std::string save_screenshot() {
     // Generate unique filename with timestamp in /tmp
     std::string filename =
         "/tmp/ui-screenshot-" + std::to_string(static_cast<unsigned long>(time(nullptr))) + ".bmp";
@@ -74,7 +74,7 @@ void save_screenshot() {
 
     if (!snapshot) {
         spdlog::error("[Screenshot] Failed to take screenshot");
-        return;
+        return {};
     }
 
     // Write BMP file
@@ -83,10 +83,12 @@ void save_screenshot() {
     } else {
         NOTIFY_ERROR("Failed to save screenshot");
         LOG_ERROR_INTERNAL("Failed to save screenshot to {}", filename);
+        filename.clear();
     }
 
     // Free snapshot buffer
     lv_draw_buf_destroy(snapshot);
+    return filename;
 }
 
 } // namespace helix

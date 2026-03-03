@@ -858,6 +858,20 @@ bool Config::save() {
     }
 }
 
+bool Config::has_preset() const {
+    if (data.contains("preset") && data["preset"].is_string()) {
+        return !data["preset"].get<std::string>().empty();
+    }
+    return false;
+}
+
+std::string Config::get_preset() const {
+    if (data.contains("preset") && data["preset"].is_string()) {
+        return data["preset"].get<std::string>();
+    }
+    return "";
+}
+
 bool Config::is_wizard_required() {
     // Check per-printer wizard_completed first (v3 config)
     if (!active_printer_id_.empty()) {

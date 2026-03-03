@@ -213,15 +213,13 @@
     <!-- DIAGNOSTICS SECTION -->
     <!-- ================================================================== -->
     <setting_section_header title="DIAGNOSTICS" title_tag="DIAGNOSTICS" icon="sysinfo"/>
-    <!-- Console / G-code Terminal (gated by beta_features) -->
-    <beta_feature name="container_console">
-      <setting_action_row name="row_console"
-                          label="G-code Console" label_tag="G-code Console" icon="console"
-                          description="Send commands directly to printer"
-                          description_tag="Send commands directly to printer">
-        <event_cb trigger="clicked" callback="on_console_row_clicked"/>
-      </setting_action_row>
-    </beta_feature>
+    <!-- Console / G-code Terminal -->
+    <setting_action_row name="row_console"
+                        label="G-code Console" label_tag="G-code Console" icon="console"
+                        description="Send commands directly to printer"
+                        description_tag="Send commands directly to printer">
+      <event_cb trigger="clicked" callback="on_console_row_clicked"/>
+    </setting_action_row>
     <!-- Print History -->
     <setting_action_row name="row_print_history"
                         label="Print History" label_tag="Print History" icon="clock"

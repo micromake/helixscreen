@@ -6,7 +6,6 @@
 #include "ui_callback_helpers.h"
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
-#include "ui_keyboard_manager.h"
 #include "ui_notification.h"
 #include "ui_subject_registry.h"
 #include "ui_update_queue.h"
@@ -917,8 +916,7 @@ lv_obj_t* WizardConnectionStep::create(lv_obj_t* parent) {
             spdlog::debug("[{}] Pre-filled IP input: {}", get_name(), ip_text);
         }
         lv_obj_add_event_cb(ip_input, on_ip_input_changed_static, LV_EVENT_VALUE_CHANGED, this);
-        KeyboardManager::instance().register_textarea(ip_input);
-        spdlog::debug("[{}] IP input configured with keyboard", get_name());
+        spdlog::debug("[{}] IP input configured", get_name());
     }
 
     lv_obj_t* port_input = lv_obj_find_by_name(screen_root_, "port_input");
@@ -933,8 +931,7 @@ lv_obj_t* WizardConnectionStep::create(lv_obj_t* parent) {
             spdlog::debug("[{}] Pre-filled port input: {}", get_name(), port_text);
         }
         lv_obj_add_event_cb(port_input, on_port_input_changed_static, LV_EVENT_VALUE_CHANGED, this);
-        KeyboardManager::instance().register_textarea(port_input);
-        spdlog::debug("[{}] Port input configured with keyboard", get_name());
+        spdlog::debug("[{}] Port input configured", get_name());
     }
 
     lv_obj_update_layout(screen_root_);

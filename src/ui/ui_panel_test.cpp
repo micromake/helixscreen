@@ -3,8 +3,6 @@
 
 #include "ui_panel_test.h"
 
-#include "ui_keyboard_manager.h"
-
 #include "app_globals.h"
 #include "lv_markdown.h"
 #include "printer_state.h"
@@ -54,13 +52,6 @@ void TestPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
 
     // Populate diagnostic labels
     populate_labels();
-
-    // Register keyboard for textarea
-    lv_obj_t* keyboard_textarea = lv_obj_find_by_name(panel_, "keyboard_test_textarea");
-    if (keyboard_textarea) {
-        KeyboardManager::instance().register_textarea(keyboard_textarea);
-        spdlog::info("[{}] Registered keyboard for textarea", get_name());
-    }
 
     // Populate markdown viewer with sample content exercising all elements
     populate_markdown();

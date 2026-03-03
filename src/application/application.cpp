@@ -288,10 +288,11 @@ int Application::run(int argc, char** argv) {
         }
 
         if (recent_timestamps.size() >= MAX_CRASH_RESTARTS) {
-            spdlog::warn("[Application] Crash loop detected: {} restarts within {}s, "
-                         "resetting counter",
-                         recent_timestamps.size(), CRASH_WINDOW_SEC);
+            spdlog::error("[Application] Crash loop detected: {} restarts within {}s — "
+                          "halting to prevent infinite restart loop",
+                          recent_timestamps.size(), CRASH_WINDOW_SEC);
             std::filesystem::remove(CRASH_MARKER_PATH);
+            return 1;
         } else {
             // Write filtered timestamps plus current restart
             std::ofstream out(CRASH_MARKER_PATH, std::ios::trunc);
@@ -921,6 +922,8 @@ bool Application::init_theme() {
 
 bool Application::init_assets() {
     AssetManager::register_all();
+
+    // TJPGD (built-in JPEG decoder) is auto-initialized by LVGL when LV_USE_TJPGD=1
     spdlog::debug("[Application] Assets registered");
     helix::MemoryMonitor::log_now("after_fonts_loaded");
     return true;
@@ -980,7 +983,17 @@ void Application::run_rotation_probe_and_layout() {
                 m_config->set("/display/rotation_probed", true);
                 m_config->save();
             } else {
-                // kernel_orientation == -1: not detected, run interactive probe
+                // kernel_orientation == -1: not detected, run interactive probe.
+                // Dismiss splash first — the probe renders full-screen UI to the
+                // framebuffer, which is invisible while the splash process is
+                // painting over it and the flush callback is suppressed.
+                if (!m_splash_manager.has_exited()) {
+                    spdlog::info("[Application] Dismissing splash for rotation probe");
+                    m_splash_manager.on_discovery_complete();
+                    m_splash_manager.check_and_signal();
+                    restore_flush_callback();
+                    lv_display_enable_invalidation(nullptr, true);
+                }
                 m_display->run_rotation_probe();
                 m_screen_width = m_display->width();
                 m_screen_height = m_display->height();
@@ -2428,7 +2441,12 @@ void Application::handle_keyboard_shortcuts() {
         // S key - take screenshot
         shortcuts.register_key(SDL_SCANCODE_S, []() {
             spdlog::info("[Application] S key - taking screenshot");
-            helix::save_screenshot();
+            auto path = helix::save_screenshot();
+            if (!path.empty()) {
+                auto basename = path.substr(path.rfind('/') + 1);
+                auto msg = "Screenshot " + basename + " taken!";
+                ToastManager::instance().show(ToastSeverity::SUCCESS, msg.c_str(), 3000);
+            }
         });
 
         // M key - toggle memory stats

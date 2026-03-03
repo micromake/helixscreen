@@ -82,15 +82,15 @@
       </lv_obj>
       <!-- Klipper Version -->
       <setting_info_row name="row_klipper" label="Klipper" label_tag="Klipper" icon="toy_brick_outline">
-        <text_muted name="value" text="—"/>
+        <text_muted name="value" bind_text="klipper_version"/>
       </setting_info_row>
       <!-- Moonraker Version -->
       <setting_info_row name="row_moonraker" label="Moonraker" label_tag="Moonraker" icon="toy_brick_outline">
-        <text_muted name="value" text="—"/>
+        <text_muted name="value" bind_text="moonraker_version"/>
       </setting_info_row>
       <!-- OS Version -->
       <setting_info_row name="row_os" label="OS" label_tag="OS" icon="console">
-        <text_muted name="value" text="—"/>
+        <text_muted name="value" bind_text="os_version"/>
       </setting_info_row>
       <!-- Total Print Hours (opens history dashboard) -->
       <setting_action_row name="row_print_hours"

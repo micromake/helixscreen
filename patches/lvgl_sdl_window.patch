@@ -1,5 +1,5 @@
 diff --git a/src/drivers/sdl/lv_sdl_window.c b/src/drivers/sdl/lv_sdl_window.c
-index 15a87ab12..20bef5b33 100644
+index 15a87ab12..28fbcd0ca 100644
 --- a/src/drivers/sdl/lv_sdl_window.c
 +++ b/src/drivers/sdl/lv_sdl_window.c
 @@ -21,6 +21,10 @@
@@ -13,7 +13,31 @@ index 15a87ab12..20bef5b33 100644
  #if LV_COLOR_DEPTH == 1 && LV_SDL_RENDER_MODE != LV_DISPLAY_RENDER_MODE_PARTIAL
      #error SDL LV_COLOR_DEPTH 1 requires LV_SDL_RENDER_MODE LV_DISPLAY_RENDER_MODE_PARTIAL
  #endif
-@@ -122,7 +126,13 @@ void lv_sdl_window_set_zoom(lv_display_t * disp, float zoom)
+@@ -83,6 +87,13 @@ lv_display_t * lv_sdl_window_create(int32_t hor_res, int32_t ver_res)
+         return NULL;
+     }
+     lv_display_set_driver_data(disp, dsc);
++
++    /*Register callbacks before window_create() so that Android display
++     *scaling (which calls lv_display_set_resolution inside window_create)
++     *triggers res_chg_event_cb and properly resizes the texture/framebuffer.*/
++    lv_display_add_event_cb(disp, release_disp_cb, LV_EVENT_DELETE, disp);
++    lv_display_add_event_cb(disp, res_chg_event_cb, LV_EVENT_RESOLUTION_CHANGED, NULL);
++
+     lv_result_t res = window_create(disp);
+     if(res != LV_RESULT_OK) {
+         LV_LOG_ERROR("Failed to initialize window");
+@@ -91,9 +102,6 @@ lv_display_t * lv_sdl_window_create(int32_t hor_res, int32_t ver_res)
+         return NULL;
+     }
+ 
+-    lv_display_add_event_cb(disp, release_disp_cb, LV_EVENT_DELETE, disp);
+-    lv_display_add_event_cb(disp, res_chg_event_cb, LV_EVENT_RESOLUTION_CHANGED, NULL);
+-
+     /*Process the initial events*/
+     sdl_event_handler(NULL);
+ 
+@@ -122,7 +130,13 @@ void lv_sdl_window_set_zoom(lv_display_t * disp, float zoom)
  
  float lv_sdl_window_get_zoom(lv_display_t * disp)
  {
@@ -27,7 +51,7 @@ index 15a87ab12..20bef5b33 100644
      return dsc->zoom;
  }
  
-@@ -256,12 +266,18 @@ static void sdl_event_handler(lv_timer_t * t)
+@@ -256,12 +270,18 @@ static void sdl_event_handler(lv_timer_t * t)
                      lv_sdl_backend_ops.redraw(disp);
                      break;
                  case SDL_WINDOWEVENT_RESIZED:
@@ -46,7 +70,7 @@ index 15a87ab12..20bef5b33 100644
                      break;
                  case SDL_WINDOWEVENT_CLOSE:
                      lv_display_delete(disp);
-@@ -271,9 +287,10 @@ static void sdl_event_handler(lv_timer_t * t)
+@@ -271,9 +291,10 @@ static void sdl_event_handler(lv_timer_t * t)
              }
          }
          if(event.type == SDL_QUIT) {
@@ -60,7 +84,7 @@ index 15a87ab12..20bef5b33 100644
  #if LV_SDL_DIRECT_EXIT
              exit(0);
  #endif
-@@ -294,12 +311,69 @@ static lv_result_t window_create(lv_display_t * disp)
+@@ -294,12 +315,69 @@ static lv_result_t window_create(lv_display_t * disp)
  #if LV_SDL_FULLSCREEN
      flag |= SDL_WINDOW_FULLSCREEN;
  #endif
@@ -132,7 +156,7 @@ index 15a87ab12..20bef5b33 100644
      if(!dsc->window) {
          LV_LOG_ERROR("Failed to create SDL window");
          return LV_RESULT_INVALID;
-@@ -310,8 +384,59 @@ static lv_result_t window_create(lv_display_t * disp)
+@@ -310,8 +388,59 @@ static lv_result_t window_create(lv_display_t * disp)
          return LV_RESULT_INVALID;
      }
  

@@ -5,6 +5,7 @@
 
 #include "theme_manager.h"
 
+#include <cstdlib>
 #include <spdlog/spdlog.h>
 
 namespace helix::ui {
@@ -213,17 +214,21 @@ void ActionPromptModal::create_button(const PromptButton& btn, lv_obj_t* contain
     lv_obj_set_style_border_width(button, 0, LV_PART_MAIN);
     lv_obj_set_style_shadow_width(button, 0, LV_PART_MAIN);
 
-    // Apply button color based on color hint
+    // Apply button color: hex_color takes priority over named color hint
     lv_color_t bg_color = get_button_color(btn.color);
+    if (!btn.hex_color.empty()) {
+        uint32_t hex_val = std::strtoul(btn.hex_color.c_str(), nullptr, 16);
+        bg_color = lv_color_hex(hex_val);
+    }
     lv_obj_set_style_bg_color(button, bg_color, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(button, LV_OPA_COVER, LV_PART_MAIN);
 
-    // Create label inside button
+    // Create label inside button with contrast-aware text color
     lv_obj_t* label = lv_label_create(button);
     lv_label_set_text(label, btn.label.c_str());
     lv_obj_center(label);
     lv_obj_set_style_text_font(label, theme_manager_get_font("font_body"), LV_PART_MAIN);
-    lv_obj_set_style_text_color(label, theme_manager_get_color("text"), LV_PART_MAIN);
+    lv_obj_set_style_text_color(label, theme_manager_get_contrast_color(bg_color), LV_PART_MAIN);
 
     // Create callback data with owned copy of gcode string and alive flag
     auto cbd = std::make_unique<ButtonCallbackData>();

@@ -11,8 +11,6 @@
 #include <string>
 #include <vector>
 
-class FanDial;
-
 namespace helix {
 class PrinterState;
 
@@ -80,11 +78,14 @@ class FanStackWidget : public PanelWidget {
 
     bool animations_enabled_ = false;
 
-    // Carousel mode: one observer per fan dial (not limited to 3 slots)
+    // Carousel mode: per-page tracking for arc + label + icon updates
+    struct CarouselPage {
+        lv_obj_t* arc = nullptr;
+        lv_obj_t* speed_label = nullptr;
+        lv_obj_t* fan_icon = nullptr;
+    };
+    std::vector<CarouselPage> carousel_pages_;
     std::vector<ObserverGuard> carousel_observers_;
-
-    // Carousel mode: owned FanDial instances
-    std::vector<std::unique_ptr<FanDial>> fan_dials_;
 
     bool is_carousel_mode() const;
     void attach_stack(lv_obj_t* widget_obj);
@@ -97,14 +98,6 @@ class FanStackWidget : public PanelWidget {
     void update_fan_animation(lv_obj_t* icon, int speed_pct);
     void refresh_all_animations();
 
-    /// Stop any running spin animation on an icon
-    static void stop_spin(lv_obj_t* icon);
-
-    /// Start continuous spin animation scaled to fan speed
-    static void start_spin(lv_obj_t* icon, int speed_pct);
-
-    /// LVGL animation exec callback for rotation
-    static void spin_anim_cb(void* var, int32_t value);
 };
 
 } // namespace helix

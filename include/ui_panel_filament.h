@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "active_material_provider.h"
 #include "ui_ams_edit_modal.h"
 #include "ui_observer_guard.h"
 #include "ui_panel_base.h"
@@ -209,6 +210,10 @@ class FilamentPanel : public PanelBase {
     // Purge amount state
     int purge_amount_ = 10; // Default 10mm
 
+    // Preset button temperature label subjects (e.g., "210°C / 60°C")
+    lv_subject_t preset_temps_subjects_[4];
+    char preset_temps_bufs_[4][24];
+
     // Subject storage buffers
     char temp_display_buf_[32];
     char status_buf_[64];
@@ -244,6 +249,13 @@ class FilamentPanel : public PanelBase {
     lv_obj_t* safety_warning_ = nullptr;
     lv_obj_t* status_icon_ = nullptr;
     lv_obj_t* preset_buttons_[4] = {nullptr};
+
+    // Dynamic spool preset button (shown when active material != standard preset)
+    lv_obj_t* spool_preset_row_ = nullptr;
+    lv_obj_t* spool_preset_button_ = nullptr;
+    lv_obj_t* spool_preset_label_ = nullptr;
+    lv_obj_t* spool_preset_temps_ = nullptr;
+    std::optional<helix::ActiveMaterial> cached_active_material_;
 
     // Temperature labels for color updates (4-state heating color)
     lv_obj_t* nozzle_current_label_ = nullptr;
@@ -303,6 +315,7 @@ class FilamentPanel : public PanelBase {
     void update_warning_text();
     void update_safety_state();
     void update_preset_buttons_visual();
+    void update_preset_button_temps();   ///< Update preset button labels from filament DB
     void check_and_auto_select_preset(); ///< Auto-select preset if targets match
     void update_all_temps();             ///< Unified handler for temp observer bundle
 
@@ -311,6 +324,8 @@ class FilamentPanel : public PanelBase {
     //
 
     void handle_preset_button(int material_id);
+    void handle_spool_preset_button();
+    void update_spool_preset();
     void handle_nozzle_temp_tap();
     void handle_bed_temp_tap();
     void handle_custom_nozzle_confirmed(float value);
@@ -351,6 +366,7 @@ class FilamentPanel : public PanelBase {
     static void on_preset_petg_clicked(lv_event_t* e);
     static void on_preset_abs_clicked(lv_event_t* e);
     static void on_preset_tpu_clicked(lv_event_t* e);
+    static void on_preset_spool_clicked(lv_event_t* e);
 
     // Temperature tap callbacks (XML event_cb)
     static void on_nozzle_temp_tap_clicked(lv_event_t* e);

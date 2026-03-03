@@ -841,12 +841,24 @@
 #define LV_USE_BMP 0
 
 /* JPG + split JPG decoder library.
- * Split JPG is a custom format optimized for embedded systems. */
-#define LV_USE_TJPGD 0
+ * LVGL's built-in JPEG decoder — no external dependencies. */
+#define LV_USE_TJPGD 1
 
 /* libjpeg-turbo decoder library.
- * Supports complete JPEG specifications and high-performance JPEG decoding. */
+ * Disabled — we use TJPGD (built-in) for LVGL image decoding and
+ * stb_image (lib/stb) for camera JPEG frames. No external deps needed. */
 #define LV_USE_LIBJPEG_TURBO 0
+
+/* Camera support — enabled on platforms with networking and enough RAM.
+ * Camera uses stb_image for JPEG decoding (header-only, zero deps). */
+#if !defined(HELIX_PLATFORM_AD5M) && !defined(HELIX_PLATFORM_CC1) && \
+    !defined(HELIX_PLATFORM_MIPS) && !defined(HELIX_PLATFORM_K1) && \
+    !defined(HELIX_PLATFORM_AD5X) && !defined(HELIX_PLATFORM_K2) && \
+    !defined(HELIX_PLATFORM_SNAPMAKER_U1)
+#define HELIX_HAS_CAMERA 1
+#else
+#define HELIX_HAS_CAMERA 0
+#endif
 
 /*GIF decoder library*/
 #define LV_USE_GIF 0

@@ -613,36 +613,41 @@ void InputShaperPanel::start_calibration(char axis) {
     calibrator_->run_calibration(
         axis,
         [this, alive](int percent) {
-            if (!alive->load())
-                return;
-            lv_subject_set_int(&is_measuring_progress_, percent);
-            // Update step label with progress text
-            if (percent < 55) {
-                snprintf(is_measuring_step_label_buf_, sizeof(is_measuring_step_label_buf_),
-                         "Measuring vibrations... %d%%", percent);
-            } else if (percent < 100) {
-                snprintf(is_measuring_step_label_buf_, sizeof(is_measuring_step_label_buf_),
-                         "Analyzing data... %d%%", percent);
-            } else {
-                if (calibrate_all_mode_ && current_axis_ == 'X') {
+            helix::ui::queue_update([this, alive, percent]() {
+                if (!alive->load())
+                    return;
+                lv_subject_set_int(&is_measuring_progress_, percent);
+                if (percent < 55) {
                     snprintf(is_measuring_step_label_buf_, sizeof(is_measuring_step_label_buf_),
-                             "X axis done, starting Y...");
+                             "Measuring vibrations... %d%%", percent);
+                } else if (percent < 100) {
+                    snprintf(is_measuring_step_label_buf_, sizeof(is_measuring_step_label_buf_),
+                             "Analyzing data... %d%%", percent);
                 } else {
-                    snprintf(is_measuring_step_label_buf_, sizeof(is_measuring_step_label_buf_),
-                             "Complete");
+                    if (calibrate_all_mode_ && current_axis_ == 'X') {
+                        snprintf(is_measuring_step_label_buf_, sizeof(is_measuring_step_label_buf_),
+                                 "X axis done, starting Y...");
+                    } else {
+                        snprintf(is_measuring_step_label_buf_, sizeof(is_measuring_step_label_buf_),
+                                 "Complete");
+                    }
                 }
-            }
-            lv_subject_copy_string(&is_measuring_step_label_, is_measuring_step_label_buf_);
+                lv_subject_copy_string(&is_measuring_step_label_, is_measuring_step_label_buf_);
+            });
         },
         [this, alive](const InputShaperResult& result) {
-            if (!alive->load())
-                return;
-            on_calibration_result(result);
+            helix::ui::queue_update([this, alive, result]() {
+                if (!alive->load())
+                    return;
+                on_calibration_result(result);
+            });
         },
         [this, alive](const std::string& err) {
-            if (!alive->load())
-                return;
-            on_calibration_error(err);
+            helix::ui::queue_update([this, alive, err]() {
+                if (!alive->load())
+                    return;
+                on_calibration_error(err);
+            });
         });
 }
 
@@ -664,19 +669,24 @@ void InputShaperPanel::measure_noise() {
 
     calibrator_->check_accelerometer(
         [this, alive](float noise_level) {
-            if (!alive->load())
-                return;
-            spdlog::debug("[InputShaper] Accelerometer check complete, noise={:.4f}", noise_level);
-            char msg[64];
-            snprintf(msg, sizeof(msg), "Noise level: %.4f", noise_level);
-            ToastManager::instance().show(ToastSeverity::INFO, msg, 3000);
-            set_state(State::IDLE);
+            helix::ui::queue_update([this, alive, noise_level]() {
+                if (!alive->load())
+                    return;
+                spdlog::debug("[InputShaper] Accelerometer check complete, noise={:.4f}",
+                              noise_level);
+                char msg[64];
+                snprintf(msg, sizeof(msg), "Noise level: %.4f", noise_level);
+                ToastManager::instance().show(ToastSeverity::INFO, msg, 3000);
+                set_state(State::IDLE);
+            });
         },
         [this, alive](const std::string& err) {
-            if (!alive->load())
-                return;
-            spdlog::error("[InputShaper] Failed to measure noise: {}", err);
-            on_calibration_error(err);
+            helix::ui::queue_update([this, alive, err]() {
+                if (!alive->load())
+                    return;
+                spdlog::error("[InputShaper] Failed to measure noise: {}", err);
+                on_calibration_error(err);
+            });
         });
 }
 

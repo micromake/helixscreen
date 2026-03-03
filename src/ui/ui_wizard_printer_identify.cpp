@@ -5,7 +5,6 @@
 
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
-#include "ui_keyboard_manager.h"
 #include "ui_subject_registry.h"
 #include "ui_wizard.h"
 
@@ -443,7 +442,6 @@ lv_obj_t* WizardPrinterIdentifyStep::create(lv_obj_t* parent) {
     if (name_ta) {
         lv_textarea_set_text(name_ta, printer_name_buffer_);
         lv_obj_add_event_cb(name_ta, on_printer_name_changed_static, LV_EVENT_VALUE_CHANGED, this);
-        KeyboardManager::instance().register_textarea(name_ta);
         spdlog::debug("[{}] Name textarea configured (initial: '{}')", get_name(),
                       printer_name_buffer_);
     }

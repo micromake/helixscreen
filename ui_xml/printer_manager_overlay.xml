@@ -59,7 +59,7 @@
           </lv_obj>
           <!-- Hidden text input for name editing (shown when heading is clicked) -->
           <text_input name="pm_printer_name_input"
-                      width="content" height="#input_height" placeholder_text="Printer name" style_text_align="center"
+                      width="100%" height="#input_height" placeholder_text="Printer name" style_text_align="center"
                       hidden="true" one_line="true" scrollbar_mode="off"/>
           <!-- Printer model -->
           <text_muted name="pm_printer_model"

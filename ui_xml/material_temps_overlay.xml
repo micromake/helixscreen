@@ -34,7 +34,7 @@
         <!-- Material name heading -->
         <text_heading name="edit_material_name" bind_text="material_edit_name" style_pad_bottom="#space_sm"/>
         <!-- Default values hint -->
-        <text_small name="edit_defaults_hint" bind_text="material_edit_defaults" style_text_color="#text_secondary" style_pad_bottom="#space_lg"/>
+        <text_small name="edit_defaults_hint" bind_text="material_edit_defaults" style_text_color="#text_muted" style_pad_bottom="#space_lg"/>
         <!-- Nozzle Min / Nozzle Max / Bed Temp (three-column row) -->
         <lv_obj width="100%" flex_flow="row" style_pad_all="0" style_pad_gap="#space_lg" scrollable="false">
           <!-- Nozzle Min column -->

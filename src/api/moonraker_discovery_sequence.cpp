@@ -8,6 +8,7 @@
 #include "app_globals.h"
 #include "helix_version.h"
 #include "led/led_controller.h"
+#include "macro_param_cache.h"
 #include "moonraker_client.h"
 #include "printer_state.h"
 
@@ -26,6 +27,7 @@ void MoonrakerDiscoverySequence::clear_cache() {
     afc_objects_.clear();
     filament_sensors_.clear();
     hardware_ = PrinterDiscovery{};
+    MacroParamCache::instance().clear();
 }
 
 bool MoonrakerDiscoverySequence::is_stale() const {
@@ -242,17 +244,27 @@ void MoonrakerDiscoverySequence::continue_discovery_objects() {
                     "server.webcams.list", json::object(),
                     [](json response) {
                         bool has_webcam = false;
+                        std::string stream_url;
+                        std::string snapshot_url;
+                        bool flip_h = false;
+                        bool flip_v = false;
                         if (response.contains("result") && response["result"].contains("webcams")) {
                             for (const auto& cam : response["result"]["webcams"]) {
                                 if (cam.value("enabled", true)) {
                                     has_webcam = true;
+                                    stream_url = cam.value("stream_url", "");
+                                    snapshot_url = cam.value("snapshot_url", "");
+                                    flip_h = cam.value("flip_horizontal", false);
+                                    flip_v = cam.value("flip_vertical", false);
                                     break;
                                 }
                             }
                         }
-                        spdlog::info("[Moonraker Client] Webcam detection: {}",
-                                     has_webcam ? "found" : "none");
-                        get_printer_state().set_webcam_available(has_webcam);
+                        spdlog::info("[Moonraker Client] Webcam detection: {}{}",
+                                     has_webcam ? "found" : "none",
+                                     has_webcam ? " stream=" + stream_url : "");
+                        get_printer_state().set_webcam_available(has_webcam, stream_url, snapshot_url,
+                                                                 flip_h, flip_v);
                     },
                     [](const MoonrakerError& err) {
                         spdlog::warn("[Moonraker Client] Webcam detection failed: {}", err.message);
@@ -341,6 +353,8 @@ void MoonrakerDiscoverySequence::continue_discovery_objects() {
                                 const auto& cfg =
                                     config_response["result"]["status"]["configfile"]["config"];
                                 hardware_.parse_config_keys(cfg);
+                                MacroParamCache::instance().populate_from_configfile(
+                                    cfg, hardware_.macros());
 
                                 // Update LED controller with configfile data (effect targets +
                                 // output_pin PWM)
@@ -757,6 +771,10 @@ void MoonrakerDiscoverySequence::parse_objects(const json& objects) {
         else if (name.rfind("temperature_fan ", 0) == 0) {
             sensors_.push_back(name);
             fans_.push_back(name); // Also add to fans for control
+        }
+        // TMC stepper drivers with built-in temperature (tmc2240, tmc5160)
+        else if (name.rfind("tmc2240 ", 0) == 0 || name.rfind("tmc5160 ", 0) == 0) {
+            sensors_.push_back(name);
         }
         // Part cooling fan
         else if (name == "fan") {

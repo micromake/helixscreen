@@ -8,6 +8,7 @@
 #include "ui_nav_manager.h"
 #include "ui_panel_ams.h"
 #include "ui_update_queue.h"
+#include "ui_utils.h"
 
 #include "ams_state.h"
 #include "app_globals.h"
@@ -21,7 +22,6 @@
 
 #include <spdlog/spdlog.h>
 
-#include <functional>
 #include <memory>
 
 using namespace helix;
@@ -37,15 +37,9 @@ static void set_event_bubble_recursive(lv_obj_t* obj) {
     }
 }
 
-/// Recursively remove CLICKABLE flag from all descendants.
-static void disable_widget_clicks_recursive(lv_obj_t* obj) {
-    uint32_t count = lv_obj_get_child_count(obj);
-    for (uint32_t i = 0; i < count; ++i) {
-        lv_obj_t* child = lv_obj_get_child(obj, static_cast<int32_t>(i));
-        lv_obj_remove_flag(child, LV_OBJ_FLAG_CLICKABLE);
-        disable_widget_clicks_recursive(child);
-    }
-}
+// disable_widget_clicks_recursive() and clear_pressed_state_recursive() are in ui_utils.h
+using helix::ui::clear_pressed_state_recursive;
+using helix::ui::disable_widget_clicks_recursive;
 
 HomePanel::HomePanel(PrinterState& printer_state, MoonrakerAPI* api)
     : PanelBase(printer_state, api) {
@@ -111,6 +105,9 @@ void HomePanel::deinit_subjects() {
     // Release gate observers BEFORE subjects are freed
     helix::PanelWidgetManager::instance().clear_gate_observers("home");
 
+    // Clear cached widget IDs so reconnects get a fresh rebuild
+    last_visible_widget_ids_.clear();
+
     // SubjectManager handles all lv_subject_deinit() calls via RAII
     subjects_.deinit_all();
     subjects_initialized_ = false;
@@ -119,10 +116,22 @@ void HomePanel::deinit_subjects() {
 
 void HomePanel::setup_widget_gate_observers() {
     auto& mgr = helix::PanelWidgetManager::instance();
-    mgr.setup_gate_observers("home", [this]() { populate_widgets(); });
+    // Gate observer rebuilds are the only path that benefits from the
+    // skip-if-unchanged optimization. Config changes and grid edit mode
+    // always need a real rebuild (positions/config may change without
+    // changing the widget ID list).
+    mgr.setup_gate_observers("home", [this]() {
+        // Skip gate-triggered rebuilds during edit mode — lv_obj_clean would
+        // destroy overlay objects whose pointers GridEditMode still holds.
+        if (grid_edit_mode_.is_active()) {
+            spdlog::debug("[{}] Skipping gate rebuild during edit mode", get_name());
+            return;
+        }
+        populate_widgets(/*force=*/false);
+    });
 }
 
-void HomePanel::populate_widgets() {
+void HomePanel::populate_widgets(bool force) {
     if (populating_widgets_) {
         spdlog::debug("[{}] populate_widgets: already in progress, skipping", get_name());
         return;
@@ -136,9 +145,28 @@ void HomePanel::populate_widgets() {
         return;
     }
 
-    // Detach active PanelWidget instances before clearing
+    // Skip rebuild if the resulting widget list would be identical.
+    // Only applies to gate observer rebuilds (force=false). Config changes
+    // and grid edit mode pass force=true to always rebuild, since positions
+    // and per-widget config can change without affecting the widget ID list.
+    if (!force) {
+        auto new_ids = helix::PanelWidgetManager::instance().compute_visible_widget_ids("home");
+        if (new_ids == last_visible_widget_ids_) {
+            spdlog::debug("[{}] Widget list unchanged, skipping rebuild", get_name());
+            populating_widgets_ = false;
+            return;
+        }
+    }
+
+    // Extract reusable widget instances before destroying the rest.
+    // Widgets that support reuse (e.g. CameraWidget) keep expensive C++ state
+    // (camera stream) alive across LVGL tree rebuilds.
+    helix::WidgetReuseMap reuse;
     for (auto& w : active_widgets_) {
         w->detach();
+        if (w->supports_reuse()) {
+            reuse[w->id()] = std::move(w);
+        }
     }
 
     // Flush any deferred observer callbacks that captured raw widget pointers.
@@ -150,11 +178,14 @@ void HomePanel::populate_widgets() {
     helix::ui::UpdateQueue::instance().drain();
 
     // Destroy LVGL children BEFORE destroying C++ widget instances.
+    // Must happen here (not in the manager) to ensure correct ordering:
+    // drain → clean LVGL → clear C++. Manager's lv_obj_clean is a no-op.
     lv_obj_clean(container);
     active_widgets_.clear();
 
-    // Delegate generic widget creation to the manager
-    active_widgets_ = helix::PanelWidgetManager::instance().populate_widgets("home", container);
+    // Delegate generic widget creation to the manager, passing reusable instances
+    active_widgets_ =
+        helix::PanelWidgetManager::instance().populate_widgets("home", container, std::move(reuse));
 
     // Enable event bubbling on the entire widget subtree so touch events
     // (long_press, click, etc.) propagate from deeply-nested clickable
@@ -167,6 +198,19 @@ void HomePanel::populate_widgets() {
     if (grid_edit_mode_.is_active()) {
         disable_widget_clicks_recursive(container);
     }
+
+    // If the panel is already active (rebuild triggered by gate observer or
+    // settings change), activate the new widgets so timers/observers start.
+    if (panel_active_) {
+        for (auto& w : active_widgets_) {
+            w->on_activate();
+        }
+    }
+
+    // Cache the visible widget IDs AFTER successful rebuild so that
+    // gate observer rebuilds can skip if the list hasn't changed.
+    last_visible_widget_ids_ =
+        helix::PanelWidgetManager::instance().compute_visible_widget_ids("home");
 
     populating_widgets_ = false;
 }
@@ -190,8 +234,16 @@ void HomePanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
     setup_widget_gate_observers();
 
     // Register rebuild callback so settings overlay toggle changes take effect immediately
-    helix::PanelWidgetManager::instance().register_rebuild_callback(
-        "home", [this]() { populate_widgets(); });
+    helix::PanelWidgetManager::instance().register_rebuild_callback("home", [this]() {
+        if (grid_edit_mode_.is_active()) {
+            spdlog::debug("[{}] Skipping settings rebuild during edit mode", get_name());
+            return;
+        }
+        populate_widgets();
+    });
+
+    // Set grid edit mode rebuild callback once (used when edit mode rearranges widgets)
+    grid_edit_mode_.set_rebuild_callback([this]() { populate_widgets(); });
 
     // Widgets handle their own initialization via version observers
     // (no explicit config reload needed)
@@ -200,6 +252,8 @@ void HomePanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
 }
 
 void HomePanel::on_activate() {
+    panel_active_ = true;
+
     // Notify all widgets that the panel is visible
     for (auto& w : active_widgets_) {
         w->on_activate();
@@ -210,6 +264,7 @@ void HomePanel::on_activate() {
 }
 
 void HomePanel::on_deactivate() {
+    panel_active_ = false;
     // Exit grid edit mode if active, UNLESS the widget catalog overlay is open
     // (push_overlay triggers on_deactivate, but edit mode must survive)
     if (grid_edit_mode_.is_active() && !grid_edit_mode_.is_catalog_open()) {
@@ -278,7 +333,6 @@ void HomePanel::handle_ams_clicked() {
 void HomePanel::printer_status_clicked_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[HomePanel] printer_status_clicked_cb");
     (void)e;
-    extern HomePanel& get_global_home_panel();
     get_global_home_panel().handle_printer_status_clicked();
     LVGL_SAFE_EVENT_CB_END();
 }
@@ -286,56 +340,56 @@ void HomePanel::printer_status_clicked_cb(lv_event_t* e) {
 void HomePanel::ams_clicked_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[HomePanel] ams_clicked_cb");
     (void)e;
-    extern HomePanel& get_global_home_panel();
     get_global_home_panel().handle_ams_clicked();
     LVGL_SAFE_EVENT_CB_END();
 }
 
+/// Returns true if the active input device is currently scrolling an object
+/// (e.g., user is swiping a carousel). Used to suppress edit mode interactions
+/// during drag/swipe gestures — LVGL fires LONG_PRESSED, PRESSING, etc.
+/// based purely on hold duration, regardless of finger movement.
+static bool is_indev_scrolling() {
+    lv_indev_t* indev = lv_indev_active();
+    return indev && lv_indev_get_scroll_obj(indev);
+}
+
 void HomePanel::on_home_grid_long_press(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[HomePanel] on_home_grid_long_press");
-    extern HomePanel& get_global_home_panel();
-    auto& panel = get_global_home_panel();
-    if (!panel.grid_edit_mode_.is_active()) {
-        // Cancel the in-progress press to prevent the widget's click action
-        // from firing on release. Also clears PRESSED state from tracked objects.
-        lv_indev_t* indev = lv_indev_active();
-        if (indev) {
-            lv_indev_reset(indev, nullptr);
-        }
-        // Clear PRESSED state from all descendants — the pressed button
-        // may be deeply nested inside a widget (e.g., print_status card).
-        auto* wc = lv_obj_find_by_name(panel.panel_, "widget_container");
-        if (wc) {
-            std::function<void(lv_obj_t*)> clear_pressed = [&](lv_obj_t* obj) {
-                lv_obj_remove_state(obj, LV_STATE_PRESSED);
-                uint32_t count = lv_obj_get_child_count(obj);
-                for (uint32_t i = 0; i < count; ++i) {
-                    clear_pressed(lv_obj_get_child(obj, static_cast<int32_t>(i)));
-                }
-            };
-            clear_pressed(wc);
-        }
 
-        // Enter edit mode on first long-press
-        auto* container = lv_obj_find_by_name(panel.panel_, "widget_container");
-        auto& config = helix::PanelWidgetManager::instance().get_widget_config("home");
-        panel.grid_edit_mode_.set_rebuild_callback([&panel]() { panel.populate_widgets(); });
-        panel.grid_edit_mode_.enter(container, &config);
-        // Select the widget under the finger and start dragging immediately.
-        panel.grid_edit_mode_.handle_click(e);
-        if (panel.grid_edit_mode_.selected_widget()) {
-            panel.grid_edit_mode_.handle_drag_start(e);
+    // A drag/swipe should never trigger or interact with edit mode.
+    // LVGL fires LONG_PRESSED based purely on hold duration, regardless
+    // of finger movement, so we must explicitly check for scroll state.
+    if (!is_indev_scrolling()) {
+        auto& panel = get_global_home_panel();
+        if (!panel.grid_edit_mode_.is_active()) {
+            // Cancel the in-progress press to prevent the widget's click
+            // action from firing on release.
+            lv_indev_t* indev = lv_indev_active();
+            if (indev) lv_indev_reset(indev, nullptr);
+
+            // Clear PRESSED state from all descendants — the pressed button
+            // may be deeply nested inside a widget (e.g., print_status card).
+            auto* container = lv_obj_find_by_name(panel.panel_, "widget_container");
+            clear_pressed_state_recursive(container);
+
+            // Enter edit mode on first long-press
+            auto& config = helix::PanelWidgetManager::instance().get_widget_config("home");
+            panel.grid_edit_mode_.enter(container, &config);
+            // Select the widget under the finger and start dragging immediately.
+            panel.grid_edit_mode_.handle_click(e);
+            if (panel.grid_edit_mode_.selected_widget()) {
+                panel.grid_edit_mode_.handle_drag_start(e);
+            }
+        } else {
+            // Already in edit mode — start drag if a widget is selected
+            panel.grid_edit_mode_.handle_long_press(e);
         }
-    } else {
-        // Already in edit mode — start drag if a widget is selected
-        panel.grid_edit_mode_.handle_long_press(e);
     }
     LVGL_SAFE_EVENT_CB_END();
 }
 
 void HomePanel::on_home_grid_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[HomePanel] on_home_grid_clicked");
-    extern HomePanel& get_global_home_panel();
     auto& panel = get_global_home_panel();
     if (panel.grid_edit_mode_.is_active()) {
         panel.grid_edit_mode_.handle_click(e);
@@ -345,20 +399,22 @@ void HomePanel::on_home_grid_clicked(lv_event_t* e) {
 
 void HomePanel::on_home_grid_pressing(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[HomePanel] on_home_grid_pressing");
-    extern HomePanel& get_global_home_panel();
-    auto& panel = get_global_home_panel();
-    if (panel.grid_edit_mode_.is_active()) {
-        panel.grid_edit_mode_.handle_pressing(e);
+    if (!is_indev_scrolling()) {
+        auto& panel = get_global_home_panel();
+        if (panel.grid_edit_mode_.is_active()) {
+            panel.grid_edit_mode_.handle_pressing(e);
+        }
     }
     LVGL_SAFE_EVENT_CB_END();
 }
 
 void HomePanel::on_home_grid_released(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[HomePanel] on_home_grid_released");
-    extern HomePanel& get_global_home_panel();
-    auto& panel = get_global_home_panel();
-    if (panel.grid_edit_mode_.is_active()) {
-        panel.grid_edit_mode_.handle_released(e);
+    if (!is_indev_scrolling()) {
+        auto& panel = get_global_home_panel();
+        if (panel.grid_edit_mode_.is_active()) {
+            panel.grid_edit_mode_.handle_released(e);
+        }
     }
     LVGL_SAFE_EVENT_CB_END();
 }

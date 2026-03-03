@@ -1,0 +1,49 @@
+diff --git a/src/drivers/evdev/lv_evdev.c b/src/drivers/evdev/lv_evdev.c
+index 1b8319e04..d656a9fe8 100644
+--- a/src/drivers/evdev/lv_evdev.c
++++ b/src/drivers/evdev/lv_evdev.c
+@@ -251,10 +251,24 @@ static void _evdev_read(lv_indev_t * indev, lv_indev_data_t * data)
+         }
+ #if LV_USE_GESTURE_RECOGNITION
+         else if(in.type == EV_SYN && in.code == SYN_REPORT) {
++            /* Protocol-A release: BTN_TOUCH=0 arrived without ABS_MT_TRACKING_ID=-1.
++             * Synthesise RELEASED for pressed slots so gesture recogniser and
++             * pointer output both observe the lift. Protocol-B is unaffected:
++             * TRACKING_ID=-1 already sets touch_data_changed=true. */
++            if(dsc->state == LV_INDEV_STATE_RELEASED && !dsc->touch_data_changed) {
++                for(int i = 0; i < dsc->touch_count; i++) {
++                    if(dsc->touch_data[i].state == LV_INDEV_STATE_PRESSED) {
++                        dsc->touch_data[i].state = LV_INDEV_STATE_RELEASED;
++                        dsc->touch_data_changed = true;
++                        LV_LOG_TRACE("evdev: Protocol-A release synthesised for slot %d", i);
++                    }
++                }
++            }
++
+             /* Handle gesture recognition at sync event */
+-            if(dsc->touch_count > 0 && dsc->touch_data_changed) {
++            if(dsc->touch_data_changed) {
+                 LV_LOG_TRACE("=== SYN_REPORT: touch_count=%d ===", dsc->touch_count);
+-                for(int i = 0; i < MAX_TOUCH_POINTS; i++) {
++                for(int i = 0; i < dsc->touch_count; i++) {
+                     if(dsc->touch_data[i].state == LV_INDEV_STATE_PRESSED || dsc->touch_data[i].state == LV_INDEV_STATE_RELEASED) {
+                         LV_LOG_TRACE("Slot %d: state=%s, raw(%d, %d)",
+                                      i,
+@@ -268,7 +282,7 @@ static void _evdev_read(lv_indev_t * indev, lv_indev_data_t * data)
+ 
+                 int active_touches = 0;
+ 
+-                for(int i = 0; i < MAX_TOUCH_POINTS; i++) {
++                for(int i = 0; i < dsc->touch_count; i++) {
+                     if(dsc->touch_data[i].state == LV_INDEV_STATE_PRESSED || dsc->touch_data[i].state == LV_INDEV_STATE_RELEASED) {
+                         calibrated_touch_data[active_touches] = dsc->touch_data[i];
+ 
+@@ -289,7 +303,7 @@ static void _evdev_read(lv_indev_t * indev, lv_indev_data_t * data)
+                 lv_indev_gesture_recognizers_set_data(indev, data);
+ 
+                 /* Clear RELEASED touch points after gesture recognition to prevent duplicate processing */
+-                for(int i = 0; i < MAX_TOUCH_POINTS; i++) {
++                for(int i = 0; i < dsc->touch_count; i++) {
+                     if(dsc->touch_data[i].state == LV_INDEV_STATE_RELEASED) {
+                         /* Mark touch point as invalid by zeroing out the data */
+                         dsc->touch_data[i].point.x = 0;

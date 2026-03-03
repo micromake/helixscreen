@@ -277,13 +277,6 @@ void SpoolEditModal::register_textareas() {
         fields[i] = find_widget(field_names[i]);
     }
 
-    // Register each with keyboard manager (sets up auto-show/hide + adds to input group)
-    for (int i = 0; i < num_fields; i++) {
-        if (fields[i]) {
-            KeyboardManager::instance().register_textarea(fields[i]);
-        }
-    }
-
     // Add Enter-to-next-field for single-line fields (not the multiline Notes)
     // LVGL fires LV_EVENT_READY on the textarea when Enter is pressed on a one-line textarea.
     // For multiline textareas, Enter inserts a newline instead (no READY event).

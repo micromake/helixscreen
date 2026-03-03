@@ -41,6 +41,11 @@ WorkingDirectory=@@INSTALL_DIR@@
 # when X11 isn't running (it polls xset, fails, and interprets that as "Off").
 ExecStartPre=+/bin/sh -c 'systemctl stop display-sleep.service 2>/dev/null || true'
 
+# Fix un-substituted polkit template if present (self-heal from broken initial install).
+# The grep/sed patterns use quote-splitting so the installer's own sed pass
+# doesn't substitute them — they must remain literal to match a broken deployed file.
+ExecStartPre=+/bin/sh -c 'u=@@HELIX_USER@@; for f in /etc/polkit-1/localauthority/50-local.d/helixscreen-network.pkla /etc/polkit-1/rules.d/50-helixscreen-network.rules; do [ -f "$$f" ] && grep -q "@@""HELIX_USER""@@" "$$f" 2>/dev/null && sed -i "s|@@""HELIX_USER""@@|$$u|g" "$$f" || true; done'
+
 # Unbind framebuffer console before starting (requires root, runs before User= drop)
 # vtcon1 is the fbcon driver; vtcon0 is the dummy. Unbinding prevents kernel
 # messages (dmesg, undervoltage) from painting over the UI via fbcon.

@@ -14,6 +14,7 @@
 #include "ui_update_queue.h"
 #include "ui_utils.h"
 
+#include "active_material_provider.h"
 #include "app_constants.h"
 #include "app_globals.h"
 #include "filament_database.h"
@@ -596,6 +597,9 @@ void TempControlPanel::setup_panel(HeaterType type, lv_obj_t* panel, lv_obj_t* p
         lv_obj_set_user_data(btn_custom, this);
     }
 
+    // Dynamic spool preset (shown when active material doesn't match standard presets)
+    setup_spool_preset(type, overlay_content);
+
     // Hide presets + custom for read-only chambers (sensor-only, no heater)
     if (h.read_only) {
         lv_obj_t* preset_grid = lv_obj_find_by_name(overlay_content, "preset_grid");
@@ -1012,6 +1016,70 @@ void TempControlPanel::on_bed_preset_abs_clicked(lv_event_t* e) {
     if (self)
         self->send_temperature(HeaterType::Bed,
                                self->heaters_[idx(HeaterType::Bed)].config.presets.abs);
+}
+
+// ============================================================================
+// Spool preset (dynamic button for active spool material)
+// ============================================================================
+
+void TempControlPanel::setup_spool_preset(helix::HeaterType type, lv_obj_t* overlay_content) {
+    // Only nozzle and bed get spool presets (chamber doesn't make sense)
+    if (type != HeaterType::Nozzle && type != HeaterType::Bed)
+        return;
+
+    lv_obj_t* btn = lv_obj_find_by_name(overlay_content, "preset_spool");
+    if (!btn)
+        return;
+
+    auto active = helix::get_active_material();
+    if (!active) {
+        spdlog::debug("[TempPanel] {} spool preset: no active material", heater_label(type));
+        return;
+    }
+
+    // Check if material matches a standard preset (case-insensitive).
+    // Include TPU even though temp panels don't have a TPU button — showing a spool
+    // preset for a well-known material would be confusing.
+    std::string mat_upper = active->material_name;
+    std::transform(mat_upper.begin(), mat_upper.end(), mat_upper.begin(), ::toupper);
+    if (mat_upper == "PLA" || mat_upper == "PETG" || mat_upper == "ABS" || mat_upper == "TPU") {
+        spdlog::debug("[TempPanel] {} spool preset: material '{}' matches standard preset",
+                      heater_label(type), active->material_name);
+        return;
+    }
+
+    // Determine the temperature for this heater type
+    int temp = 0;
+    if (type == HeaterType::Nozzle) {
+        temp = active->material_info.nozzle_recommended();
+    } else {
+        temp = active->material_info.bed_temp;
+    }
+
+    if (temp <= 0) {
+        spdlog::debug("[TempPanel] {} spool preset: material '{}' has no temp for this heater",
+                      heater_label(type), active->material_name);
+        return;
+    }
+
+    // Set up PresetButtonData using the spool_preset_data_ slot
+    auto& data = spool_preset_data_[idx(type)];
+    data = {this, type, temp};
+    lv_obj_set_user_data(btn, &data);
+
+    // Format button label: "MaterialName (Temp°C)".
+    // Using lv_label_set_text directly: text is dynamic (material name + computed temp).
+    auto& buf = spool_preset_label_bufs_[idx(type)];
+    snprintf(buf.data(), buf.size(), "%s (%d°C)", active->display_name.c_str(), temp);
+
+    lv_obj_t* label = lv_obj_find_by_name(btn, "spool_preset_label");
+    if (label) {
+        lv_label_set_text(label, buf.data());
+    }
+
+    lv_obj_remove_flag(btn, LV_OBJ_FLAG_HIDDEN);
+    spdlog::debug("[TempPanel] {} spool preset: '{}' at {}°C", heater_label(type),
+                  active->display_name, temp);
 }
 
 void TempControlPanel::on_nozzle_custom_clicked(lv_event_t* e) {
