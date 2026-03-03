@@ -499,6 +499,7 @@ static void gcode_viewer_draw_cb(lv_event_t* e) {
             lv_obj_t* label_to_delete = st->ghost_progress_label_;
             st->ghost_progress_label_ = nullptr; // Clear reference immediately
             helix::ui::async_call(
+                obj,
                 [](void* user_data) {
                     lv_obj_t* widget = static_cast<lv_obj_t*>(user_data);
                     helix::ui::safe_delete(widget);
