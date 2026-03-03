@@ -162,11 +162,22 @@ class UpdateQueue {
      * Use around drain()+destroy sequences to prevent the WebSocket background
      * thread from queueing new callbacks between drain() and widget destruction.
      * While frozen, queue() silently discards callbacks (same as shut_down_).
+     *
+     * Reference-counted: nested freezes are safe. The queue only unfreezes
+     * when the last ScopedFreeze is destroyed.
      */
     class ScopedFreeze {
     public:
-        explicit ScopedFreeze(UpdateQueue& q) : q_(q) { q_.frozen_.store(true, std::memory_order_relaxed); }
-        ~ScopedFreeze() { q_.frozen_.store(false, std::memory_order_relaxed); }
+        explicit ScopedFreeze(UpdateQueue& q) : q_(q) {
+            if (q_.freeze_depth_.fetch_add(1, std::memory_order_relaxed) == 0) {
+                q_.frozen_.store(true, std::memory_order_relaxed);
+            }
+        }
+        ~ScopedFreeze() {
+            if (q_.freeze_depth_.fetch_sub(1, std::memory_order_relaxed) == 1) {
+                q_.frozen_.store(false, std::memory_order_relaxed);
+            }
+        }
         ScopedFreeze(const ScopedFreeze&) = delete;
         ScopedFreeze& operator=(const ScopedFreeze&) = delete;
     private:
@@ -259,6 +270,7 @@ class UpdateQueue {
     bool initialized_ = false;
     bool shut_down_ = false;
     std::atomic<bool> frozen_{false};
+    std::atomic<int> freeze_depth_{0};
 };
 
 /**

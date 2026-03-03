@@ -43,7 +43,7 @@ class ThermistorConfigFixture {
 TEST_CASE("ThermistorWidget: registered in widget registry", "[thermistor][panel_widget]") {
     const auto* def = find_widget_def("thermistor");
     REQUIRE(def != nullptr);
-    REQUIRE(std::string(def->display_name) == "Thermistor");
+    REQUIRE(std::string(def->display_name) == "Thermistors");
     REQUIRE(std::string(def->icon) == "thermometer");
     REQUIRE(def->hardware_gate_subject != nullptr);
     REQUIRE(std::string(def->hardware_gate_subject) == "temp_sensor_count");
@@ -216,4 +216,200 @@ TEST_CASE_METHOD(helix::ThermistorConfigFixture,
     auto cfg = wc.get_widget_config("thermistor");
     REQUIRE(cfg.is_object());
     REQUIRE(cfg.empty());
+}
+
+// ============================================================================
+// Carousel mode: config backward compatibility
+// ============================================================================
+
+TEST_CASE_METHOD(helix::ThermistorConfigFixture,
+                 "ThermistorWidget: old sensor config round-trips with new format",
+                 "[thermistor][panel_widget][carousel]") {
+    // Old format: {"sensor": "temperature_sensor mcu_temp"}
+    json widgets = json::array({
+        {{"id", "thermistor"},
+         {"enabled", true},
+         {"config", {{"sensor", "temperature_sensor mcu_temp"}}},
+         {"col", 0},
+         {"row", 0}},
+    });
+    setup_with_widgets(widgets);
+
+    PanelWidgetConfig wc("home", config);
+    wc.load();
+
+    auto cfg = wc.get_widget_config("thermistor");
+    REQUIRE(cfg.contains("sensor"));
+    REQUIRE(cfg["sensor"].get<std::string>() == "temperature_sensor mcu_temp");
+
+    // Save and reload — old format persists (ThermistorWidget hasn't migrated it yet)
+    wc.save();
+    PanelWidgetConfig wc2("home", config);
+    wc2.load();
+    auto cfg2 = wc2.get_widget_config("thermistor");
+    REQUIRE(cfg2["sensor"].get<std::string>() == "temperature_sensor mcu_temp");
+}
+
+TEST_CASE_METHOD(helix::ThermistorConfigFixture,
+                 "ThermistorWidget: new sensors array config loads correctly",
+                 "[thermistor][panel_widget][carousel]") {
+    json widgets = json::array({
+        {{"id", "thermistor"},
+         {"enabled", true},
+         {"config",
+          {{"sensors", json::array({"temperature_sensor mcu_temp", "temperature_sensor chamber"})},
+           {"display_mode", "carousel"}}},
+         {"col", 0},
+         {"row", 0}},
+    });
+    setup_with_widgets(widgets);
+
+    PanelWidgetConfig wc("home", config);
+    wc.load();
+
+    auto cfg = wc.get_widget_config("thermistor");
+    REQUIRE(cfg.contains("sensors"));
+    REQUIRE(cfg["sensors"].is_array());
+    REQUIRE(cfg["sensors"].size() == 2);
+    REQUIRE(cfg["sensors"][0].get<std::string>() == "temperature_sensor mcu_temp");
+    REQUIRE(cfg["sensors"][1].get<std::string>() == "temperature_sensor chamber");
+    REQUIRE(cfg["display_mode"].get<std::string>() == "carousel");
+}
+
+TEST_CASE_METHOD(helix::ThermistorConfigFixture,
+                 "ThermistorWidget: carousel config round-trips through save/load",
+                 "[thermistor][panel_widget][carousel]") {
+    json widgets = json::array({
+        {{"id", "thermistor"},
+         {"enabled", true},
+         {"config",
+          {{"sensors", json::array({"temperature_sensor mcu_temp", "temperature_sensor chamber"})},
+           {"display_mode", "carousel"}}},
+         {"col", 0},
+         {"row", 0}},
+    });
+    setup_with_widgets(widgets);
+
+    PanelWidgetConfig wc("home", config);
+    wc.load();
+    wc.save();
+
+    PanelWidgetConfig wc2("home", config);
+    wc2.load();
+    auto cfg = wc2.get_widget_config("thermistor");
+    REQUIRE(cfg.contains("sensors"));
+    REQUIRE(cfg["sensors"].size() == 2);
+    REQUIRE(cfg.contains("display_mode"));
+    REQUIRE(cfg["display_mode"].get<std::string>() == "carousel");
+}
+
+TEST_CASE_METHOD(helix::ThermistorConfigFixture,
+                 "ThermistorWidget: config with both old and new format prefers new",
+                 "[thermistor][panel_widget][carousel]") {
+    // Config has both "sensor" (old) and "sensors" (new) — new takes precedence
+    json widgets = json::array({
+        {{"id", "thermistor"},
+         {"enabled", true},
+         {"config",
+          {{"sensor", "temperature_sensor old"},
+           {"sensors", json::array({"temperature_sensor new1", "temperature_sensor new2"})}}},
+         {"col", 0},
+         {"row", 0}},
+    });
+    setup_with_widgets(widgets);
+
+    PanelWidgetConfig wc("home", config);
+    wc.load();
+
+    auto cfg = wc.get_widget_config("thermistor");
+    // Both fields are present in raw config
+    REQUIRE(cfg.contains("sensor"));
+    REQUIRE(cfg.contains("sensors"));
+    REQUIRE(cfg["sensors"].size() == 2);
+}
+
+TEST_CASE_METHOD(helix::ThermistorConfigFixture,
+                 "ThermistorWidget: single sensor config implies no display_mode",
+                 "[thermistor][panel_widget][carousel]") {
+    // Old-style config with just "sensor" and no "display_mode" — after round-trip,
+    // no display_mode key should appear (single sensor = no carousel)
+    json widgets = json::array({
+        {{"id", "thermistor"},
+         {"enabled", true},
+         {"config", {{"sensor", "temperature_sensor mcu_temp"}}},
+         {"col", 0},
+         {"row", 0}},
+    });
+    setup_with_widgets(widgets);
+
+    PanelWidgetConfig wc("home", config);
+    wc.load();
+    wc.save();
+
+    PanelWidgetConfig wc2("home", config);
+    wc2.load();
+    auto cfg = wc2.get_widget_config("thermistor");
+    REQUIRE(cfg.contains("sensor"));
+    REQUIRE_FALSE(cfg.contains("display_mode"));
+}
+
+TEST_CASE_METHOD(helix::ThermistorConfigFixture,
+                 "ThermistorWidget: empty sensors array round-trips through config",
+                 "[thermistor][panel_widget][carousel]") {
+    // Empty sensors array should be preserved by the config layer
+    // (the widget layer guards against applying empty selection)
+    json widgets = json::array({
+        {{"id", "thermistor"},
+         {"enabled", true},
+         {"config", {{"sensors", json::array()}}},
+         {"col", 0},
+         {"row", 0}},
+    });
+    setup_with_widgets(widgets);
+
+    PanelWidgetConfig wc("home", config);
+    wc.load();
+
+    auto cfg = wc.get_widget_config("thermistor");
+    REQUIRE(cfg.contains("sensors"));
+    REQUIRE(cfg["sensors"].is_array());
+    REQUIRE(cfg["sensors"].empty());
+
+    // Round-trip preserves empty array
+    wc.save();
+    PanelWidgetConfig wc2("home", config);
+    wc2.load();
+    auto cfg2 = wc2.get_widget_config("thermistor");
+    REQUIRE(cfg2.contains("sensors"));
+    REQUIRE(cfg2["sensors"].is_array());
+    REQUIRE(cfg2["sensors"].empty());
+}
+
+TEST_CASE_METHOD(helix::ThermistorConfigFixture,
+                 "ThermistorWidget: display_mode persists through save/load",
+                 "[thermistor][panel_widget][carousel]") {
+    // Config with a single sensor in the array plus display_mode=carousel —
+    // display_mode should persist since PanelWidgetConfig preserves all fields
+    json widgets = json::array({
+        {{"id", "thermistor"},
+         {"enabled", true},
+         {"config",
+          {{"sensors", json::array({"temperature_sensor mcu_temp"})},
+           {"display_mode", "carousel"}}},
+         {"col", 0},
+         {"row", 0}},
+    });
+    setup_with_widgets(widgets);
+
+    PanelWidgetConfig wc("home", config);
+    wc.load();
+    wc.save();
+
+    PanelWidgetConfig wc2("home", config);
+    wc2.load();
+    auto cfg = wc2.get_widget_config("thermistor");
+    REQUIRE(cfg.contains("display_mode"));
+    REQUIRE(cfg["display_mode"].get<std::string>() == "carousel");
+    REQUIRE(cfg.contains("sensors"));
+    REQUIRE(cfg["sensors"].size() == 1);
 }

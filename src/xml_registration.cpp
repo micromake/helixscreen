@@ -322,6 +322,7 @@ void register_xml_components() {
     register_xml("components/panel_widget_width_sensor.xml");
     register_xml("components/panel_widget_filament.xml");
     register_xml("components/panel_widget_thermistor.xml");
+    register_xml("components/panel_widget_thermistor_carousel.xml");
     register_xml("components/panel_widget_fan_stack.xml");
     register_xml("components/panel_widget_fan_carousel.xml");
     register_xml("components/panel_widget_favorite_macro.xml");
@@ -336,6 +337,7 @@ void register_xml_components() {
     register_xml("components/clog_detection_config_modal.xml");
     register_xml("job_queue_modal.xml");
     register_xml("thermistor_sensor_picker.xml");
+    register_xml("thermistor_configure_picker.xml");
     register_xml("favorite_macro_picker.xml");
     register_xml("macro_param_modal.xml");
 
@@ -429,6 +431,7 @@ void register_xml_components() {
     // Settings overlay panels
     register_xml("display_settings_overlay.xml");
 register_xml("sound_settings_overlay.xml");
+    register_xml("label_printer_settings.xml");
     register_xml("led_settings_overlay.xml");
     register_xml("theme_editor_overlay.xml");
     register_xml("theme_preview_overlay.xml");

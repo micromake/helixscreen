@@ -59,7 +59,7 @@ static std::vector<PanelWidgetDef> s_widget_defs = {
     {"filament",         "Filament Sensor",   "filament_alert",   "Filament runout detection status",             "Filament Sensor",  "filament_sensor_count", true, 1, 1, 1, 1, 2, 1},
     {"humidity",         "Humidity",          "water",            "Enclosure humidity sensor readings",           "Humidity",         "humidity_sensor_count", false, 1, 1, 1, 1, 2, 2},
     {"width_sensor",     "Width Sensor",      "ruler",            "Filament width sensor readings",               "Width Sensor",     "width_sensor_count", false, 1, 1, 1, 1, 2, 2},
-    {"thermistor",       "Thermistor",        "thermometer",      "Monitor a custom temperature sensor",          "Thermistor",       "temp_sensor_count",  false, 1, 1, 1, 1, 2, 1},
+    {"thermistor",       "Thermistors",       "thermometer",      "Monitor temperature sensors (single or carousel)", "Thermistors",  "temp_sensor_count",  false, 1, 1, 1, 1, 2, 1},
     // favorite_macro_1..5 generated in init_widget_registrations()
     {"clock",            "Digital Clock",     "clock",            "Current time and date",                       "Digital Clock",    nullptr,              false, 2, 1, 1, 1, 3, 3},
     {"job_queue",        "Job Queue",         "progress_clock",   "Queued print jobs",                           "Job Queue",        nullptr,              false, 2, 2, 2, 1, 4, 3},
