@@ -11,6 +11,7 @@
 #include "theme_manager.h"
 
 #include <lvgl/lvgl.h>
+#include "lvgl/src/others/translation/lv_translation.h"
 #include <spdlog/spdlog.h>
 
 #include <string>
@@ -139,7 +140,7 @@ lv_obj_t* WidgetCatalogOverlay::create_row(lv_obj_t* parent, const char* name, c
 
     if (already_placed) {
         lv_obj_t* placed_label = lv_label_create(right_group);
-        lv_label_set_text(placed_label, "Placed");
+        lv_label_set_text(placed_label, lv_tr("Placed"));
         lv_obj_set_style_text_font(placed_label, &noto_sans_12, 0);
         lv_obj_set_style_text_color(placed_label, theme_manager_get_color("text_muted"), 0);
     }
@@ -207,17 +208,18 @@ void WidgetCatalogOverlay::populate_rows(lv_obj_t* scroll, const PanelWidgetConf
             int total = group_total_count[group];
             bool all_placed = (placed >= total);
 
-            const char* display_name = def.display_name ? def.display_name : def.id;
+            const char* display_name = def.display_name ? lv_tr(def.display_name) : def.id;
 
             // Build status suffix showing placement count
             std::string name_str(display_name);
             if (placed > 0) {
                 char buf[32];
-                snprintf(buf, sizeof(buf), " (%d of %d placed)", placed, total);
+                snprintf(buf, sizeof(buf), " (%d/%d %s)", placed, total, lv_tr("Placed"));
                 name_str += buf;
             }
 
-            lv_obj_t* row = create_row(scroll, name_str.c_str(), def.icon, def.description,
+            const char* desc = def.description ? lv_tr(def.description) : nullptr;
+            lv_obj_t* row = create_row(scroll, name_str.c_str(), def.icon, desc,
                                        def.colspan, def.rowspan, all_placed,
                                        /*hardware_gated=*/false);
 
@@ -248,7 +250,7 @@ void WidgetCatalogOverlay::populate_rows(lv_obj_t* scroll, const PanelWidgetConf
             // Non-grouped widget — existing single-widget logic
             bool already_placed = config.is_enabled(def.id);
 
-            const char* display_name = def.display_name ? def.display_name : def.id;
+            const char* display_name = def.display_name ? lv_tr(def.display_name) : def.id;
 
             // Check hardware gate
             bool hardware_gated = false;
@@ -262,10 +264,11 @@ void WidgetCatalogOverlay::populate_rows(lv_obj_t* scroll, const PanelWidgetConf
             // Build display name with "(not detected)" suffix if hardware-gated
             std::string name_str(display_name);
             if (hardware_gated) {
-                name_str += " (not detected)";
+                name_str += std::string(" (") + lv_tr("not detected") + ")";
             }
 
-            lv_obj_t* row = create_row(scroll, name_str.c_str(), def.icon, def.description,
+            const char* desc = def.description ? lv_tr(def.description) : nullptr;
+            lv_obj_t* row = create_row(scroll, name_str.c_str(), def.icon, desc,
                                        def.colspan, def.rowspan, already_placed, hardware_gated);
 
             if (!already_placed && !hardware_gated) {

@@ -14,7 +14,7 @@ translations:
   '- Ensure ADXL345 is connected': '- 确保 ADXL345 已连接'
   '- Try Measure Noise first': '- 先尝试测量噪声'
   --°C: --°C
-  0 = computed: ''
+  0 = computed: '0 = 自动计算'
   0 slots: '{0} 个料仓'
   0.4-2mm direct drive, 4-6mm bowden: 直驱 0.4-2mm，远程挤出 4-6mm
   1 day ago: 1天前
@@ -40,9 +40,10 @@ translations:
   3. Lower nozzle until paper drags slightly: 3. 降低喷嘴直到纸张有轻微阻力
   30 minutes: 30 分钟
   30 seconds: 30 秒
-  3D Pipes: ''
+  3D Pipes: '3D 管道'
   3D Preview: 3D 预览
   3D View: 3D 视图
+  3D printer visualization: '3D 打印机可视化'
   4. Paper should move but with resistance: 4. 纸张应能移动但有阻力
   4. Repeat until bed is level: 4. 重复直到热床水平
   5 minutes: 5 分钟
@@ -54,7 +55,7 @@ translations:
   ABOUT: 关于
   ABS: ABS
   ADXL: ADXL
-  AFC: ''
+  AFC: 'AFC'
   AFC Version Warning: AFC版本警告
   AFC failure reset complete: AFC故障重置完成
   AFC failure reset failed: AFC故障重置失败
@@ -65,6 +66,7 @@ translations:
   ALL DEVICES: 所有设备
   AMS: AMS
   AMS Management: AMS 管理
+  AMS Status: 'AMS 状态'
   API not available: API 不可用
   APPEARANCE: 外观
   AUTO STATE: 自动状态
@@ -157,8 +159,8 @@ translations:
   Both: 两者
   Brightness: 亮度
   Browse: 浏览
-  Buffer Status: ''
-  Buffer information not available for this backend: ''
+  Buffer Status: '缓冲区状态'
+  Buffer information not available for this backend: '此后端无缓冲区信息'
   Bundle Uploaded: 捆绑包已上传
   Button taps and navigation sounds: 按钮点击和导航声音
   Bypass: 旁路
@@ -185,6 +187,7 @@ translations:
   Calibration failed - touch targets more precisely.: 校准失败 – 请更精确地触摸目标。
   Calibration saved but cannot apply on SDL display: 校准已保存，但无法在 SDL 显示上应用
   Calibration timed out. Please try again.: 校准超时。请重试。
+  Camera: '摄像头'
   Cancel: 取消
   Cancel Escalation: 取消升级
   Cancel Print: 取消打印
@@ -220,7 +223,7 @@ translations:
   Clear All Events: 清除所有事件
   Clear Spool: 移除料盘
   Clipboard unavailable - use SSH: 剪贴板不可用 - 请使用 SSH
-  Clog Detection: ''
+  Clog Detection: '堵料检测'
   Close: 关闭
   Closer: 更近
   Closer = more squish | Farther = less squish: 更近 = 更多挤压 | 更远 = 更少挤压
@@ -288,6 +291,7 @@ translations:
   Current Version: 当前版本
   Current Z Position: 当前 Z 位置
   'Current name:': 当前名称：
+  Current time and date: '当前时间和日期'
   'Current: %s · Slot %d': '当前: %s · 插槽 %d'
   'Current: %s Â· Slot %d': '当前: %s Â· 插槽 %d'
   'Current: Bypass': '当前: 旁通'
@@ -303,7 +307,7 @@ translations:
   DISABLED: 已禁用
   Damping (Kd): 阻尼 (Kd)
   Danger: 危险
-  Danger Zone: ''
+  Danger Zone: '危险区域'
   Dark Mode: 深色模式
   Database: 数据库
   Date (newest): 日期（最新）
@@ -319,14 +323,15 @@ translations:
   'Delta:': 差值：
   Deploy: 部署
   Detailed: 详细
-  Detection Length: ''
-  Detection Mode: ''
+  Detection Length: '检测长度'
+  Detection Mode: '检测模式'
   Dev: 开发版
   Dev channel requires dev_url in config: 开发频道需要在配置中设置 dev_url
   Device name is required: 设备名称为必填项
+  Digital Clock: '数字时钟'
   Disable: 禁用
   Disable Motors?: 关闭电机？
-  Disabled: ''
+  Disabled: '已禁用'
   Discard: 丢弃
   Discard Changes?: 丢弃更改？
   Disconnected: 已断开
@@ -335,7 +340,7 @@ translations:
   Dismiss: 忽略
   Display Settings: 显示设置
   Display Sleep: 显示休眠
-  Distance to Fault: ''
+  Distance to Fault: '故障距离'
   Do not power off your printer.: 请勿关闭打印机电源。
   Do not touch the printer during calibration: 校准期间请勿触碰打印机
   Documentation: 文档
@@ -378,7 +383,8 @@ translations:
   Enable audio feedback: 启用声音反馈
   Enable detailed print preparation tracking (Recommended): 启用详细打印准备跟踪（推荐）
   Enabled: 已启用
-  Encoder: ''
+  Enclosure humidity sensor readings: '腔体湿度传感器读数'
+  Encoder: '编码器'
   Ended: 已结束
   Enhancement Complete!: 增强完成！
   Enhancement Failed: 增强失败
@@ -428,7 +434,7 @@ translations:
   Failed to open wizard: 打开向导失败
   Failed to reset theme: 重置主题失败
   Failed to restart Moonraker.: 重启 Moonraker 失败。
-  Failed to save changes to Spoolman: ''
+  Failed to save changes to Spoolman: '保存更改到 Spoolman 失败'
   Failed to save configuration: 保存配置失败
   Failed to save spool: 保存料盘失败
   Failed to save theme file: 保存主题文件失败
@@ -436,10 +442,11 @@ translations:
   Failed to update configuration.\nCheck printer connection.: 更新配置失败。\n请检查打印机连接。
   Failed to update phase tracking: 更新相位跟踪失败
   Fan Calibration: 风扇校准
+  Fan Speeds: '风扇转速'
   Fan Transfer: 风扇传热
   Fans: 风扇
   Farther: 更远
-  Fault Detection: ''
+  Fault Detection: '故障检测'
   Feed filament directly to extruder: 将耗材直接送入挤出机
   Filament: 耗材
   Filament Detected: 检测到耗材
@@ -448,9 +455,12 @@ translations:
   Filament Used: 已用耗材
   Filament already exists: 耗材已存在
   Filament by Type: 按类型分类的耗材
+  Filament clog/flow detection meter: '耗材堵塞/流量检测计'
   Filament diameter sensors for flow compensation: 耗材直径传感器用于流量补偿
   Filament runout and motion detection sensors: 耗材用尽和运动检测传感器
+  Filament runout detection status: '耗材断料检测状态'
   Filament tracking and inventory: 耗材跟踪和库存
+  Filament width sensor readings: '耗材直径传感器读数'
   File: 文件
   File Info: 文件信息
   Filename: 文件名
@@ -460,8 +470,8 @@ translations:
   Firmware restarting...: 固件重启中...
   Flat Concentric Rings (existing ams_slot): 扁平同心环（现有 ams_slot）
   Flow Rate: 流量
-  Flowguard: ''
-  Flying Toasters: ''
+  Flowguard: '流量保护'
+  Flying Toasters: '飞行烤面包机'
   Forming tip...: 正在成型尖端...
   Found 1 printer: 找到 1 台打印机
   Framerate: 帧率
@@ -469,6 +479,7 @@ translations:
   G-code Console: G-code 控制台
   G-code Preview: G-code 预览
   G-code commands will appear here: G-code 命令将显示在此处
+  GCode Console: 'G-code 控制台'
   Get help and share feedback: 获取帮助和反馈
   'Ghost:': 残影：
   Got it: 知道了
@@ -570,6 +581,8 @@ translations:
   Klipper will restart to apply changes.: Klipper 将重启以应用更改。
   Klipper will restart to apply new PID values.: Klipper 将重启以应用新的 PID 值。
   Klipper will restart to apply new settings.: Klipper 将重启以应用新设置。
+  LED Controls: 'LED 控制'
+  LED Light: 'LED 灯'
   LED SELECTION: LED 选择
   LED Settings: LED 设置
   LED Strip: LED 灯带
@@ -592,9 +605,10 @@ translations:
   Learn More: 了解更多
   'Length:': 长度：
   Leveling Gantry...: 正在调平龙门...
-  Lifetime Print Stats: ''
+  Lifetime Print Stats: '累计打印统计'
   Light: 浅色
   Link to Spoolman: 关联到Spoolman
+  Live webcam feed: '实时摄像头画面'
   Load: 加载
   Load Filament: 加载耗材
   Loaded: 已加载
@@ -622,6 +636,7 @@ translations:
   MPC: MPC
   Machine Limits: 机器限制
   Macro Browser: 宏浏览器
+  Macro Button: '宏按钮'
   Macro Buttons: 宏按钮
   Macro analysis not initialized: 宏分析未初始化
   Macro for bed mesh calibration: 热床网格校准宏
@@ -639,7 +654,7 @@ translations:
   Make Optional: 设为可选
   Make bed mesh and QGL skippable: 使热床网格和 QGL 可跳过
   Manage: 管理
-  Manual: ''
+  Manual: '手动'
   Manual Bed Leveling: 手动热床调平
   Markdown Viewer: Markdown 查看器
   Master volume level: 主音量
@@ -665,8 +680,11 @@ translations:
   Min: 最小
   Mode: 模式
   Modified: 已修改
+  Monitor a custom temperature sensor: '监控自定义温度传感器'
+  Monitor and set nozzle temperature: '监控并设置喷嘴温度'
   Month: 月
   Moonraker: Moonraker
+  Moonraker power device controls: 'Moonraker 电源设备控制'
   Moonraker restarting...\nWaiting for reconnection...: Moonraker 重启中...\n等待重新连接...
   More points = more accurate, but takes longer.: 点数越多越精确，但耗时更长。
   Motion: 运动
@@ -680,6 +698,7 @@ translations:
   Multi-Filament: 多耗材
   'Multi-Filament:': 多耗材：
   Multi-Material: 多材料
+  Multi-material spool status and control: '多材料料盘状态与控制'
   My Custom Theme: 我的自定义主题
   My Panel: 我的面板
   NEWLY DISCOVERED: 新发现
@@ -688,6 +707,7 @@ translations:
   Name (optional): 名称（可选）
   Named actions in the LED control panel (long-press).: LED 控制面板中的命名操作（长按）。
   Net Weight (g): 净重（克）
+  Network: '网络'
   Network Address: 网络地址
   Network Name: 网络名称
   Network Name (SSID): 网络名称 (SSID)
@@ -710,7 +730,7 @@ translations:
   No PRINT_START macro found: 未找到 PRINT_START 宏
   No Power Devices: 无电源设备
   No Spools: 无料盘
-  No buffer data available: ''
+  No buffer data available: '无可用缓冲区数据'
   No changes to revert: 没有可撤销的更改
   No effects available: 无可用特效
   No events queued: 无排队事件
@@ -737,7 +757,7 @@ translations:
   No sensors detected: 未检测到传感器
   No spool assigned: 未分配料盘
   No spools found in Spoolman: Spoolman中未找到料盘
-  No sync feedback data available: ''
+  No sync feedback data available: '无可用同步反馈数据'
   No timelapse videos found: 未找到延时视频
   No vendors found: 未找到供应商
   No webcam detected.\nA webcam is required for timelapse.: 未检测到摄像头。\n延时摄影需要摄像头。
@@ -762,6 +782,7 @@ translations:
   Nozzle Temp: 喷嘴温度
   Nozzle Temperature: 喷嘴温度
   Nozzle °C: 喷嘴 °C
+  Nozzle, bed, and chamber temps stacked: '喷嘴、热床和腔体温度叠显'
   'Nozzle:': 喷嘴：
   OD: OD
   OK: 确定
@@ -771,6 +792,8 @@ translations:
   On and Off macros must be different: 开和关的宏必须不同
   On/Off (state-aware): 开/关（状态跟踪）
   Open: 打开
+  Open G-code command console: '打开 G-code 命令控制台'
+  Open LED color and brightness controls: '打开 LED 颜色和亮度控制'
   Operations: 操作
   Optimize Your Printing: 优化您的打印
   Optimizes temperature control for stable, consistent heating.: 优化温度控制，实现稳定一致的加热。
@@ -789,6 +812,7 @@ translations:
   Paper Test Calibration: 纸张测试校准
   Part Cooling Fan: 零件冷却风扇
   Part Fan: 零件风扇
+  Part, hotend, and auxiliary fan speeds: '零件、热端和辅助风扇转速'
   Password: 密码
   Password cannot be empty: 密码不能为空
   Pause: 暂停
@@ -796,6 +820,7 @@ translations:
   Paused (attention needed): 已暂停（需要处理）
   Peak Freq: 峰值频率
   'Peak:': 峰值：
+  Pending alerts and system messages: '待处理警报和系统消息'
   Phase Tracking: 相位跟踪
   Phase tracking disabled: 相位跟踪已禁用
   Phase tracking enabled: 相位跟踪已启用
@@ -846,9 +871,12 @@ translations:
   Print Label: 打印标签
   Print Objects: 打印对象
   Print Speed: 打印速度
+  Print Stats: '打印统计'
   Print Status: 打印状态
   Print Time: 打印时间
   Print Tuning: 打印调优
+  Print history statistics: '打印历史统计'
+  Print progress and file selection: '打印进度和文件选择'
   Printer: 打印机
   Printer Error: 打印机错误
   Printer Firmware Disconnected: 打印机固件已断开
@@ -860,7 +888,7 @@ translations:
   Printer name: 打印机名称
   Printer ready: 打印机就绪
   Printing: 正在打印
-  Prints: ''
+  Prints: '打印次数'
   Prints Trend: 打印趋势
   'Private:': 私有：
   Probe: 探针
@@ -886,11 +914,13 @@ translations:
   QUICK BUTTONS: 快捷按钮
   Quad Gantry Level: 四角龙门调平
   'Queue: Ready': '队列：就绪'
+  Queued print jobs: '排队中的打印任务'
   Quick: 快速
   Quick Actions: 快捷操作
   Quick Button 1: 快捷按钮 1
   Quick Button 2: 快捷按钮 2
   Quick actions, calibration, speed: 快捷操作、校准、速度
+  Quick toggle, long press for full control: '快速切换，长按进入完整控制'
   'RSS:': RSS：
   Re-probe: 重新探测
   Ready: 就绪
@@ -932,6 +962,7 @@ translations:
   Restart Firmware?: 重启固件？
   Restart HelixScreen: 重启 HelixScreen
   Restart Klipper: 重启 Klipper
+  Restart Klipper firmware: '重启 Klipper 固件'
   Restart Now: 立即重启
   Restart Required: 需要重启
   'Restart failed: not connected': '重启失败: 未连接'
@@ -952,10 +983,12 @@ translations:
   Review detected hardware validation issues: 查看检测到的硬件验证问题
   Review your changes: 查看您的更改
   'Role:': 角色：
+  Rotating tips and helpful information: '轮播提示和实用信息'
   'Rotation: %d\xc2\xb0 - %ds remaining (or wait to retry)': '旋转: %d\xc2\xb0 - 剩余%ds (或等待重试)'
   Run: 运行
-  Run Dangerous Macro?: ''
+  Run Dangerous Macro?: '运行危险宏？'
   Run Macro: 运行宏
+  Run a configured macro with one tap: '单击运行已配置的宏'
   Runout Sensor: 断料传感器
   SHIPPED IMAGES: 内置图片
   SOFTWARE: 软件
@@ -1030,9 +1063,11 @@ translations:
   'Shininess:': 光泽度：
   Show detailed print preparation status: 显示详细的打印准备状态
   Show flying toasters instead of dimming: 显示飞行烤面包机而非屏幕变暗
-  Show instead of dimming: ''
+  Show instead of dimming: '显示而非变暗'
   Shutdown: 关机
   Shutdown / Reboot: 关机 / 重启
+  Shutdown or reboot the printer host: '关机或重启打印机主机'
+  Shutdown/Reboot: '关机/重启'
   Shutting down...: 正在关机...
   Side: 侧面
   Single toggle macro. State is not tracked.: 单个切换宏。不跟踪状态。
@@ -1046,7 +1081,7 @@ translations:
   Sound Settings: 声音设置
   Sound Theme: 声音主题
   Sounds: 声音
-  Source: ''
+  Source: '来源'
   Speaker: 扬声器
   'Specular:': 镜面反射：
   Speed of prime movement: 预挤移动速度
@@ -1065,7 +1100,7 @@ translations:
   Square Corner Velocity: 直角转弯速度
   Stable: 稳定版
   Standby: 待机
-  Starfield: ''
+  Starfield: '星空'
   Start: 开始
   Start Anyway: 仍然开始
   Start Calibration: 开始校准
@@ -1075,7 +1110,7 @@ translations:
   Starting Print...: 正在启动打印...
   Starting...: 正在启动...
   Startup, auto-control, and macro devices: 启动、自动控制和宏设备
-  State: ''
+  State: '状态'
   Status: 状态
   Status icons: 状态图标
   Step: 步骤
@@ -1085,7 +1120,7 @@ translations:
   Stop Print?: 停止打印？
   Stops all motion. Requires firmware restart.: 停止所有运动。需要固件重启。
   Stow: 收回
-  Success: ''
+  Success: '成功'
   Success Rate: 成功率
   Success!: 成功！
   Surfaces inherit app background tokens for light and dark modes.: 表面继承应用背景色用于浅色和深色模式。
@@ -1094,8 +1129,8 @@ translations:
   Switch between light and dark themes: 切换浅色和深色主题
   Switching heater control to MPC. Klipper will restart.: 正在将加热控制切换为 MPC。Klipper 将重启。
   Switching to MPC requires a config change and Klipper restart.: 切换到 MPC 需要修改配置并重启 Klipper。
-  Sync Drive: ''
-  Sync Feedback: ''
+  Sync Drive: '同步驱动'
+  Sync Feedback: '同步反馈'
   Sync with Spoolman: 与 Spoolman 同步
   Sysfs: Sysfs
   System: 系统
@@ -1138,6 +1173,7 @@ translations:
   Theme changes apply after restart.: 主题更改在重启后生效。
   Theme reset to defaults: 主题已重置为默认值
   Theme, brightness, and sleep settings: 主题、亮度和休眠设置
+  Thermistor: '热敏电阻'
   This calibration uses the paper friction method to set your Z-offset.: 此校准使用纸张摩擦法设置 Z 偏移。
   This cannot be undone.: 此操作无法撤销。
   This is exactly the data that will be sent: 这正是将要发送的数据
@@ -1168,6 +1204,7 @@ translations:
   Timelapse plugin is installed!: 延时摄影插件已安装！
   Timelapse rendered successfully: 延时视频渲染成功
   'Tip:': 提示：
+  Tips: '提示'
   Toggle: 切换
   Toggle (fire-and-forget): 切换（无状态跟踪）
   Toggle Feature: 切换功能
@@ -1250,12 +1287,13 @@ translations:
   Webcam: 摄像头
   Website (optional): 网站（可选）
   Week: 周
-  Weekly Print Stats: ''
+  Weekly Print Stats: '本周打印统计'
   ? Weight data is synced from Spoolman to display remaining filament. Changes are also synced when prints start, pause, or complete.
   : 重量数据从 Spoolman 同步以显示剩余耗材。打印开始、暂停或完成时也会同步更改。
   Weight sync settings: 重量同步设置
   What We Collect: 我们收集的内容
   White: 白色
+  Wi-Fi and ethernet connection status: 'Wi-Fi 和以太网连接状态'
   WiFi: WiFi
   WiFi Network: WiFi 网络
   WiFi and Ethernet: WiFi 和以太网
@@ -1263,6 +1301,7 @@ translations:
   WiFi control unavailable: WiFi 控制不可用
   WiFi hardware unavailable: WiFi 硬件不可用
   Width: 宽度
+  Width Sensor: '宽度传感器'
   Width Sensors: 宽度传感器
   X: X
   X Axis: X 轴
@@ -1299,16 +1338,16 @@ translations:
   disabled: 已禁用
   e.g. Jet Black: 例如 炭黑
   e.g. Polymaker: 例如 Polymaker
-  eSpooler: ''
+  eSpooler: 'eSpooler'
   elapsed: 已用时
   enable: 启用
   enabled: 已启用
   est: est
   layers: 层
-  mm before clog: ''
+  mm before clog: '毫米后堵料'
   not detected: 未检测到
   of: 的
-  prints: ''
+  prints: '打印次数'
   set to: 设置为
   started: 已启动
   tall: 高

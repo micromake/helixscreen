@@ -43,6 +43,7 @@ translations:
   3D Pipes: 3D Pipes
   3D Preview: Aperçu 3D
   3D View: Vue 3D
+  3D printer visualization: 'Visualisation 3D de l''imprimante'
   4. Paper should move but with resistance: 4. Le papier doit bouger mais avec résistance
   4. Repeat until bed is level: 4. Répétez jusqu'à ce que le plateau soit niveau
   5 minutes: 5 minutes
@@ -65,6 +66,7 @@ translations:
   ALL DEVICES: TOUS LES APPAREILS
   AMS: AMS
   AMS Management: Gestion AMS
+  AMS Status: 'État AMS'
   API not available: API non disponible
   APPEARANCE: APPARENCE
   AUTO STATE: ÉTAT AUTO
@@ -185,6 +187,7 @@ translations:
   Calibration failed - touch targets more precisely.: Échec de calibration – touchez les cibles plus précisément.
   Calibration saved but cannot apply on SDL display: Calibration enregistrée mais impossible à appliquer sur un écran SDL
   Calibration timed out. Please try again.: Délai expiré. Veuillez réessayer.
+  Camera: 'Caméra'
   Cancel: Annuler
   Cancel Escalation: Annuler l'escalade
   Cancel Print: Annuler l'impression
@@ -288,6 +291,7 @@ translations:
   Current Version: Version actuelle
   Current Z Position: Position Z actuelle
   'Current name:': 'Nom actuel :'
+  Current time and date: 'Heure et date actuelles'
   'Current: %s · Slot %d': 'Actuel : %s · Slot %d'
   'Current: %s Â· Slot %d': 'Actuel : %s Â· Slot %d'
   'Current: Bypass': 'Actuel : Bypass'
@@ -324,6 +328,7 @@ translations:
   Dev: Dev
   Dev channel requires dev_url in config: Le canal de développement nécessite dev_url dans la configuration
   Device name is required: Le nom de l'appareil est requis
+  Digital Clock: 'Horloge numérique'
   Disable: Désactiver
   Disable Motors?: Désactiver les moteurs ?
   Disabled: Désactivé
@@ -378,6 +383,7 @@ translations:
   Enable audio feedback: Activer le retour audio
   Enable detailed print preparation tracking (Recommended): Activer le suivi détaillé de la préparation d'impression (Recommandé)
   Enabled: Activé
+  Enclosure humidity sensor readings: 'Mesures du capteur d''humidité de l''enceinte'
   Encoder: Encodeur
   Ended: Terminé
   Enhancement Complete!: Amélioration terminée !
@@ -436,6 +442,7 @@ translations:
   Failed to update configuration.\nCheck printer connection.: Échec de la mise à jour.\nVérifiez la connexion.
   Failed to update phase tracking: Échec de la mise à jour du suivi de phase
   Fan Calibration: Calibration du ventilateur
+  Fan Speeds: 'Vitesses des ventilateurs'
   Fan Transfer: Transfert ventilateur
   Fans: Ventilateurs
   Farther: Plus loin
@@ -448,9 +455,12 @@ translations:
   Filament Used: Filament utilisé
   Filament already exists: Ce filament existe déjà
   Filament by Type: Filament par type
+  Filament clog/flow detection meter: 'Détecteur de bouchon/débit de filament'
   Filament diameter sensors for flow compensation: Capteurs de diamètre de filament pour compensation du débit
   Filament runout and motion detection sensors: Capteurs de fin de filament et de détection de mouvement
+  Filament runout detection status: 'État de détection de fin de filament'
   Filament tracking and inventory: Suivi et inventaire du filament
+  Filament width sensor readings: 'Mesures du capteur de largeur de filament'
   File: Fichier
   File Info: Info fichier
   Filename: Nom du fichier
@@ -469,6 +479,7 @@ translations:
   G-code Console: Console G-code
   G-code Preview: Aperçu G-code
   G-code commands will appear here: Les commandes G-code apparaîtront ici
+  GCode Console: 'Console GCode'
   Get help and share feedback: Obtenir de l'aide et partager vos retours
   'Ghost:': 'Fantôme :'
   Got it: Compris
@@ -570,6 +581,8 @@ translations:
   Klipper will restart to apply changes.: Klipper redémarrera pour appliquer les modifications.
   Klipper will restart to apply new PID values.: Klipper redémarrera pour appliquer les nouvelles valeurs PID.
   Klipper will restart to apply new settings.: Klipper va redémarrer pour appliquer les nouveaux paramètres.
+  LED Controls: 'Commandes LED'
+  LED Light: 'Lumière LED'
   LED SELECTION: SÉLECTION LED
   LED Settings: Paramètres LED
   LED Strip: Bandeau LED
@@ -595,6 +608,7 @@ translations:
   Lifetime Print Stats: "Statistiques d'impression totales"
   Light: Clair
   Link to Spoolman: Lier à Spoolman
+  Live webcam feed: 'Flux webcam en direct'
   Load: Charger
   Load Filament: Charger le filament
   Loaded: Chargé
@@ -622,6 +636,7 @@ translations:
   MPC: MPC
   Machine Limits: Limites de la machine
   Macro Browser: Navigateur de macros
+  Macro Button: 'Bouton macro'
   Macro Buttons: Boutons de macros
   Macro analysis not initialized: Analyse de macro non initialisée
   Macro for bed mesh calibration: Macro pour la calibration du maillage du plateau
@@ -665,8 +680,11 @@ translations:
   Min: Min
   Mode: Mode
   Modified: Modifié
+  Monitor a custom temperature sensor: 'Surveiller un capteur de température personnalisé'
+  Monitor and set nozzle temperature: 'Surveiller et régler la température de la buse'
   Month: Mois
   Moonraker: Moonraker
+  Moonraker power device controls: 'Commandes des appareils Moonraker'
   Moonraker restarting...\nWaiting for reconnection...: Redémarrage de Moonraker...\nEn attente de reconnexion...
   More points = more accurate, but takes longer.: Plus de points = plus précis, mais prend plus de temps.
   Motion: Mouvement
@@ -680,6 +698,7 @@ translations:
   Multi-Filament: Multi-filament
   'Multi-Filament:': 'Multi-filament :'
   Multi-Material: Multi-matériau
+  Multi-material spool status and control: 'État et contrôle des bobines multi-matériau'
   My Custom Theme: Mon thème personnalisé
   My Panel: Mon panneau
   NEWLY DISCOVERED: NOUVELLEMENT DÉCOUVERT
@@ -688,6 +707,7 @@ translations:
   Name (optional): Nom (facultatif)
   Named actions in the LED control panel (long-press).: Actions nommées dans le panneau de commande LED (appui long).
   Net Weight (g): Poids net (g)
+  Network: 'Réseau'
   Network Address: Adresse réseau
   Network Name: Nom du réseau
   Network Name (SSID): Nom du réseau (SSID)
@@ -762,6 +782,7 @@ translations:
   Nozzle Temp: Temp. de la buse
   Nozzle Temperature: Température de la buse
   Nozzle °C: Buse °C
+  Nozzle, bed, and chamber temps stacked: 'Températures buse, plateau et enceinte empilées'
   'Nozzle:': 'Buse :'
   OD: OD
   OK: OK
@@ -771,6 +792,8 @@ translations:
   On and Off macros must be different: Les macros On et Off doivent être différentes
   On/Off (state-aware): On/Off (avec suivi d'état)
   Open: Ouvrir
+  Open G-code command console: 'Ouvrir la console de commandes G-code'
+  Open LED color and brightness controls: 'Ouvrir les commandes de couleur et luminosité LED'
   Operations: Opérations
   Optimize Your Printing: Optimisez votre impression
   Optimizes temperature control for stable, consistent heating.: Optimise le contrôle de température pour un chauffage stable et constant.
@@ -789,6 +812,7 @@ translations:
   Paper Test Calibration: Calibration par test papier
   Part Cooling Fan: Ventilateur de refroidissement pièce
   Part Fan: Ventilateur pièce
+  Part, hotend, and auxiliary fan speeds: 'Vitesses des ventilateurs pièce, hotend et auxiliaires'
   Password: Mot de passe
   Password cannot be empty: Le mot de passe ne peut pas être vide
   Pause: Pause
@@ -796,6 +820,7 @@ translations:
   Paused (attention needed): En pause (attention requise)
   Peak Freq: Fréq. pic
   'Peak:': 'Pic :'
+  Pending alerts and system messages: 'Alertes en attente et messages système'
   Phase Tracking: Suivi de phase
   Phase tracking disabled: Suivi de phase désactivé
   Phase tracking enabled: Suivi de phase activé
@@ -846,9 +871,12 @@ translations:
   Print Label: Imprimer l'étiquette
   Print Objects: Objets d'impression
   Print Speed: Vitesse d'impression
+  Print Stats: 'Statistiques d''impression'
   Print Status: État de l'impression
   Print Time: Temps d'impression
   Print Tuning: Réglage de l'impression
+  Print history statistics: 'Statistiques de l''historique d''impression'
+  Print progress and file selection: 'Progression de l''impression et sélection de fichiers'
   Printer: Imprimante
   Printer Error: Erreur imprimante
   Printer Firmware Disconnected: Firmware imprimante déconnecté
@@ -886,11 +914,13 @@ translations:
   QUICK BUTTONS: BOUTONS RAPIDES
   Quad Gantry Level: Quad Gantry Level
   'Queue: Ready': 'File : Prête'
+  Queued print jobs: 'Travaux d''impression en file'
   Quick: Rapide
   Quick Actions: Actions rapides
   Quick Button 1: Bouton rapide 1
   Quick Button 2: Bouton rapide 2
   Quick actions, calibration, speed: Actions rapides, calibration, vitesse
+  Quick toggle, long press for full control: 'Bascule rapide, appui long pour le contrôle complet'
   'RSS:': 'RSS :'
   Re-probe: Re-palper
   Ready: Prêt
@@ -932,6 +962,7 @@ translations:
   Restart Firmware?: Redémarrer le firmware ?
   Restart HelixScreen: Redémarrer HelixScreen
   Restart Klipper: Redémarrer Klipper
+  Restart Klipper firmware: 'Redémarrer le firmware Klipper'
   Restart Now: Redémarrer maintenant
   Restart Required: Redémarrage requis
   'Restart failed: not connected': 'Échec du redémarrage : non connecté'
@@ -952,10 +983,12 @@ translations:
   Review detected hardware validation issues: Examiner les problèmes de validation matérielle détectés
   Review your changes: Examiner vos modifications
   'Role:': 'Rôle :'
+  Rotating tips and helpful information: 'Conseils et informations utiles en rotation'
   'Rotation: %d\xc2\xb0 - %ds remaining (or wait to retry)': 'Rotation : %d\xc2\xb0 - %ds restantes (ou attendre pour réessayer)'
   Run: Exécuter
   Run Dangerous Macro?: 'Exécuter le macro dangereux ?'
   Run Macro: Exécuter la macro
+  Run a configured macro with one tap: 'Exécuter une macro configurée en un appui'
   Runout Sensor: Capteur de fin de filament
   SHIPPED IMAGES: IMAGES FOURNIES
   SOFTWARE: LOGICIEL
@@ -1033,6 +1066,8 @@ translations:
   Show instead of dimming: "Afficher au lieu d'atténuer"
   Shutdown: Éteindre
   Shutdown / Reboot: Éteindre / Redémarrer
+  Shutdown or reboot the printer host: 'Éteindre ou redémarrer l''hôte de l''imprimante'
+  Shutdown/Reboot: 'Éteindre/Redémarrer'
   Shutting down...: Arrêt en cours...
   Side: Côté
   Single toggle macro. State is not tracked.: Macro à bascule unique. L'état n'est pas suivi.
@@ -1138,6 +1173,7 @@ translations:
   Theme changes apply after restart.: Les modifications du thème s'appliquent après redémarrage.
   Theme reset to defaults: Thème réinitialisé par défaut
   Theme, brightness, and sleep settings: Thème, luminosité et paramètres de veille
+  Thermistor: 'Thermistance'
   This calibration uses the paper friction method to set your Z-offset.: Cette calibration utilise la méthode de friction du papier pour définir votre Z-offset.
   This cannot be undone.: Cette action est irréversible.
   This is exactly the data that will be sent: Voici exactement les données qui seront envoyées
@@ -1168,6 +1204,7 @@ translations:
   Timelapse plugin is installed!: Le plugin timelapse est installé !
   Timelapse rendered successfully: Timelapse rendu avec succès
   'Tip:': 'Conseil :'
+  Tips: 'Conseils'
   Toggle: Basculer
   Toggle (fire-and-forget): Bascule (fire-and-forget)
   Toggle Feature: Basculer la fonctionnalité
@@ -1256,6 +1293,7 @@ translations:
   Weight sync settings: Paramètres de synchronisation du poids
   What We Collect: Ce que nous collectons
   White: Blanc
+  Wi-Fi and ethernet connection status: 'État de la connexion Wi-Fi et Ethernet'
   WiFi: WiFi
   WiFi Network: Réseau WiFi
   WiFi and Ethernet: WiFi et Ethernet
@@ -1263,6 +1301,7 @@ translations:
   WiFi control unavailable: Contrôle WiFi indisponible
   WiFi hardware unavailable: Matériel WiFi indisponible
   Width: Largeur
+  Width Sensor: 'Capteur de largeur'
   Width Sensors: Capteurs de largeur
   X: X
   X Axis: Axe X
