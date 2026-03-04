@@ -4156,7 +4156,8 @@ void MoonrakerClientMock::trigger_restart(bool is_firmware) {
             // Sleep in small increments to allow early exit on destruction
             int total_ms = static_cast<int>(effective_delay * 1000);
             int elapsed_ms = 0;
-            constexpr int SLEEP_INTERVAL_MS = 100;
+            // Use small interval (10ms) so high-speedup tests don't overshoot
+            constexpr int SLEEP_INTERVAL_MS = 10;
 
             while (elapsed_ms < total_ms && restart_pending_.load()) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_INTERVAL_MS));
