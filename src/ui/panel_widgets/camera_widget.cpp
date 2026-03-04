@@ -239,6 +239,9 @@ void CameraWidget::start_stream() {
                     }
                 }
 
+                // Always mark frame consumed — even if no target is available
+                // (e.g. during detach→reattach). Without this, frame_pending_
+                // stays true and the stream thread stalls permanently.
                 if (stream_) stream_->frame_consumed();
             });
         },
