@@ -334,9 +334,10 @@ class PrintStatusPanel : public OverlayBase {
     /// Pure-logic state machine (no LVGL deps) — owns all print state variables
     PrintLifecycleState lifecycle_;
 
-    // Thumbnail state (loaded via ActivePrintMediaManager, observed via thumbnail_path_observer_)
-    std::string current_print_filename_; ///< Full path to current print file (for gcode viewer)
+    // Thumbnail loading state
+    std::string current_print_filename_; ///< Full path to current print file (for metadata fetch)
     std::string cached_thumbnail_path_;  ///< Local cache path for downloaded thumbnail
+    uint32_t thumbnail_load_generation_ = 0; ///< Generation counter for async callback safety
 
     // Child widgets
     lv_obj_t* progress_bar_ = nullptr;
@@ -346,16 +347,26 @@ class PrintStatusPanel : public OverlayBase {
     lv_obj_t* gradient_background_ = nullptr;
 
     // Thumbnail source override - used when printing modified temp files
+    // When set, load_thumbnail_for_file() uses this instead of the actual filename
     std::string thumbnail_source_filename_;
 
+    // Track what thumbnail is currently loaded to make set_filename() idempotent
+    // Prevents redundant thumbnail loads when observer fires repeatedly with same filename
+    std::string loaded_thumbnail_filename_;
 
     // Deferred G-code loading: filename to load when panel becomes visible
     // Set in set_filename(), consumed in on_activate() - avoids downloading
     // large files unless user actually navigates to print status panel
     std::string pending_gcode_filename_;
 
+    // One-shot timer for deferred G-code loading (5s delay after print start)
+    // Prevents memory spike during homing/heating phase
+    lv_timer_t* gcode_load_timer_ = nullptr;
+    void schedule_deferred_gcode_load();
+
     // Track what G-code file we've already requested to load (deduplication).
-    // Guards the expensive async G-code download. Set when load_gcode_for_viewing() is
+    // Unlike loaded_thumbnail_filename_ which guards thumbnail loads, this guards
+    // the expensive async G-code download. Set when load_gcode_for_viewing() is
     // called or deferred; cleared when print ends or a different file is loaded.
     std::string requested_gcode_filename_;
 
@@ -408,6 +419,7 @@ class PrintStatusPanel : public OverlayBase {
     void update_all_displays();
     void show_gcode_viewer(bool show);
     void load_gcode_file(const char* file_path);
+    void load_thumbnail_for_file(const std::string& filename); ///< Fetch and display thumbnail
     void
     load_gcode_for_viewing(const std::string& filename); ///< Download and load G-code into viewer
     void update_button_states(); ///< Enable/disable buttons based on current print state
@@ -478,7 +490,6 @@ class PrintStatusPanel : public OverlayBase {
     ObserverGuard print_progress_observer_;
     ObserverGuard print_state_observer_;
     ObserverGuard print_filename_observer_;
-    ObserverGuard thumbnail_path_observer_;
     ObserverGuard speed_factor_observer_;
     ObserverGuard flow_factor_observer_;
     ObserverGuard gcode_z_offset_observer_;
