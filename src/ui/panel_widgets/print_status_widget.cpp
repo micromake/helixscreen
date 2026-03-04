@@ -12,8 +12,11 @@
 #include "filament_sensor_manager.h"
 #include "observer_factory.h"
 #include "panel_widget_registry.h"
+#include "print_history_manager.h"
 #include "printer_state.h"
 #include "runtime_config.h"
+#include "thumbnail_cache.h"
+#include "thumbnail_load_context.h"
 
 #include <spdlog/spdlog.h>
 
@@ -44,6 +47,7 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
 
     widget_obj_ = widget_obj;
     parent_screen_ = parent_screen;
+    alive_->store(true);
 
     // Store this pointer for event callback recovery
     lv_obj_set_user_data(widget_obj_, this);
@@ -106,6 +110,22 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
             }
         });
 
+    // Register history observer to update idle thumbnail when history loads [L072]
+    std::weak_ptr<std::atomic<bool>> weak = alive_;
+    history_changed_cb_ = [this, weak]() {
+        if (weak.expired()) return;
+        if (!widget_obj_ || !print_card_thumb_) return;
+        auto state = static_cast<PrintJobState>(
+            lv_subject_get_int(printer_state_.get_print_state_enum_subject()));
+        bool is_idle = (state != PrintJobState::PRINTING && state != PrintJobState::PAUSED);
+        if (is_idle) {
+            reset_print_card_to_idle();
+        }
+    };
+    if (auto* hm = get_print_history_manager()) {
+        hm->add_observer(&history_changed_cb_);
+    }
+
     spdlog::debug("[PrintStatusWidget] Subscribed to print state/progress/time/thumbnail/runout");
 
     // Check initial print state
@@ -114,6 +134,9 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
             lv_subject_get_int(printer_state_.get_print_state_enum_subject()));
         if (state == PrintJobState::PRINTING || state == PrintJobState::PAUSED) {
             on_print_state_changed(state);
+        } else {
+            // Set idle thumbnail (last print or benchy fallback)
+            reset_print_card_to_idle();
         }
         spdlog::debug("[PrintStatusWidget] Found print card widgets for dynamic updates");
     } else {
@@ -127,6 +150,14 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
 }
 
 void PrintStatusWidget::detach() {
+    // Invalidate alive guard FIRST to abort in-flight async fetches
+    alive_->store(false);
+
+    // Unregister history observer
+    if (auto* hm = get_print_history_manager()) {
+        hm->remove_observer(&history_changed_cb_);
+    }
+
     // Release observers
     print_state_observer_.reset();
     print_progress_observer_.reset();
@@ -282,13 +313,76 @@ void PrintStatusWidget::update_print_card_label(int progress, int time_left_secs
     lv_label_set_text(print_card_label_, buf);
 }
 
-void PrintStatusWidget::reset_print_card_to_idle() {
-    if (print_card_thumb_ && lv_obj_is_valid(print_card_thumb_)) {
-        lv_image_set_src(print_card_thumb_, "A:assets/images/benchy_thumbnail_white.png");
+std::string PrintStatusWidget::get_last_print_thumbnail_path() const {
+    auto* history = get_print_history_manager();
+    if (!history || !history->is_loaded()) {
+        return {};
     }
+
+    const auto& jobs = history->get_jobs();
+    if (jobs.empty()) {
+        return {};
+    }
+
+    // Most recent job is first (sorted by start_time DESC)
+    return jobs.front().thumbnail_path;
+}
+
+void PrintStatusWidget::reset_print_card_to_idle() {
     if (print_card_label_ && lv_obj_is_valid(print_card_label_)) {
         lv_label_set_text(print_card_label_, "Print Files");
     }
+
+    if (!print_card_thumb_ || !lv_obj_is_valid(print_card_thumb_)) {
+        return;
+    }
+
+    // Try to show the last printed file's thumbnail instead of benchy
+    std::string thumb_rel_path = get_last_print_thumbnail_path();
+    if (thumb_rel_path.empty()) {
+        lv_image_set_src(print_card_thumb_, "A:assets/images/benchy_thumbnail_white.png");
+        spdlog::debug("[PrintStatusWidget] Idle thumbnail: benchy (no history)");
+        return;
+    }
+
+    // Check if we already have a cached version
+    auto cached = get_thumbnail_cache().get_if_cached(thumb_rel_path);
+    if (!cached.empty()) {
+        lv_image_set_src(print_card_thumb_, cached.c_str());
+        spdlog::debug("[PrintStatusWidget] Idle thumbnail from cache: {}", cached);
+        return;
+    }
+
+    // Set benchy as placeholder while we fetch
+    lv_image_set_src(print_card_thumb_, "A:assets/images/benchy_thumbnail_white.png");
+
+    // Fetch async from Moonraker
+    auto* api = get_moonraker_api();
+    if (!api) {
+        spdlog::debug("[PrintStatusWidget] Idle thumbnail: benchy (no API)");
+        return;
+    }
+
+    // Use alive guard to prevent use-after-free if widget is destroyed during fetch [L072]
+    lv_obj_t* thumb_widget = print_card_thumb_;
+    auto ctx = ThumbnailLoadContext::create(alive_);
+
+    get_thumbnail_cache().fetch_for_card_view(
+        api, thumb_rel_path, ctx,
+        [thumb_widget](const std::string& lvgl_path) {
+            // alive check handled by fetch_for_card_view's ctx guard
+            helix::ui::queue_update<std::string>(
+                std::make_unique<std::string>(lvgl_path),
+                [thumb_widget](std::string* path) {
+                    if (lv_obj_is_valid(thumb_widget)) {
+                        lv_image_set_src(thumb_widget, path->c_str());
+                        spdlog::info("[PrintStatusWidget] Idle thumbnail loaded: {}", *path);
+                    }
+                });
+        },
+        [](const std::string& error) {
+            spdlog::debug("[PrintStatusWidget] Idle thumbnail fetch failed: {}", error);
+        });
 }
 
 // ============================================================================

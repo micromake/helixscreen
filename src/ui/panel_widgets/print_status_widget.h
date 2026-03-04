@@ -7,6 +7,11 @@
 #include "ui_runout_guidance_modal.h"
 
 #include "panel_widget.h"
+#include "print_history_manager.h"
+
+#include <atomic>
+#include <memory>
+#include <string>
 
 namespace helix {
 
@@ -53,11 +58,18 @@ class PrintStatusWidget : public PanelWidget {
     ObserverGuard print_thumbnail_path_observer_;
     ObserverGuard filament_runout_observer_;
 
+    // Alive guard for async thumbnail callbacks and history observer [L072]
+    std::shared_ptr<std::atomic<bool>> alive_ = std::make_shared<std::atomic<bool>>(false);
+
+    // History observer for updating idle thumbnail when history loads
+    helix::HistoryChangedCallback history_changed_cb_;
+
     // Filament runout modal
     RunoutGuidanceModal runout_modal_;
     bool runout_modal_shown_ = false;
 
     // Print card update methods
+    [[nodiscard]] std::string get_last_print_thumbnail_path() const;
     void handle_print_card_clicked();
     void on_print_state_changed(PrintJobState state);
     void on_print_progress_or_time_changed();
