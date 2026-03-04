@@ -637,17 +637,17 @@ void AmsBackendHappyHare::parse_mmu_state(const nlohmann::json& mmu_data) {
     // Parse flowguard: printer.mmu.flowguard (v4, nested)
     if (mmu_data.contains("flowguard") && mmu_data["flowguard"].is_object()) {
         const auto& fg = mmu_data["flowguard"];
-        if (fg.contains("is_enabled") && fg["is_enabled"].is_boolean()) {
-            system_info_.flowguard_info.enabled = fg["is_enabled"].get<bool>();
+        if (fg.contains("enabled") && fg["enabled"].is_boolean()) {
+            system_info_.flowguard_info.enabled = fg["enabled"].get<bool>();
         }
-        if (fg.contains("is_active") && fg["is_active"].is_boolean()) {
-            system_info_.flowguard_info.active = fg["is_active"].get<bool>();
+        if (fg.contains("active") && fg["active"].is_boolean()) {
+            system_info_.flowguard_info.active = fg["active"].get<bool>();
         }
-        if (fg.contains("clog_or_tangle") && fg["clog_or_tangle"].is_string()) {
-            system_info_.flowguard_info.trigger = fg["clog_or_tangle"].get<std::string>();
+        if (fg.contains("trigger") && fg["trigger"].is_string()) {
+            system_info_.flowguard_info.trigger = fg["trigger"].get<std::string>();
         }
-        if (fg.contains("flow_rate_level") && fg["flow_rate_level"].is_number()) {
-            system_info_.flowguard_info.level = fg["flow_rate_level"].get<float>();
+        if (fg.contains("level") && fg["level"].is_number()) {
+            system_info_.flowguard_info.level = fg["level"].get<float>();
         }
         if (fg.contains("max_clog") && fg["max_clog"].is_number()) {
             system_info_.flowguard_info.max_clog = fg["max_clog"].get<float>();
@@ -660,14 +660,13 @@ void AmsBackendHappyHare::parse_mmu_state(const nlohmann::json& mmu_data) {
                       system_info_.flowguard_info.trigger, system_info_.flowguard_info.level);
     }
 
-    // Parse sync_feedback.flow_rate: printer.mmu.sync_feedback (v4, nested)
-    if (mmu_data.contains("sync_feedback") && mmu_data["sync_feedback"].is_object()) {
-        const auto& sf = mmu_data["sync_feedback"];
-        if (sf.contains("flow_rate") && sf["flow_rate"].is_number()) {
-            system_info_.sync_feedback_flow_rate = sf["flow_rate"].get<float>();
-            spdlog::trace("[AMS HappyHare] Sync feedback flow rate: {:.1f}",
-                          system_info_.sync_feedback_flow_rate);
-        }
+    // Parse sync_feedback_flow_rate: printer.mmu.sync_feedback_flow_rate (top-level)
+    if (mmu_data.contains("sync_feedback_flow_rate") &&
+        mmu_data["sync_feedback_flow_rate"].is_number()) {
+        system_info_.sync_feedback_flow_rate =
+            mmu_data["sync_feedback_flow_rate"].get<float>();
+        spdlog::trace("[AMS HappyHare] Sync feedback flow rate: {:.1f}",
+                      system_info_.sync_feedback_flow_rate);
     }
 
     // Parse toolchange_purge_volume: printer.mmu.toolchange_purge_volume (v4)

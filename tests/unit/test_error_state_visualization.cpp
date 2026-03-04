@@ -43,7 +43,7 @@ TEST_CASE("BufferHealth defaults", "[ams][error_state]") {
     BufferHealth health;
 
     REQUIRE(health.fault_detection_enabled == false);
-    REQUIRE(health.distance_to_fault == 0.0f);
+    REQUIRE(health.distance_to_fault == -1.0f);
     REQUIRE(health.state.empty());
 }
 

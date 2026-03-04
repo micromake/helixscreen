@@ -531,7 +531,7 @@ struct SlotError {
  */
 struct BufferHealth {
     bool fault_detection_enabled = false; ///< Whether buffer fault detection is active
-    float distance_to_fault = 0;          ///< Distance to fault in mm (0 = no fault proximity)
+    float distance_to_fault = -1.0f;     ///< Distance to fault in mm (-1 = not tracking/null)
     std::string state;                    ///< Buffer state (e.g., "Advancing", "Trailing")
 };
 
