@@ -326,6 +326,12 @@ class AmsState {
     lv_subject_t* get_toolchange_text_subject() {
         return &toolchange_text_;
     }
+    lv_subject_t* get_ams_current_toolchange_subject() {
+        return &ams_current_toolchange_;
+    }
+    lv_subject_t* get_ams_number_of_toolchanges_subject() {
+        return &ams_number_of_toolchanges_;
+    }
 
     /**
      * @brief Get filament loaded subject
@@ -580,7 +586,7 @@ class AmsState {
      * @return Temperature in degrees C
      */
     [[nodiscard]] int get_modal_target_temp() const {
-        return modal_target_temp_c_;
+        return lv_subject_get_int(const_cast<lv_subject_t*>(&modal_target_temp_));
     }
 
     /**
@@ -588,7 +594,14 @@ class AmsState {
      * @return Duration in minutes
      */
     [[nodiscard]] int get_modal_duration_min() const {
-        return modal_duration_min_;
+        return lv_subject_get_int(const_cast<lv_subject_t*>(&modal_duration_min_));
+    }
+
+    lv_subject_t* get_modal_target_temp_subject() {
+        return &modal_target_temp_;
+    }
+    lv_subject_t* get_modal_duration_subject() {
+        return &modal_duration_min_;
     }
 
     /**
@@ -610,10 +623,6 @@ class AmsState {
      */
     void set_modal_preset(int temp_c, int duration_min);
 
-    /**
-     * @brief Update modal text subjects from current values
-     */
-    void update_modal_text_subjects();
 
     // ========================================================================
     // Currently Loaded Display Subjects (for reactive "Currently Loaded" card)
@@ -976,7 +985,9 @@ class AmsState {
     char ams_current_tool_text_buf_[16]; // "T0" to "T15" or "---"
 
     // Tool change progress (AFC multi-color prints)
-    lv_subject_t toolchange_visible_; // 1 when swaps expected, 0 otherwise
+    lv_subject_t toolchange_visible_;          // 1 when swaps expected, 0 otherwise
+    lv_subject_t ams_current_toolchange_;      // 0-based current toolchange index (-1=none)
+    lv_subject_t ams_number_of_toolchanges_;   // Total expected toolchanges
     lv_subject_t toolchange_text_;    // "2 / 5" formatted display
     char toolchange_text_buf_[32]{};  // Buffer for formatted text
 
@@ -1013,8 +1024,8 @@ class AmsState {
     char dryer_modal_temp_text_buf_[16];
     lv_subject_t dryer_modal_duration_text_;
     char dryer_modal_duration_text_buf_[16];
-    int modal_target_temp_c_ = DEFAULT_DRYER_TEMP_C;      ///< Modal's target temp (default PETG)
-    int modal_duration_min_ = DEFAULT_DRYER_DURATION_MIN; ///< Modal's duration (default)
+    lv_subject_t modal_target_temp_;   ///< Modal's target temp in °C (raw int subject)
+    lv_subject_t modal_duration_min_;  ///< Modal's duration in minutes (raw int subject)
 
     // Clog detection config overrides (set by ClogDetectionConfigModal)
     int source_override_ = 0;           // 0=auto, 1=encoder, 2=flowguard, 3=afc

@@ -108,6 +108,11 @@ class AmsDryerCard {
     // === Observers ===
     ObserverGuard progress_observer_;
     ObserverGuard humidity_observer_;
+    ObserverGuard temp_text_observer_;
+    ObserverGuard target_text_observer_;
+    ObserverGuard time_text_observer_;
+    ObserverGuard modal_temp_text_observer_;
+    ObserverGuard modal_duration_text_observer_;
 
     // === Static Callback Registration ===
     static void register_callbacks();

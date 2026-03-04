@@ -6,6 +6,7 @@
 #include "ui_ams_detail.h"
 #include "ui_ams_device_operations_overlay.h"
 #include "ui_ams_sidebar.h"
+#include "ui_ams_tool_text.h"
 #include "ui_ams_slot.h"
 #include "ui_ams_slot_layout.h"
 #include "ui_endless_spool_arrows.h"
@@ -85,6 +86,9 @@ static void ensure_ams_widgets_registered() {
 
     // Register dryer card callbacks BEFORE XML parsing (callbacks must exist when parser sees them)
     helix::ui::AmsDryerCard::register_callbacks_static();
+
+    // Initialize tool text observers (format raw int subjects → display text)
+    helix::ui::init_ams_tool_text_observers();
 
     // Register AMS device operations overlay callbacks BEFORE XML parsing
     helix::ui::get_ams_device_operations_overlay().register_callbacks();

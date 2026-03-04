@@ -132,6 +132,12 @@ class ToolState {
     lv_subject_t* get_tools_version_subject() {
         return &tools_version_;
     }
+    lv_subject_t* get_tool_badge_text_subject() {
+        return &tool_badge_text_;
+    }
+    lv_subject_t* get_show_tool_badge_subject() {
+        return &show_tool_badge_;
+    }
 
   private:
     ToolState() = default;
@@ -146,8 +152,6 @@ class ToolState {
     lv_subject_t tool_badge_text_{};
     char tool_badge_text_buf_[16] = {};
     lv_subject_t show_tool_badge_{};
-
-    void update_tool_badge();
 
     std::vector<ToolInfo> tools_;
     int active_tool_index_ = 0;

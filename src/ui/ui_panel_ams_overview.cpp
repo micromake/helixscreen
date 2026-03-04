@@ -6,6 +6,7 @@
 #include "ui_ams_context_menu.h"
 #include "ui_ams_detail.h"
 #include "ui_ams_sidebar.h"
+#include "ui_ams_tool_text.h"
 #include "ui_ams_slot.h"
 #include "ui_ams_slot_layout.h"
 #include "ui_error_reporting.h"
@@ -897,6 +898,7 @@ static void ensure_overview_registered() {
     // Register sidebar and dryer card callbacks before component registration
     helix::ui::AmsOperationSidebar::register_callbacks_static();
     helix::ui::AmsDryerCard::register_callbacks_static();
+    helix::ui::init_ams_tool_text_observers();
 
     // Register back button callback for detail view
     lv_xml_register_event_cb(nullptr, "on_ams_overview_back_clicked", [](lv_event_t* e) {

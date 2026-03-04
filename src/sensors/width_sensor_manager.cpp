@@ -5,7 +5,6 @@
 
 #include "ui_update_queue.h"
 
-#include "format_utils.h"
 #include "spdlog/spdlog.h"
 #include "static_subject_registry.h"
 
@@ -482,19 +481,10 @@ void WidthSensorManager::update_subjects() {
     int diameter = get_diameter_value();
     lv_subject_set_int(&diameter_, diameter);
 
-    // Update text subject: format as "1.75 mm" or "—" if unavailable
-    if (diameter >= 0) {
-        // Diameter is stored as mm * 1000, so divide to get mm with 2 decimal places
-        float diameter_mm = diameter / 1000.0f;
-        helix::format::format_diameter_mm(diameter_mm, diameter_text_buf_,
-                                          sizeof(diameter_text_buf_));
-    } else {
-        snprintf(diameter_text_buf_, sizeof(diameter_text_buf_), "%s", helix::format::UNAVAILABLE);
-    }
-    lv_subject_copy_string(&diameter_text_, diameter_text_buf_);
+    // Text formatting (diameter_text_) handled by UI-layer observer in WidthSensorWidget
 
-    spdlog::trace("[WidthSensorManager] Subjects updated: diameter={}, text={}",
-                  lv_subject_get_int(&diameter_), diameter_text_buf_);
+    spdlog::trace("[WidthSensorManager] Subjects updated: diameter={}",
+                  lv_subject_get_int(&diameter_));
 }
 
 } // namespace helix::sensors

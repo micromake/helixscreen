@@ -43,6 +43,12 @@ AmsDryerCard::~AmsDryerCard() {
 AmsDryerCard::AmsDryerCard(AmsDryerCard&& other) noexcept
     : active_(other.active_), dryer_card_(other.dryer_card_), dryer_modal_(other.dryer_modal_),
       progress_fill_(other.progress_fill_), progress_observer_(std::move(other.progress_observer_)),
+      humidity_observer_(std::move(other.humidity_observer_)),
+      temp_text_observer_(std::move(other.temp_text_observer_)),
+      target_text_observer_(std::move(other.target_text_observer_)),
+      time_text_observer_(std::move(other.time_text_observer_)),
+      modal_temp_text_observer_(std::move(other.modal_temp_text_observer_)),
+      modal_duration_text_observer_(std::move(other.modal_duration_text_observer_)),
       cached_presets_(std::move(other.cached_presets_)) {
     // Update modal's user_data so the LV_EVENT_DELETE callback points to new owner
     if (dryer_modal_) {
@@ -63,6 +69,12 @@ AmsDryerCard& AmsDryerCard::operator=(AmsDryerCard&& other) noexcept {
         dryer_modal_ = other.dryer_modal_;
         progress_fill_ = other.progress_fill_;
         progress_observer_ = std::move(other.progress_observer_);
+        humidity_observer_ = std::move(other.humidity_observer_);
+        temp_text_observer_ = std::move(other.temp_text_observer_);
+        target_text_observer_ = std::move(other.target_text_observer_);
+        time_text_observer_ = std::move(other.time_text_observer_);
+        modal_temp_text_observer_ = std::move(other.modal_temp_text_observer_);
+        modal_duration_text_observer_ = std::move(other.modal_duration_text_observer_);
         cached_presets_ = std::move(other.cached_presets_);
 
         // Update modal's user_data so the LV_EVENT_DELETE callback points to new owner
@@ -137,9 +149,68 @@ bool AmsDryerCard::setup(lv_obj_t* panel) {
         spdlog::debug("[AmsDryerCard] Humidity observer set up");
     }
 
+    // Observe raw dryer temp and format text for display
+    auto& ams = AmsState::instance();
+    temp_text_observer_ = observe_int_sync<AmsDryerCard>(
+        ams.get_dryer_current_temp_subject(), this, [](AmsDryerCard* /*self*/, int temp) {
+            auto& a = AmsState::instance();
+            if (lv_subject_get_int(a.get_dryer_supported_subject()) == 0) {
+                lv_subject_copy_string(a.get_dryer_current_temp_text_subject(), "---");
+            } else {
+                char buf[16];
+                snprintf(buf, sizeof(buf), "%d\xC2\xB0""C", temp);
+                lv_subject_copy_string(a.get_dryer_current_temp_text_subject(), buf);
+            }
+        });
+
+    // Observe raw dryer target temp and format text
+    target_text_observer_ = observe_int_sync<AmsDryerCard>(
+        ams.get_dryer_target_temp_subject(), this, [](AmsDryerCard* /*self*/, int target) {
+            auto& a = AmsState::instance();
+            if (lv_subject_get_int(a.get_dryer_supported_subject()) == 0) {
+                lv_subject_copy_string(a.get_dryer_target_temp_text_subject(), "---");
+            } else if (target > 0) {
+                char buf[16];
+                snprintf(buf, sizeof(buf), "%d\xC2\xB0""C", target);
+                lv_subject_copy_string(a.get_dryer_target_temp_text_subject(), buf);
+            } else {
+                lv_subject_copy_string(a.get_dryer_target_temp_text_subject(), "Off");
+            }
+        });
+
+    // Observe dryer remaining time and format duration text
+    time_text_observer_ = observe_int_sync<AmsDryerCard>(
+        ams.get_dryer_remaining_min_subject(), this, [](AmsDryerCard* /*self*/, int remaining_min) {
+            auto& a = AmsState::instance();
+            bool active = lv_subject_get_int(a.get_dryer_active_subject()) != 0;
+            if (active && remaining_min > 0) {
+                std::string time_str = helix::format::duration_remaining(remaining_min * 60);
+                lv_subject_copy_string(a.get_dryer_time_text_subject(), time_str.c_str());
+            } else {
+                lv_subject_copy_string(a.get_dryer_time_text_subject(), "");
+            }
+        });
+
+    // Observe modal target temp and format text (e.g., "55°C")
+    modal_temp_text_observer_ = observe_int_sync<AmsDryerCard>(
+        ams.get_modal_target_temp_subject(), this, [](AmsDryerCard* /*self*/, int temp) {
+            auto& a = AmsState::instance();
+            char buf[16];
+            snprintf(buf, sizeof(buf), "%d\xC2\xB0""C", temp);
+            lv_subject_copy_string(a.get_dryer_modal_temp_text_subject(), buf);
+        });
+
+    // Observe modal duration and format text (e.g., "4h", "30m", "4h 30m")
+    modal_duration_text_observer_ = observe_int_sync<AmsDryerCard>(
+        ams.get_modal_duration_subject(), this, [](AmsDryerCard* /*self*/, int duration_min) {
+            auto& a = AmsState::instance();
+            std::string duration = helix::format::duration(duration_min * 60);
+            lv_subject_copy_string(a.get_dryer_modal_duration_text_subject(), duration.c_str());
+        });
+
     // Modal is created on-demand via helix::ui::modal_show() in on_open_modal_cb
     // Initial sync of dryer state
-    AmsState::instance().sync_dryer_from_backend();
+    ams.sync_dryer_from_backend();
 
     active_ = true;
     spdlog::debug("[AmsDryerCard] Setup complete");
@@ -154,6 +225,11 @@ void AmsDryerCard::cleanup() {
     // Remove observers
     progress_observer_.reset();
     humidity_observer_.reset();
+    temp_text_observer_.reset();
+    target_text_observer_.reset();
+    time_text_observer_.reset();
+    modal_temp_text_observer_.reset();
+    modal_duration_text_observer_.reset();
 
     // Hide modal if visible (Modal system handles deletion via exit animation).
     // Clear dryer_modal_ unconditionally — even if modal_hide() returns early because

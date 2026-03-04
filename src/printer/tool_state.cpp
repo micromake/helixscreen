@@ -146,7 +146,7 @@ void ToolState::init_tools(const helix::PrinterDiscovery& hardware) {
     int version = lv_subject_get_int(&tools_version_) + 1;
     lv_subject_set_int(&tools_version_, version);
 
-    update_tool_badge();
+    // Tool badge formatting handled by UI-layer observer on tools_version_
 
     spdlog::info("[ToolState] Initialized {} tools (version {})", tools_.size(), version);
 }
@@ -268,7 +268,7 @@ void ToolState::update_from_status(const nlohmann::json& status) {
     }
 
     if (changed) {
-        update_tool_badge();
+        // Tool badge formatting handled by UI-layer observer on tools_version_
         int version = lv_subject_get_int(&tools_version_) + 1;
         lv_subject_set_int(&tools_version_, version);
         spdlog::trace("[ToolState] Status updated, version {}", version);
@@ -293,21 +293,7 @@ std::string ToolState::nozzle_label() const {
     return "Nozzle";
 }
 
-void ToolState::update_tool_badge() {
-    if (!subjects_initialized_) {
-        return;
-    }
-
-    const auto* tool = is_multi_tool() ? active_tool() : nullptr;
-    if (tool) {
-        std::snprintf(tool_badge_text_buf_, sizeof(tool_badge_text_buf_), "%s", tool->name.c_str());
-    } else {
-        tool_badge_text_buf_[0] = '\0';
-    }
-
-    lv_subject_copy_string(&tool_badge_text_, tool_badge_text_buf_);
-    lv_subject_set_int(&show_tool_badge_, tool ? 1 : 0);
-}
+// Tool badge formatting moved to UI layer (ui_ams_tool_text.cpp)
 
 std::string ToolState::tool_name_for_extruder(const std::string& extruder_name) const {
     for (const auto& tool : tools_) {

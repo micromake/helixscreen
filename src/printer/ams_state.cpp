@@ -19,7 +19,6 @@
 
 #include "ams_backend_mock.h"
 #include "app_globals.h"
-#include "format_utils.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "observer_factory.h"
@@ -232,6 +231,8 @@ void AmsState::init_subjects(bool register_xml) {
 
     // Tool change progress subjects
     INIT_SUBJECT_INT(toolchange_visible, 0, subjects_, register_xml);
+    INIT_SUBJECT_INT(ams_current_toolchange, -1, subjects_, register_xml);
+    INIT_SUBJECT_INT(ams_number_of_toolchanges, 0, subjects_, register_xml);
     INIT_SUBJECT_STRING(toolchange_text, "", subjects_, register_xml);
 
     // Filament path visualization subjects
@@ -254,7 +255,9 @@ void AmsState::init_subjects(bool register_xml) {
     INIT_SUBJECT_STRING(dryer_target_temp_text, "---", subjects_, register_xml);
     INIT_SUBJECT_STRING(dryer_time_text, "", subjects_, register_xml);
 
-    // Dryer modal editing subjects
+    // Dryer modal editing subjects (raw int + formatted text)
+    INIT_SUBJECT_INT(modal_target_temp, DEFAULT_DRYER_TEMP_C, subjects_, register_xml);
+    INIT_SUBJECT_INT(modal_duration_min, DEFAULT_DRYER_DURATION_MIN, subjects_, register_xml);
     INIT_SUBJECT_STRING(dryer_modal_temp_text, "55°C", subjects_, register_xml);
     INIT_SUBJECT_STRING(dryer_modal_duration_text, "4h", subjects_, register_xml);
 
@@ -758,19 +761,7 @@ void AmsState::sync_from_backend() {
         lv_subject_set_int(&ams_current_tool_, info.current_tool);
     }
 
-    // Update formatted tool text (e.g., "T0", "T1", or "---" when no tool active)
-    if (info.current_tool >= 0) {
-        snprintf(ams_current_tool_text_buf_, sizeof(ams_current_tool_text_buf_), "T%d",
-                 info.current_tool);
-        if (strcmp(lv_subject_get_string(&ams_current_tool_text_),
-                  ams_current_tool_text_buf_) != 0) {
-            lv_subject_copy_string(&ams_current_tool_text_, ams_current_tool_text_buf_);
-        }
-    } else {
-        if (strcmp(lv_subject_get_string(&ams_current_tool_text_), "---") != 0) {
-            lv_subject_copy_string(&ams_current_tool_text_, "---");
-        }
-    }
+    // Tool text formatting (ams_current_tool_text_) handled by UI-layer observer
 
     int new_loaded = info.filament_loaded ? 1 : 0;
     if (lv_subject_get_int(&filament_loaded_) != new_loaded) {
@@ -795,24 +786,21 @@ void AmsState::sync_from_backend() {
         lv_subject_set_int(&ams_slot_count_, info.total_slots);
     }
 
-    // Update tool change progress display
+    // Update tool change progress raw data (text formatting in UI layer)
     if (info.number_of_toolchanges > 0) {
         if (lv_subject_get_int(&toolchange_visible_) != 1) {
             lv_subject_set_int(&toolchange_visible_, 1);
-        }
-        int display_current = std::max(0, info.current_toolchange + 1); // 1-based
-        snprintf(toolchange_text_buf_, sizeof(toolchange_text_buf_), "%d / %d", display_current,
-                 info.number_of_toolchanges);
-        if (strcmp(lv_subject_get_string(&toolchange_text_), toolchange_text_buf_) != 0) {
-            lv_subject_copy_string(&toolchange_text_, toolchange_text_buf_);
         }
     } else {
         if (lv_subject_get_int(&toolchange_visible_) != 0) {
             lv_subject_set_int(&toolchange_visible_, 0);
         }
-        if (strcmp(lv_subject_get_string(&toolchange_text_), "") != 0) {
-            lv_subject_copy_string(&toolchange_text_, "");
-        }
+    }
+    if (lv_subject_get_int(&ams_current_toolchange_) != info.current_toolchange) {
+        lv_subject_set_int(&ams_current_toolchange_, info.current_toolchange);
+    }
+    if (lv_subject_get_int(&ams_number_of_toolchanges_) != info.number_of_toolchanges) {
+        lv_subject_set_int(&ams_number_of_toolchanges_, info.number_of_toolchanges);
     }
 
     // Update action detail string
@@ -1054,34 +1042,8 @@ void AmsState::sync_dryer_from_backend() {
         lv_subject_set_int(&dryer_progress_pct_, new_progress);
     }
 
-    // Format temperature text strings.
-    // Use local buffers for formatting, then copy to subject — the subject's value
-    // pointer aliases the member buf_ arrays, so writing directly to buf_ modifies
-    // the subject value without triggering observer notification.
-    if (dryer.supported) {
-        char buf[16];
-        snprintf(buf, sizeof(buf), "%d\xC2\xB0""C", static_cast<int>(dryer.current_temp_c));
-        lv_subject_copy_string(&dryer_current_temp_text_, buf);
-
-        if (dryer.target_temp_c > 0) {
-            snprintf(buf, sizeof(buf), "%d\xC2\xB0""C", static_cast<int>(dryer.target_temp_c));
-        } else {
-            snprintf(buf, sizeof(buf), "Off");
-        }
-        lv_subject_copy_string(&dryer_target_temp_text_, buf);
-
-        // Format time remaining text
-        if (dryer.active && dryer.remaining_min > 0) {
-            std::string time_str = helix::format::duration_remaining(dryer.remaining_min * 60);
-            lv_subject_copy_string(&dryer_time_text_, time_str.c_str());
-        } else {
-            lv_subject_copy_string(&dryer_time_text_, "");
-        }
-    } else {
-        lv_subject_copy_string(&dryer_current_temp_text_, "---");
-        lv_subject_copy_string(&dryer_target_temp_text_, "---");
-        lv_subject_copy_string(&dryer_time_text_, "");
-    }
+    // Text formatting (dryer_current_temp_text_, dryer_target_temp_text_, dryer_time_text_)
+    // is handled by observers in AmsDryerCard::setup() — UI-layer responsibility.
 
     spdlog::trace("[AMS State] Synced dryer - supported={}, active={}, temp={}→{}°C, {}min left",
                   dryer.supported, dryer.active, static_cast<int>(dryer.current_temp_c),
@@ -1659,12 +1621,12 @@ void AmsState::adjust_modal_temp(int delta_c) {
         max_temp = dryer.max_temp_c;
     }
 
-    int new_temp = modal_target_temp_c_ + delta_c;
+    int cur = lv_subject_get_int(&modal_target_temp_);
+    int new_temp = cur + delta_c;
     new_temp = std::max(static_cast<int>(min_temp), std::min(new_temp, static_cast<int>(max_temp)));
-    modal_target_temp_c_ = new_temp;
+    lv_subject_set_int(&modal_target_temp_, new_temp);
 
-    update_modal_text_subjects();
-    spdlog::debug("[AMS State] Modal temp adjusted to {}°C", modal_target_temp_c_);
+    spdlog::debug("[AMS State] Modal temp adjusted to {}°C", new_temp);
 }
 
 void AmsState::adjust_modal_duration(int delta_min) {
@@ -1678,38 +1640,19 @@ void AmsState::adjust_modal_duration(int delta_min) {
         max_duration = dryer.max_duration_min;
     }
 
-    int new_duration = modal_duration_min_ + delta_min;
+    int cur = lv_subject_get_int(&modal_duration_min_);
+    int new_duration = cur + delta_min;
     new_duration = std::max(MIN_DRYER_DURATION_MIN, std::min(new_duration, max_duration));
-    modal_duration_min_ = new_duration;
+    lv_subject_set_int(&modal_duration_min_, new_duration);
 
-    update_modal_text_subjects();
-    spdlog::debug("[AMS State] Modal duration adjusted to {} min", modal_duration_min_);
+    spdlog::debug("[AMS State] Modal duration adjusted to {} min", new_duration);
 }
 
 void AmsState::set_modal_preset(int temp_c, int duration_min) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    modal_target_temp_c_ = temp_c;
-    modal_duration_min_ = duration_min;
-    update_modal_text_subjects();
+    lv_subject_set_int(&modal_target_temp_, temp_c);
+    lv_subject_set_int(&modal_duration_min_, duration_min);
     spdlog::debug("[AMS State] Modal preset set: {}°C for {} min", temp_c, duration_min);
-}
-
-void AmsState::update_modal_text_subjects() {
-    // Format temperature (e.g., "55°C")
-    snprintf(dryer_modal_temp_text_buf_, sizeof(dryer_modal_temp_text_buf_), "%d°C",
-             modal_target_temp_c_);
-    if (strcmp(lv_subject_get_string(&dryer_modal_temp_text_), dryer_modal_temp_text_buf_) != 0) {
-        lv_subject_copy_string(&dryer_modal_temp_text_, dryer_modal_temp_text_buf_);
-    }
-
-    // Format duration using utility (e.g., "4h", "30m", "4h 30m")
-    std::string duration = helix::format::duration(modal_duration_min_ * 60);
-    snprintf(dryer_modal_duration_text_buf_, sizeof(dryer_modal_duration_text_buf_), "%s",
-             duration.c_str());
-    if (strcmp(lv_subject_get_string(&dryer_modal_duration_text_),
-              dryer_modal_duration_text_buf_) != 0) {
-        lv_subject_copy_string(&dryer_modal_duration_text_, dryer_modal_duration_text_buf_);
-    }
 }
 
 // ============================================================================
