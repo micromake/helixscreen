@@ -7,6 +7,7 @@
 #include "ui_update_queue.h"
 
 #include "app_globals.h"
+#include "memory_monitor.h"
 #include "observer_factory.h"
 #include "thumbnail_cache.h"
 #include "thumbnail_processor.h"
@@ -102,6 +103,7 @@ void ActivePrintMediaManager::process_filename(const char* raw_filename) {
         return;
     }
     last_was_empty_ = false;
+    helix::MemoryMonitor::log_now("active_media_process_filename");
 
     std::string filename = raw_filename;
 
@@ -246,6 +248,7 @@ void ActivePrintMediaManager::load_thumbnail_for_file(const std::string& filenam
                         std::make_unique<std::string>(lvgl_path), [state](std::string* path) {
                             state->set_print_thumbnail_path(*path);
                             spdlog::info("[ActivePrintMediaManager] Thumbnail path set: {}", *path);
+                            helix::MemoryMonitor::log_now("thumbnail_loaded");
                         });
                 },
                 [](const std::string& error) {

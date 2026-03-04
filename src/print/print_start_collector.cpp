@@ -7,6 +7,7 @@
 
 #include "config.h"
 #include "format_utils.h"
+#include "memory_monitor.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 
 #include <spdlog/spdlog.h>
@@ -81,6 +82,7 @@ void PrintStartCollector::start() {
         phase_enter_times_.clear();
     }
     fallbacks_enabled_.store(false); // Will be enabled after initial window
+    helix::MemoryMonitor::log_now("print_start_collector_start");
 
     // Load prediction history from config
     load_prediction_history();
