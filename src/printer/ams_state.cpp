@@ -747,6 +747,8 @@ void AmsState::sync_from_backend() {
         lv_subject_set_pointer(&ams_system_logo_, system_logo_buf_);
     }
     if (lv_subject_get_int(&current_slot_) != info.current_slot) {
+        spdlog::debug("[AmsState] current_slot changed: {} → {}",
+                      lv_subject_get_int(&current_slot_), info.current_slot);
         lv_subject_set_int(&current_slot_, info.current_slot);
     }
     if (lv_subject_get_int(&pending_target_slot_) != info.pending_target_slot) {
@@ -1530,6 +1532,7 @@ void AmsState::sync_current_loaded_from_backend(const AmsSystemInfo& primary_inf
         }
     } else if (slot_index >= 0 && filament_loaded) {
         // Filament is loaded - show slot info from the backend that has it loaded
+        spdlog::debug("[AmsState] sync_current_loaded: slot={}, filament_loaded=true", slot_index);
         SlotInfo slot_info = loaded_backend->get_slot_info(slot_index);
 
         // Sync Spoolman active spool when slot with spoolman_id is loaded.

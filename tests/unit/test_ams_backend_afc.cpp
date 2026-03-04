@@ -2840,7 +2840,7 @@ TEST_CASE("Mixed BoxTurtle + ViViD units with string format", "[ams][afc][mixed]
     }
 }
 
-TEST_CASE("Partial unit data triggers reorganization for available units",
+TEST_CASE("Partial unit data waits for all units before reorganization",
           "[ams][afc][mixed]") {
     AmsBackendAfcTestHelper helper;
     helper.initialize_test_lanes_zero_based(12);
@@ -2877,17 +2877,13 @@ TEST_CASE("Partial unit data triggers reorganization for available units",
     params["AFC_OpenAMS AMS_1"] = ams1_data;
     helper.feed_status_update(params);
 
-    // With 2 of 3 units having data, reorganization should happen (>=2 threshold)
+    // With only 2 of 3 units having data, reorganization should NOT happen yet.
+    // Premature reorganization drops the last unit's lane data from the stash.
     auto info = helper.get_system_info();
-    REQUIRE(info.units.size() == 2);
-    // The 2 known units should have 8 lanes total
-    int partial_slots = 0;
-    for (const auto& unit : info.units) {
-        partial_slots += static_cast<int>(unit.slots.size());
-    }
-    CHECK(partial_slots == 8);
+    // Units from initial initialize_slots remain (1 flat unit), not reorganized
+    CHECK(info.units.size() == 1);
 
-    // Now feed 3rd unit → re-reorganization to 3 units
+    // Now feed 3rd unit → reorganization triggers with all units present
     nlohmann::json ams2_data;
     ams2_data["lanes"] = nlohmann::json::array({"lane8", "lane9", "lane10", "lane11"});
     ams2_data["extruders"] = nlohmann::json::array({"extruder5"});
@@ -2898,7 +2894,7 @@ TEST_CASE("Partial unit data triggers reorganization for available units",
     params2["AFC_OpenAMS AMS_2"] = ams2_data;
     helper.feed_status_update(params2);
 
-    // Now all 3 units should be present
+    // Now all 3 units should be present with all lane data preserved
     info = helper.get_system_info();
     REQUIRE(info.units.size() == 3);
     int total_slots = 0;
@@ -2966,4 +2962,172 @@ TEST_CASE("Non-contiguous lane numbering assigns sequential global indices",
         }
     }
     CHECK(expected_global == 12);
+}
+
+// ============================================================================
+// Bug fix: Tool changer current_slot overwrite
+// ============================================================================
+
+TEST_CASE("AFC tool changer reconciliation preserves current_load slot",
+          "[ams][afc][toolchanger]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_zero_based(4);
+    helper.initialize_slots_from_discovery();
+
+    // In a tool changer, ALL 4 lanes are tool_loaded: true (direct-feed).
+    // AFC reports current_load = "lane2" meaning lane2 is active at toolhead.
+    // The reconciliation block must NOT overwrite current_slot with lane0.
+
+    // Build a single status update containing BOTH AFC state and lane data
+    nlohmann::json params;
+
+    // AFC global state with current_load
+    params["AFC"] = {{"current_load", "lane2"}};
+
+    // All 4 lanes report as loaded (tool changer direct-feed)
+    for (int i = 0; i < 4; ++i) {
+        std::string key = "AFC_stepper lane" + std::to_string(i);
+        params[key] = {
+            {"status", "Tooled"},
+            {"tool_loaded", true},
+            {"color", "FF0000"},
+            {"material", "PLA"},
+            {"spool_id", std::to_string(100 + i)},
+            {"weight", 750}};
+    }
+
+    helper.feed_status_update(params);
+
+    // current_slot should be 2 (lane2), not 0 (first loaded lane)
+    auto info = helper.get_system_info();
+    CHECK(info.current_slot == 2);
+    CHECK(info.filament_loaded == true);
+}
+
+TEST_CASE("AFC parse_lane_data does not overwrite valid current_slot",
+          "[ams][afc][toolchanger]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_zero_based(4);
+    helper.initialize_slots_from_discovery();
+
+    // First set current_slot via AFC state (current_load)
+    helper.feed_afc_state({{"current_load", "lane2"}});
+    REQUIRE(helper.get_system_info().current_slot == 2);
+
+    // Now feed lane data where all lanes are tool_loaded
+    nlohmann::json lane_data;
+    for (int i = 0; i < 4; ++i) {
+        std::string name = "lane" + std::to_string(i);
+        lane_data[name] = {
+            {"tool_loaded", true},
+            {"color", "00FF00"},
+            {"material", "PETG"},
+            {"spool_id", std::to_string(200 + i)}};
+    }
+    helper.feed_afc_state({{"lanes", lane_data}});
+
+    // current_slot should still be 2 (set by current_load), not overwritten
+    auto info = helper.get_system_info();
+    CHECK(info.current_slot == 2);
+}
+
+// ============================================================================
+// Bug fix: 3-unit premature reorganize drops last unit's lanes
+// ============================================================================
+
+TEST_CASE("AFC 3-unit incremental arrival preserves all unit lanes",
+          "[ams][afc][mixed][toolchanger]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_zero_based(12);
+    helper.initialize_slots_from_discovery();
+
+    // Feed AFC state with 3 string-format units
+    nlohmann::json afc_state;
+    afc_state["units"] = nlohmann::json::array(
+        {"OpenAMS AMS_1", "OpenAMS AMS_2", "Box_Turtle Turtle_1"});
+    afc_state["lanes"] = nlohmann::json::array(
+        {"lane0", "lane1", "lane2", "lane3", "lane4", "lane5", "lane6", "lane7",
+         "lane8", "lane9", "lane10", "lane11"});
+    afc_state["extruders"] = nlohmann::json::array({"extruder"});
+    helper.feed_afc_state(afc_state);
+
+    REQUIRE(helper.get_unit_infos().size() == 3);
+
+    // Feed stepper data with color/material for ALL 12 lanes BEFORE unit objects
+    for (int i = 0; i < 12; ++i) {
+        std::string lane_name = "lane" + std::to_string(i);
+        nlohmann::json stepper_data = {
+            {"color", "FF" + std::to_string(1000 + i).substr(1)},
+            {"material", "PLA"},
+            {"spool_id", std::to_string(300 + i)},
+            {"weight", 800},
+            {"tool_loaded", (i >= 8)}  // Turtle lanes are direct-feed
+        };
+        helper.feed_afc_stepper(lane_name, stepper_data);
+    }
+
+    // Now feed unit objects ONE AT A TIME (simulating incremental status notifications)
+    // Unit 1: OpenAMS AMS_1
+    {
+        nlohmann::json ams1_data;
+        ams1_data["lanes"] = nlohmann::json::array({"lane0", "lane1", "lane2", "lane3"});
+        ams1_data["extruders"] = nlohmann::json::array({"extruder0"});
+        ams1_data["hubs"] = nlohmann::json::array({"Hub_1"});
+        ams1_data["buffers"] = nlohmann::json::array();
+
+        nlohmann::json params;
+        params["AFC_OpenAMS AMS_1"] = ams1_data;
+        helper.feed_status_update(params);
+    }
+
+    // Unit 2: OpenAMS AMS_2
+    {
+        nlohmann::json ams2_data;
+        ams2_data["lanes"] = nlohmann::json::array({"lane4", "lane5", "lane6", "lane7"});
+        ams2_data["extruders"] = nlohmann::json::array({"extruder1"});
+        ams2_data["hubs"] = nlohmann::json::array({"Hub_2"});
+        ams2_data["buffers"] = nlohmann::json::array();
+
+        nlohmann::json params;
+        params["AFC_OpenAMS AMS_2"] = ams2_data;
+        helper.feed_status_update(params);
+    }
+
+    // Unit 3: Box_Turtle Turtle_1
+    {
+        nlohmann::json bt_data;
+        bt_data["lanes"] = nlohmann::json::array({"lane8", "lane9", "lane10", "lane11"});
+        bt_data["extruders"] =
+            nlohmann::json::array({"extruder", "extruder2", "extruder3", "extruder4"});
+        bt_data["hubs"] = nlohmann::json::array();
+        bt_data["buffers"] = nlohmann::json::array();
+
+        nlohmann::json params;
+        params["AFC_BoxTurtle Turtle_1"] = bt_data;
+        helper.feed_status_update(params);
+    }
+
+    // After all 3 units processed, ALL 12 slots should have valid data
+    auto info = helper.get_system_info();
+    REQUIRE(info.units.size() == 3);
+
+    int total_slots = 0;
+    for (const auto& unit : info.units) {
+        total_slots += static_cast<int>(unit.slots.size());
+    }
+    REQUIRE(total_slots == 12);
+
+    // Specifically verify that Turtle_1's lanes (8-11) have color/material from stepper data
+    // Find Turtle unit - after reorganize, units are sorted alphabetically
+    bool found_turtle = false;
+    for (const auto& unit : info.units) {
+        if (unit.name.find("Turtle") != std::string::npos) {
+            found_turtle = true;
+            for (const auto& slot : unit.slots) {
+                CHECK(slot.material != "");
+                CHECK(slot.color_rgb != 0x808080);  // Not default gray
+            }
+        }
+    }
+    CHECK(found_turtle);
 }

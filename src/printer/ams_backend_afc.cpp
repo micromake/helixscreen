@@ -398,15 +398,20 @@ void AmsBackendAfc::handle_status_update(const nlohmann::json& notification) {
             has_explicit_filament_loaded = params["afc"].contains("filament_loaded");
         }
 
+        // Track whether parse_afc_state set current_slot from current_load/current_lane.
+        // When set, the reconciliation block must not overwrite it (tool changers have
+        // ALL lanes loaded, so scanning for first loaded lane picks the wrong one).
+        bool current_slot_set_by_afc_state = false;
+
         // Parse global AFC state if present
         if (params.contains("AFC") && params["AFC"].is_object()) {
-            parse_afc_state(params["AFC"], deferred_error_event);
+            parse_afc_state(params["AFC"], deferred_error_event, current_slot_set_by_afc_state);
             state_changed = true;
         }
 
         // Legacy: also check for lowercase "afc" (older AFC versions)
         if (params.contains("afc") && params["afc"].is_object()) {
-            parse_afc_state(params["afc"], deferred_error_event);
+            parse_afc_state(params["afc"], deferred_error_event, current_slot_set_by_afc_state);
             state_changed = true;
         }
 
@@ -451,7 +456,18 @@ void AmsBackendAfc::handle_status_update(const nlohmann::json& notification) {
                 }
             }
             system_info_.filament_loaded = any_loaded;
-            system_info_.current_slot = any_loaded ? loaded_slot : -1;
+            // Only set current_slot as fallback when AFC state didn't provide
+            // an authoritative value (tool changers have ALL lanes loaded, so
+            // scanning for first loaded lane would pick the wrong one)
+            if (!current_slot_set_by_afc_state) {
+                system_info_.current_slot = any_loaded ? loaded_slot : -1;
+                spdlog::debug("[AMS AFC] Reconciliation: current_slot={} (from lane scan)",
+                              system_info_.current_slot);
+            } else {
+                spdlog::debug("[AMS AFC] Reconciliation: preserving current_slot={} (set by AFC "
+                              "state), scan found loaded_slot={}",
+                              system_info_.current_slot, loaded_slot);
+            }
         }
 
         // Parse AFC_hub objects for hub sensor state
@@ -511,7 +527,8 @@ void AmsBackendAfc::handle_status_update(const nlohmann::json& notification) {
 }
 
 void AmsBackendAfc::parse_afc_state(const nlohmann::json& afc_data,
-                                    std::string& deferred_error_event) {
+                                    std::string& deferred_error_event,
+                                    bool& current_slot_set_by_afc_state) {
     // Parse current lane — try "current_lane" first, fall back to "current_load"
     // Some AFC versions use "current_load" instead of "current_lane"
     std::string loaded_lane;
@@ -525,6 +542,7 @@ void AmsBackendAfc::parse_afc_state(const nlohmann::json& afc_data,
         int slot_index = slots_.index_of(loaded_lane);
         if (slot_index >= 0) {
             system_info_.current_slot = slot_index;
+            current_slot_set_by_afc_state = true;
             // Derive current_tool from slot's mapped tool
             int mapped = slots_.tool_for_slot(slot_index);
             if (mapped >= 0) {
@@ -663,6 +681,7 @@ void AmsBackendAfc::parse_afc_state(const nlohmann::json& afc_data,
         int load_slot = slots_.index_of(load_lane);
         if (load_slot >= 0) {
             system_info_.current_slot = load_slot;
+            current_slot_set_by_afc_state = true;
             spdlog::trace("[AMS AFC] Current load: {} (slot {})", load_lane, load_slot);
         }
     }
@@ -1242,19 +1261,23 @@ void AmsBackendAfc::parse_afc_unit_object(AfcUnitInfo& unit_info, const nlohmann
                   unit_info.hubs.size(), unit_info.buffers.size(),
                   path_topology_to_string(unit_info.topology));
 
-    // Reorganize when we have enough unit data. Don't block all units
-    // if one unit's Klipper object data hasn't arrived yet.
+    // Reorganize only when ALL known units have lane data.
+    // Triggering early (e.g., >=2) causes the slot registry rebuild to consume
+    // stashed lane data before all units are accounted for, resulting in the
+    // last-processed unit getting empty/default slot values.
     int units_with_lanes = 0;
     for (const auto& ui : unit_infos_) {
         if (!ui.lanes.empty()) {
             units_with_lanes++;
         }
     }
-    // Reorganize when at least 2 units have data (multi-unit partial),
-    // or when all units have data (single unit case or complete arrival)
-    if (units_with_lanes >= 2 ||
-        units_with_lanes == static_cast<int>(unit_infos_.size())) {
+    if (units_with_lanes == static_cast<int>(unit_infos_.size())) {
+        spdlog::debug("[AMS AFC] All {}/{} units have lane data, triggering reorganize",
+                      units_with_lanes, unit_infos_.size());
         rebuild_unit_map_from_klipper();
+    } else {
+        spdlog::debug("[AMS AFC] Waiting for unit data: {}/{} units have lanes",
+                      units_with_lanes, unit_infos_.size());
     }
 }
 
@@ -1635,7 +1658,10 @@ void AmsBackendAfc::parse_lane_data(const nlohmann::json& lane_data) {
     // filament_loaded field, but lane data is the authoritative source for
     // which specific slot is loaded.
     system_info_.filament_loaded = any_tool_loaded;
-    if (any_tool_loaded) {
+    // Only set current_slot as fallback when no authoritative value exists.
+    // In tool changers, multiple lanes are loaded simultaneously, so the
+    // first tool_loaded lane is not necessarily the active one.
+    if (any_tool_loaded && system_info_.current_slot < 0) {
         system_info_.current_slot = tool_loaded_slot;
     }
 }
