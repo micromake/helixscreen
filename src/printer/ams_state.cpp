@@ -365,11 +365,13 @@ void AmsState::deinit_subjects() {
 
     spdlog::trace("[AMS State] Deinitializing subjects");
 
-    // Reset cross-singleton observers FIRST — they observe subjects from
-    // other singletons, which live outside our SubjectManager.
-    // Must be cleaned up while those subjects are still alive.
-    print_state_observer_.reset();
-    dryer_humidity_observer_.reset();
+    // Release cross-singleton observers — they observe subjects from other
+    // singletons (PrinterState, HumiditySensorManager) which may already be
+    // destroyed during StaticSubjectRegistry::deinit_all() reverse-order
+    // teardown. Using release() (not reset()) avoids dereferencing a dangling
+    // subject pointer in lv_observer_remove(). [L073]
+    print_state_observer_.release();
+    dryer_humidity_observer_.release();
 
     // IMPORTANT: clear_backends() MUST precede subjects_.deinit_all() because
     // BackendSlotSubjects are managed outside SubjectManager for lifetime reasons
