@@ -39,6 +39,13 @@
       <lv_label text="Delta:" translation_tag="Delta:" style_text_font="noto_sans_14" style_text_color="#text_muted"/>
       <lv_label name="delta_value" text="--" style_text_font="noto_sans_14" style_text_color="#success"/>
     </lv_obj>
+    <!-- Pressure row -->
+    <lv_obj width="100%"
+            height="content" style_pad_all="0" style_layout="flex" style_flex_flow="row"
+            style_flex_main_place="space_between">
+      <lv_label text="Pressure:" translation_tag="Pressure:" style_text_font="noto_sans_14" style_text_color="#text_muted"/>
+      <lv_label name="pressure_value" text="--" style_text_font="noto_sans_14" style_text_color="#success"/>
+    </lv_obj>
     <!-- Hint -->
     <lv_label name="memory_hint"
               width="100%" text="M to toggle" translation_tag="M to toggle" style_text_font="noto_sans_10" style_text_color="#text_subtle"

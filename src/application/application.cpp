@@ -464,6 +464,10 @@ int Application::run(int argc, char** argv) {
 
     // Phase 16: Start memory monitoring (logs at TRACE level, -vvv)
     helix::MemoryMonitor::instance().start(5000);
+    helix::MemoryMonitor::instance().set_warning_callback(
+        [](const helix::MemoryWarningEvent& event) {
+            TelemetryManager::instance().record_memory_warning(event);
+        });
 
     // Phase 16b: Force full screen refresh
     // On framebuffer displays with PARTIAL render mode, some widgets may not paint

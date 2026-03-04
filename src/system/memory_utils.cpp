@@ -84,6 +84,51 @@ bool read_private_dirty(int64_t& private_dirty_kb) {
     return false;
 }
 
+bool read_smaps_rollup(SmapsRollup& rollup) {
+    rollup = {};
+
+#ifdef __linux__
+    std::ifstream smaps("/proc/self/smaps_rollup");
+    if (!smaps.is_open())
+        return false;
+
+    int fields_found = 0;
+    std::string line;
+    while (std::getline(smaps, line)) {
+        // Fields in smaps_rollup: "FieldName:     1234 kB"
+        if (line.compare(0, 4, "Rss:") == 0) {
+            rollup.rss_kb = std::stoll(line.substr(4));
+            ++fields_found;
+        } else if (line.compare(0, 4, "Pss:") == 0) {
+            rollup.pss_kb = std::stoll(line.substr(4));
+            ++fields_found;
+        } else if (line.compare(0, 14, "Private_Dirty:") == 0) {
+            rollup.private_dirty_kb = std::stoll(line.substr(14));
+            ++fields_found;
+        } else if (line.compare(0, 14, "Private_Clean:") == 0) {
+            rollup.private_clean_kb = std::stoll(line.substr(14));
+            ++fields_found;
+        } else if (line.compare(0, 13, "Shared_Clean:") == 0) {
+            rollup.shared_clean_kb = std::stoll(line.substr(13));
+            ++fields_found;
+        } else if (line.compare(0, 13, "Shared_Dirty:") == 0) {
+            rollup.shared_dirty_kb = std::stoll(line.substr(13));
+            ++fields_found;
+        } else if (line.compare(0, 8, "SwapPss:") == 0) {
+            rollup.swap_pss_kb = std::stoll(line.substr(8));
+            ++fields_found;
+        } else if (line.compare(0, 5, "Swap:") == 0) {
+            rollup.swap_kb = std::stoll(line.substr(5));
+            ++fields_found;
+        }
+    }
+    return fields_found > 0;
+
+#else
+    return false;
+#endif
+}
+
 MemoryInfo get_system_memory_info() {
     MemoryInfo info;
 

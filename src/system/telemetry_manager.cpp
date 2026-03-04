@@ -480,6 +480,17 @@ void TelemetryManager::record_memory_snapshot(const std::string& trigger) {
     enqueue_event(std::move(event));
 }
 
+void TelemetryManager::record_memory_warning(const helix::MemoryWarningEvent& warning) {
+    if (!enabled_.load() || !initialized_.load()) {
+        return;
+    }
+
+    spdlog::debug("[TelemetryManager] Recording memory warning (level={})",
+                  helix::pressure_level_to_string(warning.level));
+    auto event = build_memory_warning_event(warning);
+    enqueue_event(std::move(event));
+}
+
 void TelemetryManager::record_hardware_profile() {
     if (!enabled_.load() || !initialized_.load()) {
         return;
@@ -1373,6 +1384,58 @@ nlohmann::json TelemetryManager::build_memory_snapshot_event(const std::string& 
     event["vm_swap_kb"] = static_cast<int>(stats.vm_swap_kb);
     event["vm_peak_kb"] = static_cast<int>(stats.vm_peak_kb);
     event["vm_hwm_kb"] = static_cast<int>(stats.vm_hwm_kb);
+
+    // Smaps breakdown
+    helix::SmapsRollup smaps;
+    if (helix::read_smaps_rollup(smaps)) {
+        event["private_dirty_kb"] = static_cast<int>(smaps.private_dirty_kb);
+        event["private_clean_kb"] = static_cast<int>(smaps.private_clean_kb);
+        event["shared_clean_kb"] = static_cast<int>(smaps.shared_clean_kb);
+        event["pss_kb"] = static_cast<int>(smaps.pss_kb);
+    }
+
+    // System memory
+    auto sys = helix::get_system_memory_info();
+    event["system_total_mb"] = static_cast<int>(sys.total_mb());
+    event["system_available_mb"] = static_cast<int>(sys.available_mb());
+
+    return event;
+}
+
+nlohmann::json
+TelemetryManager::build_memory_warning_event(const helix::MemoryWarningEvent& warning) const {
+    json event;
+    event["schema_version"] = SCHEMA_VERSION;
+    event["event"] = "memory_warning";
+    event["device_id"] = get_hashed_device_id();
+    event["timestamp"] = get_timestamp();
+    event["level"] = helix::pressure_level_to_string(warning.level);
+    event["reason"] = warning.reason;
+
+    auto now = std::chrono::steady_clock::now();
+    auto uptime = std::chrono::duration_cast<std::chrono::seconds>(now - init_time_);
+    event["uptime_sec"] = static_cast<int>(uptime.count());
+
+    // Process stats
+    event["rss_kb"] = static_cast<int>(warning.stats.vm_rss_kb);
+    event["vm_size_kb"] = static_cast<int>(warning.stats.vm_size_kb);
+    event["vm_hwm_kb"] = static_cast<int>(warning.stats.vm_hwm_kb);
+    event["vm_swap_kb"] = static_cast<int>(warning.stats.vm_swap_kb);
+
+    // System memory
+    event["system_total_mb"] = static_cast<int>(warning.system_info.total_mb());
+    event["system_available_mb"] = static_cast<int>(warning.system_info.available_mb());
+
+    // Growth
+    event["growth_5min_kb"] = static_cast<int>(warning.growth_5min_kb);
+
+    // Smaps breakdown
+    event["private_dirty_kb"] = static_cast<int>(warning.smaps.private_dirty_kb);
+    event["private_clean_kb"] = static_cast<int>(warning.smaps.private_clean_kb);
+    event["shared_clean_kb"] = static_cast<int>(warning.smaps.shared_clean_kb);
+    event["shared_dirty_kb"] = static_cast<int>(warning.smaps.shared_dirty_kb);
+    event["pss_kb"] = static_cast<int>(warning.smaps.pss_kb);
+    event["swap_pss_kb"] = static_cast<int>(warning.smaps.swap_pss_kb);
 
     return event;
 }

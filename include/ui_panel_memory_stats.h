@@ -74,6 +74,7 @@ class MemoryStatsOverlay {
     lv_obj_t* hwm_label_ = nullptr;
     lv_obj_t* private_label_ = nullptr;
     lv_obj_t* delta_label_ = nullptr;
+    lv_obj_t* pressure_label_ = nullptr;
     lv_timer_t* update_timer_ = nullptr;
 
     int64_t baseline_rss_kb_ = 0;

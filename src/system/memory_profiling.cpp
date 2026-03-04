@@ -48,15 +48,24 @@ lv_timer_t* g_report_timer = nullptr;
  * @param label Label for the log entry
  */
 void log_memory_snapshot_impl(const char* label) {
-    int64_t rss_kb = 0, hwm_kb = 0, private_dirty_kb = 0;
+    int64_t rss_kb = 0, hwm_kb = 0;
 
     if (read_memory_stats(rss_kb, hwm_kb)) {
-        read_private_dirty(private_dirty_kb);
+        SmapsRollup smaps;
+        bool have_smaps = read_smaps_rollup(smaps);
 
         int64_t delta = (g_baseline_rss_kb > 0) ? (rss_kb - g_baseline_rss_kb) : 0;
 
-        spdlog::info("[Memory Profiling] {} RSS={}KB HWM={}KB Private={}KB Delta={:+}KB", label,
-                     rss_kb, hwm_kb, private_dirty_kb, delta);
+        if (have_smaps) {
+            spdlog::info("[Memory Profiling] {} RSS={}KB HWM={}KB Private={}KB "
+                         "PSS={}KB Shared={}KB PrivClean={}KB Swap={}KB Delta={:+}KB",
+                         label, rss_kb, hwm_kb, smaps.private_dirty_kb, smaps.pss_kb,
+                         smaps.shared_clean_kb + smaps.shared_dirty_kb, smaps.private_clean_kb,
+                         smaps.swap_kb, delta);
+        } else {
+            spdlog::info("[Memory Profiling] {} RSS={}KB HWM={}KB Delta={:+}KB", label, rss_kb,
+                         hwm_kb, delta);
+        }
     } else {
         spdlog::debug("[Memory Profiling] stats not available (non-Linux platform)");
     }

@@ -214,6 +214,18 @@ class TelemetryManager {
     void record_memory_snapshot(const std::string& trigger);
 
     /**
+     * @brief Record a memory pressure warning event
+     *
+     * Captures a memory warning with level, reason, stats, and smaps breakdown.
+     * No-op if telemetry is disabled.
+     *
+     * Thread-safe: may be called from any thread.
+     *
+     * @param event Memory warning event data from MemoryMonitor callback
+     */
+    void record_memory_warning(const helix::MemoryWarningEvent& event);
+
+    /**
      * @brief Record a comprehensive hardware profile event
      *
      * Captures full printer hardware inventory: MCUs, build volume, fans,
@@ -641,6 +653,13 @@ class TelemetryManager {
      * @return JSON event with type "memory_snapshot" and memory stats
      */
     nlohmann::json build_memory_snapshot_event(const std::string& trigger) const;
+
+    /**
+     * @brief Build a memory warning event JSON object
+     * @param warning Memory warning event data from MemoryMonitor
+     * @return JSON event with type "memory_warning" and full diagnostics
+     */
+    nlohmann::json build_memory_warning_event(const helix::MemoryWarningEvent& warning) const;
 
     /**
      * @brief Build a hardware profile event JSON object

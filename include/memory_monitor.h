@@ -2,26 +2,49 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * @file memory_monitor.h
- * @brief Background thread that samples and logs memory usage
+ * @brief Background thread that samples memory usage and evaluates pressure thresholds
  *
  * Periodically reads /proc/self/status (Linux) and logs RSS, VmSize, etc.
- * at TRACE level. Useful for diagnosing memory spikes and leaks.
+ * Evaluates device-tier-aware thresholds and fires callbacks on breach.
  *
  * Usage:
  *   MemoryMonitor::instance().start();  // Start monitoring
+ *   MemoryMonitor::instance().set_warning_callback(fn);  // Wire telemetry
  *   MemoryMonitor::instance().stop();   // Stop monitoring
- *
- * Logs appear at TRACE level (-vvv), e.g.:
- *   [MemoryMonitor] RSS=6520kB VmSize=69476kB VmData=60624kB Heap=1234kB
  */
 
 #pragma once
 
+#include "memory_utils.h"
+
+#include <array>
 #include <atomic>
 #include <chrono>
+#include <functional>
+#include <mutex>
+#include <string>
 #include <thread>
 
 namespace helix {
+
+/**
+ * @brief Memory pressure level based on threshold evaluation
+ */
+enum class MemoryPressureLevel { none, elevated, warning, critical };
+
+/**
+ * @brief Device-tier-aware memory thresholds
+ */
+struct MemoryThresholds {
+    size_t warn_rss_kb = 0;
+    size_t critical_rss_kb = 0;
+    size_t warn_available_kb = 0;
+    size_t critical_available_kb = 0;
+    size_t growth_5min_kb = 0; ///< Max acceptable RSS growth over 5 minutes
+
+    /// Build thresholds appropriate for the device tier
+    static MemoryThresholds for_device(const MemoryInfo& info);
+};
 
 /**
  * @brief Memory usage snapshot
@@ -36,13 +59,28 @@ struct MemoryStats {
 };
 
 /**
- * @brief Background memory monitoring thread
+ * @brief Data emitted when a memory pressure threshold is breached
+ */
+struct MemoryWarningEvent {
+    MemoryPressureLevel level = MemoryPressureLevel::none;
+    std::string reason;
+    MemoryStats stats;
+    MemoryInfo system_info;
+    int64_t growth_5min_kb = 0;
+    SmapsRollup smaps;
+};
+
+/**
+ * @brief Background memory monitoring thread with threshold evaluation
  *
- * Singleton that periodically samples memory usage and logs at TRACE level.
+ * Singleton that periodically samples memory usage, evaluates pressure
+ * thresholds, and fires callbacks when limits are breached.
  * Only active on Linux (reads /proc/self/status).
  */
 class MemoryMonitor {
   public:
+    using WarningCallback = std::function<void(const MemoryWarningEvent&)>;
+
     static MemoryMonitor& instance();
 
     /**
@@ -74,6 +112,21 @@ class MemoryMonitor {
      */
     static void log_now(const char* context = nullptr);
 
+    /**
+     * @brief Set callback for memory pressure warnings
+     *
+     * Called from the monitor thread when a threshold is breached.
+     * Rate-limited to at most once per level per 5 minutes.
+     */
+    void set_warning_callback(WarningCallback cb);
+
+    /**
+     * @brief Get current memory pressure level (lock-free)
+     */
+    MemoryPressureLevel pressure_level() const {
+        return pressure_level_.load();
+    }
+
   private:
     MemoryMonitor() = default;
     ~MemoryMonitor();
@@ -82,10 +135,32 @@ class MemoryMonitor {
     MemoryMonitor& operator=(const MemoryMonitor&) = delete;
 
     void monitor_loop();
+    void evaluate_thresholds(const MemoryStats& stats);
+    void fire_warning(MemoryPressureLevel level, const std::string& reason,
+                      const MemoryStats& stats, int64_t growth_kb);
 
     std::atomic<bool> running_{false};
     std::atomic<int> interval_ms_{5000};
     std::thread monitor_thread_;
+
+    // Threshold evaluation
+    MemoryThresholds thresholds_{};
+    std::atomic<MemoryPressureLevel> pressure_level_{MemoryPressureLevel::none};
+    WarningCallback warning_callback_;
+    std::mutex callback_mutex_;
+
+    // Growth tracking: circular buffer of RSS samples at 30s intervals (5-min window)
+    static constexpr size_t RSS_HISTORY_SIZE = 10;
+    std::array<size_t, RSS_HISTORY_SIZE> rss_history_{};
+    size_t rss_history_index_ = 0;
+    size_t rss_history_count_ = 0;
+    int deep_sample_counter_ = 0; ///< Counts 5s ticks; deep sample every 6th (30s)
+
+    // Rate limiting: last warning time per level
+    static constexpr int NUM_LEVELS = 4;
+    std::array<std::chrono::steady_clock::time_point, NUM_LEVELS> last_warning_time_{};
 };
+
+const char* pressure_level_to_string(MemoryPressureLevel level);
 
 } // namespace helix

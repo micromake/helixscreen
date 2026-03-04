@@ -1,5 +1,5 @@
 # HelixScreen Memory Usage Analysis
-*Last Updated: 2025-12-24*
+*Last Updated: 2026-03-04*
 
 ## Executive Summary
 
@@ -177,6 +177,66 @@ The current architecture is **well-optimized** for the use case. Physical memory
 **Don't refactor unless:**
 - Profiling shows OOM crashes on target hardware
 - Need to support 50+ panels
+
+---
+
+## Proactive Memory Monitoring (2026-03-04)
+
+### Overview
+
+`MemoryMonitor` now evaluates device-tier-aware thresholds every 5 seconds and fires `memory_warning` telemetry events on breach. This provides production visibility into memory issues without manual intervention.
+
+### Components
+
+| Component | File | Role |
+|-----------|------|------|
+| `MemoryMonitor` | `include/memory_monitor.h` | Background thread: 5s sampling, threshold evaluation, growth tracking |
+| `SmapsRollup` | `include/memory_utils.h` | Reads `/proc/self/smaps_rollup` for heap vs shared lib vs file-backed breakdown |
+| `TelemetryManager` | `src/system/telemetry_manager.cpp` | `memory_warning` event (on breach) + enriched `memory_snapshot` (hourly) |
+| `MemoryProfiler` | `src/system/memory_profiling.cpp` | SIGUSR1/periodic snapshots now include PSS, shared, swap breakdown |
+| `MemoryStatsOverlay` | `src/ui/ui_panel_memory_stats.cpp` | Dev overlay shows pressure level: OK/ELEVATED/WARNING/CRITICAL |
+
+### Threshold Tiers
+
+| Tier | Total RAM | Warn RSS | Critical RSS | Warn Available | Critical Available | Growth/5min |
+|------|-----------|----------|--------------|----------------|--------------------|-------------|
+| Constrained | <256 MB | 15 MB | 20 MB | 15 MB | 8 MB | 1 MB |
+| Normal | 256-512 MB | 120 MB | 180 MB | 32 MB | 16 MB | 3 MB |
+| Good | >512 MB | 180 MB | 230 MB | 48 MB | 24 MB | 5 MB |
+
+Thresholds are hardcoded (not configurable) — these are operational guardrails, not user preferences. Tier detection uses `MemoryInfo::is_constrained_device()` / `is_normal_device()` / `is_good_device()`.
+
+### How It Works
+
+1. `MemoryMonitor::start(5000)` launches a background thread sampling `/proc/self/status` every 5s
+2. Every sample: RSS and system available memory are checked against thresholds
+3. Every 30s (6th tick): RSS is recorded in a 10-sample circular buffer for growth rate tracking
+4. On breach: `evaluate_thresholds()` determines the highest pressure level and fires `WarningCallback`
+5. Callback is rate-limited to 1 per level per 5 minutes to avoid telemetry spam
+6. `TelemetryManager::record_memory_warning()` builds and enqueues the telemetry event
+7. `MemoryStatsOverlay` (M key) reads `MemoryMonitor::pressure_level()` for real-time display
+
+### Performance Impact
+
+| Operation | Frequency | Cost |
+|-----------|-----------|------|
+| `/proc/self/status` read | 5s | ~50 μs |
+| `/proc/meminfo` read | 5s | ~50 μs |
+| `/proc/self/smaps_rollup` | On warning only | ~100 μs |
+| Telemetry JSON build | ≤1 per 5min | Negligible |
+
+### Verification
+
+```bash
+# Check threshold log at startup
+./build/bin/helix-screen --test -vv 2>&1 | grep "Thresholds:"
+
+# SIGUSR1 snapshot with smaps breakdown
+kill -USR1 $(pidof helix-screen)
+
+# Memory overlay (press M in running app)
+# Shows: RSS, Peak, Private, Delta, Pressure level
+```
 
 ---
 

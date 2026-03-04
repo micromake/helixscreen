@@ -4,6 +4,7 @@
 #include "ui_panel_memory_stats.h"
 
 #include "helix-xml/src/xml/lv_xml.h"
+#include "memory_monitor.h"
 #include "memory_utils.h"
 #include "static_panel_registry.h"
 #include "theme_manager.h"
@@ -64,8 +65,9 @@ void MemoryStatsOverlay::init(lv_obj_t* /*parent*/, bool initially_visible) {
     hwm_label_ = lv_obj_find_by_name(overlay_, "hwm_value");
     private_label_ = lv_obj_find_by_name(overlay_, "private_value");
     delta_label_ = lv_obj_find_by_name(overlay_, "delta_value");
+    pressure_label_ = lv_obj_find_by_name(overlay_, "pressure_value");
 
-    if (!rss_label_ || !hwm_label_ || !private_label_ || !delta_label_) {
+    if (!rss_label_ || !hwm_label_ || !private_label_ || !delta_label_ || !pressure_label_) {
         spdlog::warn("[MemoryStats] Some labels not found in XML");
     }
 
@@ -150,6 +152,7 @@ void MemoryStatsOverlay::shutdown() {
     hwm_label_ = nullptr;
     private_label_ = nullptr;
     delta_label_ = nullptr;
+    pressure_label_ = nullptr;
 
     initialized_ = false;
 }
@@ -220,5 +223,33 @@ void MemoryStatsOverlay::update() {
             lv_label_set_text(private_label_, "N/A");
         if (delta_label_)
             lv_label_set_text(delta_label_, "N/A");
+    }
+
+    // Pressure level is available regardless of /proc stats
+    if (pressure_label_) {
+        auto level = helix::MemoryMonitor::instance().pressure_level();
+        const char* level_str = nullptr;
+        const char* color_token = nullptr;
+        switch (level) {
+        case helix::MemoryPressureLevel::none:
+            level_str = "OK";
+            color_token = "success";
+            break;
+        case helix::MemoryPressureLevel::elevated:
+            level_str = "ELEVATED";
+            color_token = "warning";
+            break;
+        case helix::MemoryPressureLevel::warning:
+            level_str = "WARNING";
+            color_token = "warning";
+            break;
+        case helix::MemoryPressureLevel::critical:
+            level_str = "CRITICAL";
+            color_token = "danger";
+            break;
+        }
+        lv_label_set_text_fmt(pressure_label_, "%s", level_str);
+        lv_obj_set_style_text_color(pressure_label_, theme_manager_get_color(color_token),
+                                    LV_PART_MAIN);
     }
 }

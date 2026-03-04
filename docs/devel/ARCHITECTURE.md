@@ -867,6 +867,25 @@ static void my_widget_delete_cb(lv_event_t* e) {
 - `src/ui/ui_step_progress.cpp` - Complex nested allocations
 - `src/ui/ui_temp_graph.cpp` - Standalone structure with custom destroy
 
+### Memory Monitoring & Pressure Detection
+
+`MemoryMonitor` (singleton, background thread) samples `/proc/self/status` every 5 seconds and evaluates device-tier-aware pressure thresholds:
+
+- **`MemoryPressureLevel`**: `none` → `elevated` → `warning` → `critical`
+- **`MemoryThresholds::for_device()`**: Returns thresholds tuned for constrained (<256 MB), normal (256-512 MB), or good (>512 MB) devices
+- **Growth tracking**: Circular buffer of 10 RSS samples at 30s intervals detects leaks (>N MB growth over 5 minutes)
+- **`SmapsRollup`**: Reads `/proc/self/smaps_rollup` for cheap heap vs shared lib breakdown without per-VMA cost
+
+On threshold breach, fires a rate-limited `WarningCallback` (max 1 per level per 5 minutes) which is wired to `TelemetryManager::record_memory_warning()` in `Application::init()`. The `MemoryStatsOverlay` (M key) reads `MemoryMonitor::pressure_level()` for real-time display.
+
+**Key files:**
+- `include/memory_monitor.h` — `MemoryMonitor`, `MemoryPressureLevel`, `MemoryThresholds`, `MemoryWarningEvent`
+- `include/memory_utils.h` — `MemoryInfo` (device tiers), `SmapsRollup`, `read_smaps_rollup()`
+- `src/system/memory_monitor.cpp` — threshold evaluation, growth tracking, callback firing
+- `src/system/telemetry_manager.cpp` — `memory_warning` and enriched `memory_snapshot` events
+
+See `docs/audits/MEMORY_ANALYSIS.md` § "Proactive Memory Monitoring" for threshold values and verification steps.
+
 ### Static Object Destructors and Logging
 
 **Problem:** Static/global objects are destroyed during `exit()` in undefined order across translation units (static destruction order fiasco). If your destructor tries to use spdlog, it may crash because spdlog's global logger might already be destroyed.

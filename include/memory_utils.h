@@ -23,6 +23,30 @@ bool read_memory_stats(int64_t& rss_kb, int64_t& hwm_kb);
  */
 bool read_private_dirty(int64_t& private_dirty_kb);
 
+/**
+ * @brief Aggregated memory breakdown from /proc/self/smaps_rollup
+ *
+ * Provides cheap per-process memory categorization without per-VMA cost.
+ * Useful for understanding what's consuming memory in production.
+ */
+struct SmapsRollup {
+    int64_t rss_kb = 0;
+    int64_t pss_kb = 0;
+    int64_t private_dirty_kb = 0;
+    int64_t private_clean_kb = 0;
+    int64_t shared_clean_kb = 0;
+    int64_t shared_dirty_kb = 0;
+    int64_t swap_kb = 0;
+    int64_t swap_pss_kb = 0;
+};
+
+/**
+ * @brief Read aggregated smaps data from /proc/self/smaps_rollup (Linux only)
+ * @param rollup Output: all memory breakdown fields
+ * @return true if successful (always false on macOS)
+ */
+bool read_smaps_rollup(SmapsRollup& rollup);
+
 // ============================================================================
 // System memory info (for resource management decisions)
 // ============================================================================

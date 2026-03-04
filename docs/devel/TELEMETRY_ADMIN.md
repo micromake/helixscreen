@@ -196,7 +196,8 @@ If `HELIX_ANALYTICS_READ_TOKEN` needs to be recreated:
 | `crash` | App crash | signal_name, version, platform, uptime, backtrace_depth |
 | `update_failed` | Update attempt failed | reason, version, from_version, platform, http_code |
 | `update_success` | Update completed | version, from_version, platform |
-| `memory_snapshot` | Periodic memory check | trigger, uptime_sec, rss_kb, vm_size_kb, vm_peak_kb, vm_hwm_kb |
+| `memory_snapshot` | Periodic memory check | trigger, uptime_sec, rss_kb, vm_size_kb, vm_peak_kb, vm_hwm_kb, private_dirty_kb, private_clean_kb, shared_clean_kb, pss_kb, system_total_mb, system_available_mb |
+| `memory_warning` | Memory threshold breach | level, reason, rss_kb, vm_size_kb, vm_hwm_kb, vm_swap_kb, system_total_mb, system_available_mb, growth_5min_kb, private_dirty_kb, pss_kb |
 | `hardware_profile` | Hardware/feature inventory | printer.*, mcus.*, extruders.*, fans.*, capabilities.*, ams.*, tools.* |
 | `settings_snapshot` | User configuration | theme, brightness_pct, locale, animations_enabled, time_format |
 | `panel_usage` | Session navigation summary | session_duration_sec, panel_time_sec.*, panel_visits.*, overlay_open_count |
@@ -212,6 +213,7 @@ If `HELIX_ANALYTICS_READ_TOKEN` needs to be recreated:
 | `hardware_profile` | After printer discovery | Once per launch |
 | `settings_snapshot` | After printer discovery | Once per launch |
 | `memory_snapshot` | Session start + hourly timer | ~1/hour |
+| `memory_warning` | Memory threshold breach | Rate-limited: 1/level/5min |
 | `panel_usage` | App shutdown | Once per session |
 | `connection_stability` | App shutdown | Once per session |
 | `print_outcome` | Print reaches terminal state | Per print |
@@ -221,4 +223,53 @@ If `HELIX_ANALYTICS_READ_TOKEN` needs to be recreated:
 | `update_failed` | Update failure | Per failure |
 | `update_success` | Next boot after update | Once per update |
 
-> **Note:** The dashboard views (Overview, Adoption, Prints, Crashes, Releases) currently query `session`, `print_outcome`, and `crash` events. Dashboard views for the newer event types (`hardware_profile`, `settings_snapshot`, `memory_snapshot`, `panel_usage`, `connection_stability`, `print_start_context`, `error_encountered`, `update_failed`, `update_success`) will be added in a future update.
+> **Note:** The dashboard views (Overview, Adoption, Prints, Crashes, Releases) currently query `session`, `print_outcome`, and `crash` events. Dashboard views for the newer event types (`hardware_profile`, `settings_snapshot`, `memory_snapshot`, `memory_warning`, `panel_usage`, `connection_stability`, `print_start_context`, `error_encountered`, `update_failed`, `update_success`) will be added in a future update.
+
+### memory_warning Event Details
+
+Fired when `MemoryMonitor` detects a threshold breach. Rate-limited to at most one event per pressure level per 5 minutes.
+
+**Pressure levels:**
+
+| Level | Meaning | Log Level |
+|-------|---------|-----------|
+| `elevated` | RSS growth exceeding 5-min threshold | INFO |
+| `warning` | RSS or available memory past warning threshold | WARN |
+| `critical` | RSS or available memory past critical threshold | ERROR |
+
+**Thresholds by device tier:**
+
+| Tier | Total RAM | Warn RSS | Critical RSS | Warn Available | Critical Available | Growth/5min |
+|------|-----------|----------|--------------|----------------|--------------------|-------------|
+| Constrained | <256 MB | 15 MB | 20 MB | 15 MB | 8 MB | 1 MB |
+| Normal | 256-512 MB | 120 MB | 180 MB | 32 MB | 16 MB | 3 MB |
+| Good | >512 MB | 180 MB | 230 MB | 48 MB | 24 MB | 5 MB |
+
+**Event fields:**
+
+```json
+{
+  "schema_version": 2,
+  "event": "memory_warning",
+  "device_id": "<hashed>",
+  "timestamp": "<ISO8601>",
+  "level": "warning",
+  "reason": "RSS 185MB exceeds warning threshold 180MB",
+  "uptime_sec": 3600,
+  "rss_kb": 189440,
+  "vm_size_kb": 524288,
+  "vm_hwm_kb": 195000,
+  "vm_swap_kb": 0,
+  "system_total_mb": 1024,
+  "system_available_mb": 512,
+  "growth_5min_kb": 2048,
+  "private_dirty_kb": 150000,
+  "private_clean_kb": 20000,
+  "shared_clean_kb": 15000,
+  "shared_dirty_kb": 1000,
+  "pss_kb": 170000,
+  "swap_pss_kb": 0
+}
+```
+
+**Implementation:** `MemoryMonitor` (background thread, 5s sampling) → `WarningCallback` → `TelemetryManager::record_memory_warning()`. Growth tracking uses a circular buffer of 10 RSS samples at 30s intervals (5-minute window).
