@@ -112,6 +112,7 @@ void LedController::deinit() {
     configured_macros_.clear();
     discovered_led_macros_.clear();
     led_on_at_start_ = false;
+    startup_brightness_ = 80;
     light_on_ = false;
 
     spdlog::info("[LedController] Deinitialized");
@@ -1621,6 +1622,12 @@ void LedController::load_config() {
     auto& on_at_start_json = cfg->get_json("/printer/leds/led_on_at_start");
     led_on_at_start_ = on_at_start_json.is_boolean() ? on_at_start_json.get<bool>() : false;
 
+    auto& startup_brightness_json = cfg->get_json("/printer/leds/startup_brightness");
+    startup_brightness_ =
+        startup_brightness_json.is_number_integer()
+            ? std::clamp(startup_brightness_json.get<int>(), 0, 100)
+            : 80;
+
     spdlog::debug("[LedController] Loaded config: {} strips, {} presets, {} macros",
                   selected_strips_.size(), color_presets_.size(), configured_macros_.size());
 }
@@ -1683,6 +1690,7 @@ void LedController::save_config() {
 
     // LED on at start preference
     cfg->set("/printer/leds/led_on_at_start", led_on_at_start_);
+    cfg->set("/printer/leds/startup_brightness", startup_brightness_);
 
     cfg->save();
     spdlog::debug("[LedController] Saved config");
@@ -1932,6 +1940,14 @@ void LedController::set_led_on_at_start(bool enabled) {
     led_on_at_start_ = enabled;
 }
 
+int LedController::get_startup_brightness() const {
+    return startup_brightness_;
+}
+
+void LedController::set_startup_brightness(int brightness_pct) {
+    startup_brightness_ = std::clamp(brightness_pct, 0, 100);
+}
+
 void LedController::apply_startup_preference() {
     if (!led_on_at_start_) {
         spdlog::debug("[LedController] LED on at start disabled - skipping");
@@ -1943,7 +1959,9 @@ void LedController::apply_startup_preference() {
         return;
     }
 
-    spdlog::info("[LedController] Applying startup preference: turning LEDs on");
+    spdlog::info("[LedController] Applying startup preference: brightness={}%, turning LEDs on",
+                 startup_brightness_);
+    set_brightness_all(startup_brightness_);
     light_set(true);
 }
 

@@ -62,6 +62,8 @@
       "_selected_strips_comment": "Klipper LED strip IDs to control (e.g., [\"neopixel caselight\"]). Configured via Settings > LED Settings.",
       "led_on_at_start": false,
       "_led_on_at_start_comment": "Automatically turn on selected LED strips when Klipper becomes ready. Default: false.",
+      "startup_brightness": 80,
+      "_startup_brightness_comment": "Brightness percentage (1-100) used when LEDs turn on at startup. Default: 80.",
       "last_color": "#FFFFFF",
       "_last_color_comment": "Last used LED color as #RRGGBB hex string (also accepts legacy integer RGB). Remembered between sessions.",
       "last_brightness": 100,

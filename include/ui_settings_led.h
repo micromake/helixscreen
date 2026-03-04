@@ -80,6 +80,7 @@ class LedSettingsOverlay : public OverlayBase {
     //
 
     void handle_led_on_at_start_changed(bool enabled);
+    void handle_startup_brightness_changed(int value);
     void handle_auto_state_changed(bool enabled);
     void handle_add_macro_device();
     void handle_edit_macro_device(int index);
@@ -118,6 +119,7 @@ class LedSettingsOverlay : public OverlayBase {
     // Auto-state editor state
     SubjectManager subjects_;
     lv_subject_t auto_state_enabled_subject_{};
+    lv_subject_t led_on_at_start_subject_{};
     std::vector<std::string> action_type_options_; // Maps dropdown index to action type string
     int editing_macro_index_ = -1;                 // -1 = no macro device being edited
 
@@ -126,6 +128,7 @@ class LedSettingsOverlay : public OverlayBase {
     //
 
     static void on_led_on_at_start_changed(lv_event_t* e);
+    static void on_startup_brightness_changed(lv_event_t* e);
     static void on_auto_state_changed(lv_event_t* e);
     static void on_add_macro_device(lv_event_t* e);
 };

@@ -427,6 +427,9 @@ class LedController {
     [[nodiscard]] bool get_led_on_at_start() const;
     void set_led_on_at_start(bool enabled);
 
+    [[nodiscard]] int get_startup_brightness() const;
+    void set_startup_brightness(int brightness_pct);
+
     // Apply startup preference (call at boot after printer is ready)
     void apply_startup_preference();
 
@@ -495,6 +498,7 @@ class LedController {
     std::vector<LedMacroInfo> configured_macros_;
     std::vector<std::string> discovered_led_macros_; // Raw macro names from hardware
     bool led_on_at_start_ = false;
+    int startup_brightness_ = 80;
     bool light_on_ = false; // Internal light state for abstract API
 
     /// Dispatch on/off to all selected strips (low-level — callers should use light_set())

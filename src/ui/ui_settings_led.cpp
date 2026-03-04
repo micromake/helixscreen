@@ -63,12 +63,14 @@ LedSettingsOverlay::~LedSettingsOverlay() {
 void LedSettingsOverlay::init_subjects() {
     init_subjects_guarded([this]() {
         UI_MANAGED_SUBJECT_INT(auto_state_enabled_subject_, 0, "led_auto_state_enabled", subjects_);
+        UI_MANAGED_SUBJECT_INT(led_on_at_start_subject_, 0, "led_on_at_start_enabled", subjects_);
     });
 }
 
 void LedSettingsOverlay::register_callbacks() {
     register_xml_callbacks({
         {"on_led_on_at_start_changed", on_led_on_at_start_changed},
+        {"on_startup_brightness_changed", on_startup_brightness_changed},
         {"on_auto_state_changed", on_auto_state_changed},
         {"on_add_macro_device", on_add_macro_device},
     });
@@ -155,17 +157,36 @@ void LedSettingsOverlay::init_led_on_at_start_toggle() {
     if (!overlay_root_)
         return;
 
+    auto& ctrl = helix::led::LedController::instance();
+    bool enabled = ctrl.get_led_on_at_start();
+
+    // Init toggle state
     lv_obj_t* row = lv_obj_find_by_name(overlay_root_, "row_led_on_at_start");
     if (row) {
         lv_obj_t* toggle = lv_obj_find_by_name(row, "toggle");
         if (toggle) {
-            bool enabled = helix::led::LedController::instance().get_led_on_at_start();
             if (enabled) {
                 lv_obj_add_state(toggle, LV_STATE_CHECKED);
             } else {
                 lv_obj_remove_state(toggle, LV_STATE_CHECKED);
             }
             spdlog::trace("[{}]   LED on at start toggle: {}", get_name(), enabled ? "ON" : "OFF");
+        }
+    }
+
+    // Drive visibility subject for the startup brightness slider
+    lv_subject_set_int(&led_on_at_start_subject_, enabled ? 1 : 0);
+
+    // Init startup brightness slider value
+    lv_obj_t* brightness_row = lv_obj_find_by_name(overlay_root_, "row_startup_brightness");
+    if (brightness_row) {
+        lv_obj_t* slider = lv_obj_find_by_name(brightness_row, "slider");
+        if (slider) {
+            lv_slider_set_value(slider, ctrl.get_startup_brightness(), LV_ANIM_OFF);
+        }
+        lv_obj_t* value_label = lv_obj_find_by_name(brightness_row, "value_label");
+        if (value_label) {
+            lv_label_set_text_fmt(value_label, "%d%%", ctrl.get_startup_brightness());
         }
     }
 }
@@ -1013,6 +1034,26 @@ void LedSettingsOverlay::handle_led_on_at_start_changed(bool enabled) {
     spdlog::info("[{}] LED on at start toggled: {}", get_name(), enabled ? "ON" : "OFF");
     helix::led::LedController::instance().set_led_on_at_start(enabled);
     helix::led::LedController::instance().save_config();
+
+    // Drive visibility of the startup brightness slider
+    lv_subject_set_int(&led_on_at_start_subject_, enabled ? 1 : 0);
+}
+
+void LedSettingsOverlay::handle_startup_brightness_changed(int value) {
+    spdlog::info("[{}] Startup brightness changed: {}%", get_name(), value);
+    helix::led::LedController::instance().set_startup_brightness(value);
+    helix::led::LedController::instance().save_config();
+
+    // Update the value label
+    if (overlay_root_) {
+        lv_obj_t* brightness_row = lv_obj_find_by_name(overlay_root_, "row_startup_brightness");
+        if (brightness_row) {
+            lv_obj_t* value_label = lv_obj_find_by_name(brightness_row, "value_label");
+            if (value_label) {
+                lv_label_set_text_fmt(value_label, "%d%%", value);
+            }
+        }
+    }
 }
 
 void LedSettingsOverlay::handle_auto_state_changed(bool enabled) {
@@ -1632,6 +1673,14 @@ void LedSettingsOverlay::on_led_on_at_start_changed(lv_event_t* e) {
     auto* toggle = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
     bool enabled = lv_obj_has_state(toggle, LV_STATE_CHECKED);
     get_led_settings_overlay().handle_led_on_at_start_changed(enabled);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void LedSettingsOverlay::on_startup_brightness_changed(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[LedSettingsOverlay] on_startup_brightness_changed");
+    auto* slider = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    int value = lv_slider_get_value(slider);
+    get_led_settings_overlay().handle_startup_brightness_changed(value);
     LVGL_SAFE_EVENT_CB_END();
 }
 
