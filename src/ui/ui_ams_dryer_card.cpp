@@ -9,6 +9,8 @@
 
 #include "ams_state.h"
 #include "filament_database.h"
+#include "format_utils.h"
+#include "humidity_sensor_manager.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "observer_factory.h"
 
@@ -117,6 +119,24 @@ bool AmsDryerCard::setup(lv_obj_t* panel) {
         spdlog::debug("[AmsDryerCard] Progress bar observer set up");
     }
 
+    // Observe raw humidity from HumiditySensorManager and format for display
+    auto* humidity_subj =
+        helix::sensors::HumiditySensorManager::instance().get_dryer_humidity_subject();
+    if (humidity_subj) {
+        humidity_observer_ = observe_int_sync<AmsDryerCard>(
+            humidity_subj, this, [](AmsDryerCard* /*self*/, int humidity_x10) {
+                auto& ams = AmsState::instance();
+                if (humidity_x10 < 0) {
+                    lv_subject_copy_string(ams.get_dryer_humidity_text_subject(), "---");
+                } else {
+                    char buf[8];
+                    helix::format::format_humidity(humidity_x10, buf, sizeof(buf));
+                    lv_subject_copy_string(ams.get_dryer_humidity_text_subject(), buf);
+                }
+            });
+        spdlog::debug("[AmsDryerCard] Humidity observer set up");
+    }
+
     // Modal is created on-demand via helix::ui::modal_show() in on_open_modal_cb
     // Initial sync of dryer state
     AmsState::instance().sync_dryer_from_backend();
@@ -131,8 +151,9 @@ void AmsDryerCard::cleanup() {
     // Deactivate FIRST — prevents observer callbacks from accessing freed widgets
     active_ = false;
 
-    // Remove observer
+    // Remove observers
     progress_observer_.reset();
+    humidity_observer_.reset();
 
     // Hide modal if visible (Modal system handles deletion via exit animation).
     // Clear dryer_modal_ unconditionally — even if modal_hide() returns early because

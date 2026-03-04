@@ -879,7 +879,6 @@ class AmsState {
     void sync_clog_meter_from_info(const AmsSystemInfo& info);
 
     /** @brief Set up observer on HumiditySensorManager dryer humidity subject */
-    void setup_humidity_observer();
 
     AmsState();
     ~AmsState();
@@ -1008,7 +1007,6 @@ class AmsState {
     lv_subject_t dryer_humidity_text_;
     char dryer_humidity_text_buf_[8]; ///< "35%" or "---"
     lv_subject_t dryer_info_visible_; ///< 1 when info bar should show
-    ObserverGuard dryer_humidity_observer_; ///< Observer on HumiditySensorManager
 
     // Dryer modal editing subjects (user-adjustable values)
     lv_subject_t dryer_modal_temp_text_;

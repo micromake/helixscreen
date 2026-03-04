@@ -5,7 +5,6 @@
 
 #include "ui_update_queue.h"
 
-#include "format_utils.h"
 #include "spdlog/spdlog.h"
 #include "static_subject_registry.h"
 
@@ -292,9 +291,6 @@ void HumiditySensorManager::init_subjects() {
     // -1 = no sensor assigned, 0+ = humidity x 10
     UI_MANAGED_SUBJECT_INT(dryer_humidity_, -1, "dryer_humidity", subjects_);
     UI_MANAGED_SUBJECT_INT(sensor_count_, 0, "humidity_sensor_count", subjects_);
-    // Text subject for display (formatted as "45%" or "--")
-    UI_MANAGED_SUBJECT_STRING(chamber_humidity_text_, chamber_humidity_text_buf_, "--",
-                              "chamber_humidity_text", subjects_);
 
     subjects_initialized_ = true;
 
@@ -436,10 +432,6 @@ lv_subject_t* HumiditySensorManager::get_sensor_count_subject() {
     return &sensor_count_;
 }
 
-lv_subject_t* HumiditySensorManager::get_chamber_humidity_text_subject() {
-    return &chamber_humidity_text_;
-}
-
 // ============================================================================
 // Testing Support
 // ============================================================================
@@ -575,22 +567,10 @@ void HumiditySensorManager::update_subjects() {
         lv_subject_set_int(&dryer_humidity_, dryer_humidity);
     }
 
-    // Update text subject: format as "45%" or "—" if unavailable
-    if (chamber_humidity >= 0) {
-        helix::format::format_humidity(chamber_humidity, chamber_humidity_text_buf_,
-                                       sizeof(chamber_humidity_text_buf_));
-    } else {
-        snprintf(chamber_humidity_text_buf_, sizeof(chamber_humidity_text_buf_), "%s",
-                 helix::format::UNAVAILABLE);
-    }
-    if (strcmp(lv_subject_get_string(&chamber_humidity_text_), chamber_humidity_text_buf_) != 0) {
-        lv_subject_copy_string(&chamber_humidity_text_, chamber_humidity_text_buf_);
-    }
-
     spdlog::trace("[HumiditySensorManager] Subjects updated: chamber_humidity={}, "
-                  "chamber_pressure={}, dryer_humidity={}, text={}",
+                  "chamber_pressure={}, dryer_humidity={}",
                   lv_subject_get_int(&chamber_humidity_), lv_subject_get_int(&chamber_pressure_),
-                  lv_subject_get_int(&dryer_humidity_), chamber_humidity_text_buf_);
+                  lv_subject_get_int(&dryer_humidity_));
 }
 
 } // namespace helix::sensors

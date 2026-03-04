@@ -20,7 +20,6 @@
 #include "ams_backend_mock.h"
 #include "app_globals.h"
 #include "format_utils.h"
-#include "humidity_sensor_manager.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "observer_factory.h"
@@ -365,13 +364,11 @@ void AmsState::deinit_subjects() {
 
     spdlog::trace("[AMS State] Deinitializing subjects");
 
-    // Release cross-singleton observers — they observe subjects from other
-    // singletons (PrinterState, HumiditySensorManager) which may already be
-    // destroyed during StaticSubjectRegistry::deinit_all() reverse-order
-    // teardown. Using release() (not reset()) avoids dereferencing a dangling
-    // subject pointer in lv_observer_remove(). [L073]
+    // Release cross-singleton observer — it observes a subject from PrinterState
+    // which may already be destroyed during StaticSubjectRegistry::deinit_all()
+    // reverse-order teardown. Using release() (not reset()) avoids dereferencing
+    // a dangling subject pointer in lv_observer_remove(). [L073]
     print_state_observer_.release();
-    dryer_humidity_observer_.release();
 
     // IMPORTANT: clear_backends() MUST precede subjects_.deinit_all() because
     // BackendSlotSubjects are managed outside SubjectManager for lifetime reasons
@@ -1095,44 +1092,6 @@ void AmsState::sync_dryer_from_backend() {
         lv_subject_set_int(&dryer_info_visible_, new_visible);
     }
 
-    // Set up humidity observer on first call (lazy init)
-    setup_humidity_observer();
-}
-
-void AmsState::setup_humidity_observer() {
-    // Only set up once
-    if (dryer_humidity_observer_) {
-        spdlog::debug("[AMS State] Humidity observer already set up");
-        return;
-    }
-
-    auto& hmgr = helix::sensors::HumiditySensorManager::instance();
-    auto* humidity_subj = hmgr.get_dryer_humidity_subject();
-    if (!humidity_subj) {
-        spdlog::debug("[AMS State] No dryer humidity subject available");
-        return;
-    }
-    spdlog::debug("[AMS State] Setting up humidity observer, current value={}",
-                  lv_subject_get_int(humidity_subj));
-
-    using helix::ui::observe_int_sync;
-    dryer_humidity_observer_ = observe_int_sync<AmsState>(
-        humidity_subj, this, [](AmsState* self, int humidity_x10) {
-            if (humidity_x10 < 0) {
-                lv_subject_copy_string(&self->dryer_humidity_text_, "---");
-            } else {
-                // Format into a temp buffer, then copy to subject.
-                // Cannot use dryer_humidity_text_buf_ directly because the subject's
-                // value pointer already points to it (set during init), so snprintf
-                // would modify the subject value without triggering notification.
-                char buf[8];
-                snprintf(buf, sizeof(buf), "%d%%", humidity_x10 / 10);
-                lv_subject_copy_string(&self->dryer_humidity_text_, buf);
-            }
-
-            // Visibility is driven by dryer_supported (set in sync_dryer_from_backend),
-            // so no need to re-evaluate here — humidity is only shown when dryer exists.
-        });
 }
 
 lv_subject_t* AmsState::get_dryer_humidity_text_subject() {
@@ -1260,22 +1219,30 @@ void AmsState::sync_clog_meter_from_info(const AmsSystemInfo& info) {
         for (const auto& unit : info.units) {
             if (use_afc && unit.buffer_health && unit.buffer_health->fault_detection_enabled) {
                 mode = 3;
-                // Value: proximity to fault (0=safe, 100=imminent)
-                // TODO: compute from sensitivity when available: (11 - sensitivity) * 10
-                float max_dist = 60.0f;
                 float dist = unit.buffer_health->distance_to_fault;
-                value = 100 - static_cast<int>((dist / max_dist) * 100.0f);
-                value = std::clamp(value, 0, 100);
-                warning = (value > 75) ? 1 : 0;
 
-                snprintf(value_text, sizeof(value_text), "%.0fmm", dist);
+                if (dist < 0) {
+                    // Not tracking yet (distance_to_fault was null from AFC)
+                    value = 0;
+                    warning = 0;
+                    snprintf(value_text, sizeof(value_text), "---");
+                } else {
+                    // Value: proximity to fault (0=safe, 100=imminent)
+                    float max_dist = 60.0f;
+                    value = 100 - static_cast<int>((dist / max_dist) * 100.0f);
+                    value = std::clamp(value, 0, 100);
+                    warning = (value > 75) ? 1 : 0;
+                    snprintf(value_text, sizeof(value_text), "%.0fmm", dist);
+                }
+
                 snprintf(mode_text, sizeof(mode_text), "%s",
                          unit.buffer_health->state.c_str());
 
                 // Enhanced clog detection widget subjects
                 new_danger_pct = 75;
-                new_peak_pct = value;
-                snprintf(center_buf, sizeof(center_buf), "%.0fmm", dist);
+                new_peak_pct = (dist >= 0) ? value : 0;
+                snprintf(center_buf, sizeof(center_buf), "%s",
+                         dist >= 0 ? value_text : "---");
                 snprintf(left_buf, sizeof(left_buf), "SAFE");
                 snprintf(right_buf, sizeof(right_buf), "FAULT");
                 break; // Use first unit with fault detection
