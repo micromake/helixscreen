@@ -1053,60 +1053,42 @@ void AmsState::sync_dryer_from_backend() {
         lv_subject_set_int(&dryer_progress_pct_, new_progress);
     }
 
-    // Format temperature text strings
+    // Format temperature text strings.
+    // Use local buffers for formatting, then copy to subject — the subject's value
+    // pointer aliases the member buf_ arrays, so writing directly to buf_ modifies
+    // the subject value without triggering observer notification.
     if (dryer.supported) {
-        snprintf(dryer_current_temp_text_buf_, sizeof(dryer_current_temp_text_buf_), "%d°C",
-                 static_cast<int>(dryer.current_temp_c));
-        if (strcmp(lv_subject_get_string(&dryer_current_temp_text_),
-                  dryer_current_temp_text_buf_) != 0) {
-            lv_subject_copy_string(&dryer_current_temp_text_, dryer_current_temp_text_buf_);
-        }
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%d\xC2\xB0""C", static_cast<int>(dryer.current_temp_c));
+        lv_subject_copy_string(&dryer_current_temp_text_, buf);
 
         if (dryer.target_temp_c > 0) {
-            snprintf(dryer_target_temp_text_buf_, sizeof(dryer_target_temp_text_buf_), "%d°C",
-                     static_cast<int>(dryer.target_temp_c));
+            snprintf(buf, sizeof(buf), "%d\xC2\xB0""C", static_cast<int>(dryer.target_temp_c));
         } else {
-            snprintf(dryer_target_temp_text_buf_, sizeof(dryer_target_temp_text_buf_), "Off");
+            snprintf(buf, sizeof(buf), "Off");
         }
-        if (strcmp(lv_subject_get_string(&dryer_target_temp_text_),
-                  dryer_target_temp_text_buf_) != 0) {
-            lv_subject_copy_string(&dryer_target_temp_text_, dryer_target_temp_text_buf_);
-        }
+        lv_subject_copy_string(&dryer_target_temp_text_, buf);
 
         // Format time remaining text
         if (dryer.active && dryer.remaining_min > 0) {
             std::string time_str = helix::format::duration_remaining(dryer.remaining_min * 60);
-            std::strncpy(dryer_time_text_buf_, time_str.c_str(), sizeof(dryer_time_text_buf_) - 1);
-            dryer_time_text_buf_[sizeof(dryer_time_text_buf_) - 1] = '\0';
+            lv_subject_copy_string(&dryer_time_text_, time_str.c_str());
         } else {
-            dryer_time_text_buf_[0] = '\0';
-        }
-        if (strcmp(lv_subject_get_string(&dryer_time_text_), dryer_time_text_buf_) != 0) {
-            lv_subject_copy_string(&dryer_time_text_, dryer_time_text_buf_);
-        }
-    } else {
-        if (strcmp(lv_subject_get_string(&dryer_current_temp_text_), "---") != 0) {
-            lv_subject_copy_string(&dryer_current_temp_text_, "---");
-        }
-        if (strcmp(lv_subject_get_string(&dryer_target_temp_text_), "---") != 0) {
-            lv_subject_copy_string(&dryer_target_temp_text_, "---");
-        }
-        if (strcmp(lv_subject_get_string(&dryer_time_text_), "") != 0) {
             lv_subject_copy_string(&dryer_time_text_, "");
         }
+    } else {
+        lv_subject_copy_string(&dryer_current_temp_text_, "---");
+        lv_subject_copy_string(&dryer_target_temp_text_, "---");
+        lv_subject_copy_string(&dryer_time_text_, "");
     }
 
     spdlog::trace("[AMS State] Synced dryer - supported={}, active={}, temp={}→{}°C, {}min left",
                   dryer.supported, dryer.active, static_cast<int>(dryer.current_temp_c),
                   static_cast<int>(dryer.target_temp_c), dryer.remaining_min);
 
-    // Update info bar visibility: show if dryer supported OR humidity sensor exists
-    auto& hmgr = helix::sensors::HumiditySensorManager::instance();
-    auto* humidity_subj = hmgr.get_dryer_humidity_subject();
-    bool has_humidity =
-        humidity_subj != nullptr && lv_subject_get_int(humidity_subj) >= 0;
-    bool visible = (lv_subject_get_int(&dryer_supported_) != 0) || has_humidity;
-    int new_visible = visible ? 1 : 0;
+    // Update info bar visibility: show only when dryer is supported.
+    // Humidity is displayed as part of the dryer bar, so it's hidden too when no dryer.
+    int new_visible = (lv_subject_get_int(&dryer_supported_) != 0) ? 1 : 0;
     if (lv_subject_get_int(&dryer_info_visible_) != new_visible) {
         lv_subject_set_int(&dryer_info_visible_, new_visible);
     }
@@ -1118,39 +1100,36 @@ void AmsState::sync_dryer_from_backend() {
 void AmsState::setup_humidity_observer() {
     // Only set up once
     if (dryer_humidity_observer_) {
+        spdlog::debug("[AMS State] Humidity observer already set up");
         return;
     }
 
     auto& hmgr = helix::sensors::HumiditySensorManager::instance();
     auto* humidity_subj = hmgr.get_dryer_humidity_subject();
     if (!humidity_subj) {
+        spdlog::debug("[AMS State] No dryer humidity subject available");
         return;
     }
+    spdlog::debug("[AMS State] Setting up humidity observer, current value={}",
+                  lv_subject_get_int(humidity_subj));
 
     using helix::ui::observe_int_sync;
     dryer_humidity_observer_ = observe_int_sync<AmsState>(
         humidity_subj, this, [](AmsState* self, int humidity_x10) {
             if (humidity_x10 < 0) {
-                if (strcmp(lv_subject_get_string(&self->dryer_humidity_text_), "---") != 0) {
-                    lv_subject_copy_string(&self->dryer_humidity_text_, "---");
-                }
+                lv_subject_copy_string(&self->dryer_humidity_text_, "---");
             } else {
-                snprintf(self->dryer_humidity_text_buf_, sizeof(self->dryer_humidity_text_buf_),
-                         "%d%%", humidity_x10 / 10);
-                if (strcmp(lv_subject_get_string(&self->dryer_humidity_text_),
-                          self->dryer_humidity_text_buf_) != 0) {
-                    lv_subject_copy_string(&self->dryer_humidity_text_,
-                                           self->dryer_humidity_text_buf_);
-                }
+                // Format into a temp buffer, then copy to subject.
+                // Cannot use dryer_humidity_text_buf_ directly because the subject's
+                // value pointer already points to it (set during init), so snprintf
+                // would modify the subject value without triggering notification.
+                char buf[8];
+                snprintf(buf, sizeof(buf), "%d%%", humidity_x10 / 10);
+                lv_subject_copy_string(&self->dryer_humidity_text_, buf);
             }
 
-            // Re-evaluate info bar visibility when humidity changes
-            bool has_humidity = humidity_x10 >= 0;
-            bool dryer_supported = lv_subject_get_int(&self->dryer_supported_) != 0;
-            int new_visible = (dryer_supported || has_humidity) ? 1 : 0;
-            if (lv_subject_get_int(&self->dryer_info_visible_) != new_visible) {
-                lv_subject_set_int(&self->dryer_info_visible_, new_visible);
-            }
+            // Visibility is driven by dryer_supported (set in sync_dryer_from_backend),
+            // so no need to re-evaluate here — humidity is only shown when dryer exists.
         });
 }
 

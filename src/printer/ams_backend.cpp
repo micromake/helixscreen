@@ -82,11 +82,12 @@ static std::unique_ptr<AmsBackendMock> create_mock_with_features(int gate_count)
     // Orthogonal features (kept separate)
     // ========================================================================
 
-    // Enable mock dryer if requested via environment variable
+    // Enable mock dryer by default (disable with HELIX_MOCK_DRYER=0)
     const char* dryer_env = std::getenv("HELIX_MOCK_DRYER");
-    if (dryer_env && (std::string(dryer_env) == "1" || std::string(dryer_env) == "true")) {
+    bool dryer_enabled = !dryer_env || (std::string(dryer_env) != "0" && std::string(dryer_env) != "false");
+    if (dryer_enabled) {
         mock->set_dryer_enabled(true);
-        spdlog::info("[AMS Backend] Mock dryer enabled via HELIX_MOCK_DRYER");
+        spdlog::info("[AMS Backend] Mock dryer enabled");
     }
 
     // Simulate mid-print tool change progress (3rd of 5 swaps) for visual testing
