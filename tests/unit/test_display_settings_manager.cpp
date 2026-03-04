@@ -47,10 +47,6 @@ TEST_CASE_METHOD(LVGLTestFixture, "DisplaySettingsManager default values after i
         REQUIRE(DisplaySettingsManager::instance().get_animations_enabled() == true);
     }
 
-    SECTION("gcode_3d_enabled defaults to true") {
-        REQUIRE(DisplaySettingsManager::instance().get_gcode_3d_enabled() == true);
-    }
-
     SECTION("bed_mesh_render_mode defaults to 0 (Auto)") {
         REQUIRE(DisplaySettingsManager::instance().get_bed_mesh_render_mode() == 0);
     }
@@ -144,14 +140,6 @@ TEST_CASE_METHOD(LVGLTestFixture, "DisplaySettingsManager set/get round trips",
 
         DisplaySettingsManager::instance().set_sleep_while_printing(true);
         REQUIRE(DisplaySettingsManager::instance().get_sleep_while_printing() == true);
-    }
-
-    SECTION("gcode_3d_enabled set/get") {
-        DisplaySettingsManager::instance().set_gcode_3d_enabled(false);
-        REQUIRE(DisplaySettingsManager::instance().get_gcode_3d_enabled() == false);
-
-        DisplaySettingsManager::instance().set_gcode_3d_enabled(true);
-        REQUIRE(DisplaySettingsManager::instance().get_gcode_3d_enabled() == true);
     }
 
     SECTION("bed_mesh_render_mode set/get") {

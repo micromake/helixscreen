@@ -250,7 +250,9 @@ print(f'Wizard:     {\"completed\" if st.get(\"wizard_completed\") else \"not co
 disp = st.get('display', {})
 if disp:
     print(f'Display:    dim={disp.get(\"dim_sec\",\"?\")}s sleep={disp.get(\"sleep_sec\",\"?\")}s rotate={disp.get(\"rotate\",\"?\")}°')
-    print(f'3D viewer:  {\"enabled\" if disp.get(\"gcode_3d_enabled\") else \"disabled\"}')
+    gcode_mode = disp.get(\"gcode_render_mode\", 0)
+    mode_names = {0: \"Auto\", 1: \"3D View\", 2: \"2D Layers\", 3: \"Thumbnail Only\"}
+    print(f'G-code:     {mode_names.get(gcode_mode, \"Unknown\")} (mode={gcode_mode})')
 
 # Touch calibration
 cal = st.get('input', {}).get('calibration', {})

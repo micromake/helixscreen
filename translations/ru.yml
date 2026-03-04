@@ -88,6 +88,7 @@ translations:
   Add Hidden Network: Добавить скрытую сеть
   Add Vendor: Добавить производителя
   Add Widget: Добавить виджет
+  Address: ''
   Adjust screen brightness level: Настроить уровень яркости экрана
   Adjust screws, then re-probe.: Отрегулируйте винты, затем перепроверьте.
   Adjustments stay active until restart. Save after print completes.: Настройки активны до перезагрузки. Сохраните после завершения печати.
@@ -221,6 +222,7 @@ translations:
   Clear: Очистить
   Clear All: Очистить всё
   Clear All Events: Очистить все события
+  Clear Console?: ''
   Clear Spool: Убрать катушку
   Clipboard unavailable - use SSH: Буфер обмена недоступен - используйте SSH
   Clog Detection: 'Обнаружение засора'
@@ -232,6 +234,7 @@ translations:
   Color: Цвет
   Color Mismatch: Несоответствие цвета
   Color Sensors: Датчики цвета
+  Compact: ''
   Complete: Завершено
   Complete!: Готово!
   Completed: Завершено
@@ -244,6 +247,7 @@ translations:
   Configure: Настроить
   Configure G10/G11 firmware retraction: Настроить аппаратный ретракт G10/G11
   Configure PRINT_START: Настроить PRINT_START
+  Configure QR label printing: ''
   Configure Spoolman integration and weight sync settings.: Настройте интеграцию со Spoolman и синхронизацию веса.
   Configure devices in Moonraker: Настроить устройства в Moonraker
   Configure filament detection sensors: Настроить датчики обнаружения филамента
@@ -301,6 +305,7 @@ translations:
   Currently printing: Сейчас печатается
   Custom: Свой
   Custom...: Настроить...
+  Customize Macro: ''
   Customize preset temperatures: Настройка пресетов температур
   Cutting filament...: Обрезка филамента...
   DIAGNOSTICS: ДИАГНОСТИКА
@@ -380,6 +385,7 @@ translations:
   Enable UI motion effects: Включить эффекты движения интерфейса
   Enable WiFi to scan: Включите WiFi для сканирования
   Enable WiFi to scan for networks: Включите WiFi для поиска сетей
+  Enable anonymous statistics: ''
   Enable audio feedback: Включить звуковую обратную связь
   Enable detailed print preparation tracking (Recommended): Включить детальное отслеживание подготовки к печати (рекомендуется)
   Enabled: Включено
@@ -392,6 +398,7 @@ translations:
   'Enter a name for your custom theme:': 'Введите название для вашей темы:'
   Enter a name to save this profile: Введите имя для сохранения профиля
   Enter password: Введите пароль
+  Enter printer IP address first: ''
   Error: Ошибка
   Error state: Состояние ошибки
   Escalate to emergency stop if cancel doesn't respond: Эскалация до аварийной остановки, если отмена не отвечает
@@ -427,11 +434,13 @@ translations:
   Failed to download moonraker.conf.\nCheck printer connection.: Не удалось скачать moonraker.conf.\nПроверьте подключение принтера.
   Failed to enable tuning tower: Не удалось включить башню настройки
   Failed to get limits: Не удалось получить ограничения
+  Failed to load history: ''
   Failed to load overlay: Не удалось загрузить оверлей
   Failed to load spools: Не удалось загрузить катушки
   Failed to open history: Не удалось открыть историю
   Failed to open history list: Не удалось открыть список истории
   Failed to open wizard: Не удалось открыть мастер
+  Failed to render label: ''
   Failed to reset theme: Не удалось сбросить тему
   Failed to restart Moonraker.: Не удалось перезапустить Moonraker.
   Failed to save changes to Spoolman: 'Не удалось сохранить изменения в Spoolman'
@@ -519,6 +528,7 @@ translations:
   HelixScreen Crashed: HelixScreen аварийно завершился
   HelixScreen is detecting your display orientation: HelixScreen определяет ориентацию дисплея
   HelixScreen will integrate with your filament changer for multi-spool/color print operations.: HelixScreen интегрируется с вашим сменщиком филамента для многокатушечной/многоцветной печати.
+  Help Improve HelixScreen: ''
   Help improve HelixScreen?: Помочь улучшить HelixScreen?
   Higher = faster: Выше = быстрее
   Home: Главная
@@ -538,6 +548,7 @@ translations:
   Hyperlapse: Гиперлапс
   IMPORT FROM USB: ИМПОРТ С USB
   'IP:': 'IP:'
+  Icon: ''
   Idle: Ожидание
   Ignore: Игнорировать
   In Progress: В процессе
@@ -567,6 +578,7 @@ translations:
   Interactive 3D G-code during prints: Интерактивный 3D G-code во время печати
   Interactive probe calibration: Интерактивная калибровка зонда
   Interactive probe offset adjustment: Интерактивная настройка смещения датчика
+  Invalid port number: ''
   Issue description: Описание проблемы
   Job Queue: Очередь заданий
   Just now: Только что
@@ -592,6 +604,10 @@ translations:
   LEDs controlled by the light button: LED, управляемые кнопкой света
   LOADED: ЗАГРУЖЕН
   LOT-2024-001: LOT-2024-001
+  Label Preset: ''
+  Label Printer: ''
+  Label Size: ''
+  Label printed: ''
   Label printing coming soon: Печать этикеток скоро появится
   Language: Язык
   Last print cancelled: Последняя печать отменена
@@ -602,6 +618,7 @@ translations:
   Layer mode captures one frame per layer change. Best for most prints.: Послойный режим захватывает один кадр на каждую смену слоя. Лучший выбор для большинства печатей.
   'Layer:': 'Слой:'
   Layers: Слои
+  Layout style for labels: ''
   Learn More: Подробнее
   'Length:': 'Длина:'
   Leveling Gantry...: Выравнивание портала...
@@ -635,6 +652,7 @@ translations:
   MOTION: ДВИЖЕНИЕ
   MPC: MPC
   Machine Limits: Ограничения принтера
+  Macro: ''
   Macro Browser: Обзор макросов
   Macro Button: 'Кнопка макроса'
   Macro Buttons: Кнопки макросов
@@ -678,6 +696,7 @@ translations:
   Mesh Complete: Сетка завершена
   Method: Метод
   Min: Мин
+  Minimal: ''
   Mode: Режим
   Modified: Изменён
   Monitor a custom temperature sensor: 'Мониторинг пользовательского датчика температуры'
@@ -740,6 +759,7 @@ translations:
   No images found on USB drive: Изображения на USB-накопителе не найдены
   No jobs in queue: Очередь пуста
   No macros available: Нет доступных макросов
+  No macros found: ''
   No matching prints: Нет совпадающих печатей
   No mesh data: Нет данных сетки
   No mesh loaded: Сетка не загружена
@@ -810,6 +830,7 @@ translations:
   PRE-PRINT STEPS: ЭТАПЫ ПОДГОТОВКИ
   PRINTER: ПРИНТЕР
   Paper Test Calibration: Калибровка бумажным тестом
+  Parameters: ''
   Part Cooling Fan: Вентилятор охлаждения детали
   Part Fan: Вент. детали
   Part, hotend, and auxiliary fan speeds: 'Скорости вентиляторов детали, хотенда и вспом.'
@@ -875,6 +896,8 @@ translations:
   Print Status: Статус печати
   Print Time: Время печати
   Print Tuning: Настройка печати
+  Print a test label: ''
+  Print failed: ''
   Print history statistics: 'Статистика истории печати'
   Print progress and file selection: 'Прогресс печати и выбор файла'
   Printer: Принтер
@@ -888,6 +911,8 @@ translations:
   Printer name: Название принтера
   Printer ready: Принтер готов
   Printing: Печать
+  Printing label...: ''
+  Printing test label...: ''
   Prints: 'Печати'
   Prints Trend: Тренд печатей
   'Private:': 'Закрытая:'
@@ -1036,12 +1061,14 @@ translations:
   Select G-Code File: Выбрать файл G-Code
   Select Macro: Выбрать макрос
   Select Sensor: Выбрать датчик
+  Select Sensors: ''
   Select Spool: Выбрать катушку
   Select a material or adjust temperature: Выберите материал или настройте температуру
   Select macro for first button: Выберите макрос для первой кнопки
   Select macro for second button: Выберите макрос для второй кнопки
   Select sensor: Выбрать датчик
   Select which devices the home screen power button controls: Выберите устройства для кнопки питания на главном экране
+  Select your label media: ''
   Selecting slot...: Выбор слота...
   Self-Test: Самотестирование
   Semantic Size Parameter Tests: Тесты семантических параметров размера
@@ -1054,11 +1081,13 @@ translations:
   Separate on/off macros. HelixScreen tracks the state.: Отдельные макросы вкл/выкл. HelixScreen отслеживает состояние.
   'Set ': 'Установить '
   Set Active: Сделать активной
+  Set up your label printer in Settings: ''
   Settings: Настройки
   Settings reset to defaults. Restarting...: Настройки сброшены к значениям по умолчанию. Перезапуск...
   Setup Timelapse: Настроить таймлапс
   Shadow Intensity: Интенсивность тени
   Share Usage Data: Делиться данными использования
+  Share anonymous usage statistics to help us make HelixScreen better. No personal data is ever collected.: ''
   'Share this code in Discord or support:': 'Поделитесь этим кодом в Discord или с поддержкой:'
   'Shininess:': 'Блеск:'
   Show detailed print preparation status: Показывать детальный статус подготовки к печати
@@ -1099,6 +1128,7 @@ translations:
   Spoolman unavailable — filament weights may be stale: Spoolman недоступен — вес филамента может быть устаревшим
   Square Corner Velocity: Square Corner Velocity
   Stable: Стабильная
+  Standard: ''
   Standby: Режим ожидания
   Starfield: 'Звёздное небо'
   Start: Старт
@@ -1156,7 +1186,9 @@ translations:
   Tertiary: Третичный
   Test Connection: Тест соединения
   Test Network: Тест сети
+  Test Print: ''
   Test Sound: Тестовый звук
+  Test label printed: ''
   Test probe repeatability: Тест повторяемости датчика
   'Testing rotation: %d\xc2\xb0 (%d/%d) - %ds remaining': 'Тест поворота: %d\xc2\xb0 (%d/%d) - осталось %ds'
   Thanks! Anonymous usage data helps improve HelixScreen.: Спасибо! Анонимные данные использования помогают улучшить HelixScreen.
@@ -1187,6 +1219,7 @@ translations:
   ? This will collect system info, logs, settings, and printer data to help diagnose issues. No passwords or sensitive data will be included.
   : Будут собраны системная информация, логи, настройки и данные принтера для диагностики. Пароли и конфиденциальные данные включены не будут.
   This will immediately halt all printer operations. The printer will require a restart to resume.: Это немедленно остановит все операции принтера. Для продолжения потребуется перезапуск.
+  This will remove all entries from the display.: ''
   This will reset all settings to defaults. This action cannot be undone.: Это сбросит все настройки к значениям по умолчанию. Это действие нельзя отменить.
   This will restart Klipper firmware. Any active operations will be interrupted.: Прошивка Klipper будет перезапущена. Активные операции будут прерваны.
   This will restart Klipper.: Это перезапустит Klipper.
@@ -1337,6 +1370,7 @@ translations:
   disable: отключить
   disabled: отключено
   e.g. Jet Black: напр. Чёрный
+  e.g. NAME=my_var VALUE=123: ''
   e.g. Polymaker: напр. Polymaker
   eSpooler: 'eSpooler'
   elapsed: прошло

@@ -88,6 +88,7 @@ translations:
   Add Hidden Network: Verstecktes Netzwerk hinzufügen
   Add Vendor: Hersteller hinzufügen
   Add Widget: Widget hinzufügen
+  Address: ''
   Adjust screen brightness level: Bildschirmhelligkeit anpassen
   Adjust screws, then re-probe.: Schrauben einstellen, dann erneut prüfen.
   Adjustments stay active until restart. Save after print completes.: Anpassungen bleiben bis zum Neustart aktiv. Nach Druckende speichern.
@@ -221,6 +222,7 @@ translations:
   Clear: Löschen
   Clear All: Alles löschen
   Clear All Events: Alle Ereignisse löschen
+  Clear Console?: ''
   Clear Spool: Spule entfernen
   Clipboard unavailable - use SSH: Zwischenablage nicht verfügbar - verwenden Sie SSH
   Clog Detection: Verstopfungserkennung
@@ -232,6 +234,7 @@ translations:
   Color: Farbe
   Color Mismatch: Farbabweichung
   Color Sensors: Farbsensoren
+  Compact: ''
   Complete: Abgeschlossen
   Complete!: Abgeschlossen!
   Completed: Abgeschlossen
@@ -244,6 +247,7 @@ translations:
   Configure: Konfigurieren
   Configure G10/G11 firmware retraction: G10/G11 Firmware-Retraktion konfigurieren
   Configure PRINT_START: PRINT_START konfigurieren
+  Configure QR label printing: ''
   Configure Spoolman integration and weight sync settings.: Spoolman-Integration und Gewichtssynchronisierung konfigurieren.
   Configure devices in Moonraker: Geräte in Moonraker konfigurieren
   Configure filament detection sensors: Filamenterkennungssensoren konfigurieren
@@ -301,6 +305,7 @@ translations:
   Currently printing: Aktueller Druck
   Custom: Benutzerdefiniert
   Custom...: Benutzerdefiniert...
+  Customize Macro: ''
   Customize preset temperatures: Voreingestellte Temperaturen anpassen
   Cutting filament...: Filament wird geschnitten...
   DIAGNOSTICS: DIAGNOSE
@@ -380,6 +385,7 @@ translations:
   Enable UI motion effects: UI-Bewegungseffekte aktivieren
   Enable WiFi to scan: WiFi aktivieren zum Scannen
   Enable WiFi to scan for networks: WiFi aktivieren, um nach Netzwerken zu suchen
+  Enable anonymous statistics: ''
   Enable audio feedback: Akustisches Feedback aktivieren
   Enable detailed print preparation tracking (Recommended): Detaillierte Druckvorbereitungsverfolgung aktivieren (Empfohlen)
   Enabled: Aktiviert
@@ -392,6 +398,7 @@ translations:
   'Enter a name for your custom theme:': 'Geben Sie einen Namen für Ihr benutzerdefiniertes Thema ein:'
   Enter a name to save this profile: Geben Sie einen Namen ein, um dieses Profil zu speichern
   Enter password: Passwort eingeben
+  Enter printer IP address first: ''
   Error: Fehler
   Error state: Fehlerzustand
   Escalate to emergency stop if cancel doesn't respond: Auf Not-Stopp eskalieren, falls Abbruch nicht reagiert
@@ -427,11 +434,13 @@ translations:
   Failed to download moonraker.conf.\nCheck printer connection.: moonraker.conf konnte nicht heruntergeladen werden.\nDruckerverbindung prüfen.
   Failed to enable tuning tower: Tuning-Tower konnte nicht aktiviert werden
   Failed to get limits: Limits konnten nicht abgerufen werden
+  Failed to load history: ''
   Failed to load overlay: Overlay konnte nicht geladen werden
   Failed to load spools: Spulen konnten nicht geladen werden
   Failed to open history: Verlauf konnte nicht geöffnet werden
   Failed to open history list: Verlaufsliste konnte nicht geöffnet werden
   Failed to open wizard: Assistent konnte nicht geöffnet werden
+  Failed to render label: ''
   Failed to reset theme: Thema zurücksetzen fehlgeschlagen
   Failed to restart Moonraker.: Moonraker konnte nicht neu gestartet werden.
   Failed to save changes to Spoolman: 'Änderungen konnten nicht in Spoolman gespeichert werden'
@@ -519,6 +528,7 @@ translations:
   HelixScreen Crashed: HelixScreen abgestürzt
   HelixScreen is detecting your display orientation: HelixScreen erkennt Ihre Display-Ausrichtung
   HelixScreen will integrate with your filament changer for multi-spool/color print operations.: HelixScreen wird sich mit Ihrem Filamentwechsler für Multi-Spulen/Farb-Druckoperationen integrieren.
+  Help Improve HelixScreen: ''
   Help improve HelixScreen?: HelixScreen verbessern helfen?
   Higher = faster: Höher = schneller
   Home: Home
@@ -538,6 +548,7 @@ translations:
   Hyperlapse: Hyperlapse
   IMPORT FROM USB: VON USB IMPORTIEREN
   'IP:': 'IP:'
+  Icon: ''
   Idle: Leerlauf
   Ignore: Ignorieren
   In Progress: In Bearbeitung
@@ -567,6 +578,7 @@ translations:
   Interactive 3D G-code during prints: Interaktiver 3D-G-Code während des Drucks
   Interactive probe calibration: Interaktive Sondenkalibrierung
   Interactive probe offset adjustment: Interaktive Taster-Offset-Anpassung
+  Invalid port number: ''
   Issue description: Problembeschreibung
   Job Queue: Auftragswarteschlange
   Just now: Gerade eben
@@ -592,6 +604,10 @@ translations:
   LEDs controlled by the light button: LEDs gesteuert durch die Lichttaste
   LOADED: GELADEN
   LOT-2024-001: LOT-2024-001
+  Label Preset: ''
+  Label Printer: ''
+  Label Size: ''
+  Label printed: ''
   Label printing coming soon: Etikettendruck kommt bald
   Language: Sprache
   Last print cancelled: Letzter Druck abgebrochen
@@ -602,6 +618,7 @@ translations:
   Layer mode captures one frame per layer change. Best for most prints.: Schichtmodus nimmt ein Bild pro Schichtwechsel auf. Am besten für die meisten Drucke.
   'Layer:': 'Schicht:'
   Layers: Schichten
+  Layout style for labels: ''
   Learn More: Mehr erfahren
   'Length:': 'Länge:'
   Leveling Gantry...: Gantry nivellieren...
@@ -635,6 +652,7 @@ translations:
   MOTION: BEWEGUNG
   MPC: MPC
   Machine Limits: Maschinenlimits
+  Macro: ''
   Macro Browser: Makro-Browser
   Macro Button: 'Makro-Taste'
   Macro Buttons: Makro-Tasten
@@ -678,6 +696,7 @@ translations:
   Mesh Complete: Netz abgeschlossen
   Method: Methode
   Min: Min
+  Minimal: ''
   Mode: Modus
   Modified: Geändert
   Monitor a custom temperature sensor: 'Benutzerdefinierten Temperatursensor überwachen'
@@ -740,6 +759,7 @@ translations:
   No images found on USB drive: Keine Bilder auf USB-Laufwerk gefunden
   No jobs in queue: Keine Aufträge in der Warteschlange
   No macros available: Keine Makros verfügbar
+  No macros found: ''
   No matching prints: Keine passenden Drucke
   No mesh data: Keine Mesh-Daten
   No mesh loaded: Kein Netz geladen
@@ -810,6 +830,7 @@ translations:
   PRE-PRINT STEPS: VOR-DRUCK-SCHRITTE
   PRINTER: DRUCKER
   Paper Test Calibration: Papiertest-Kalibrierung
+  Parameters: ''
   Part Cooling Fan: Teile-Kühllüfter
   Part Fan: Teile-Lüfter
   Part, hotend, and auxiliary fan speeds: 'Teil-, Hotend- und Hilfslüftergeschwindigkeiten'
@@ -875,6 +896,8 @@ translations:
   Print Status: Druckstatus
   Print Time: Druckzeit
   Print Tuning: Druck-Feinabstimmung
+  Print a test label: ''
+  Print failed: ''
   Print history statistics: 'Druckverlauf-Statistiken'
   Print progress and file selection: 'Druckfortschritt und Dateiauswahl'
   Printer: Drucker
@@ -888,6 +911,8 @@ translations:
   Printer name: Druckername
   Printer ready: Drucker bereit
   Printing: Druckt
+  Printing label...: ''
+  Printing test label...: ''
   Prints: Drucke
   Prints Trend: Drucktrend
   'Private:': 'Privat:'
@@ -1036,12 +1061,14 @@ translations:
   Select G-Code File: G-Code-Datei auswählen
   Select Macro: Makro auswählen
   Select Sensor: Sensor auswählen
+  Select Sensors: ''
   Select Spool: Spule auswählen
   Select a material or adjust temperature: Material auswählen oder Temperatur anpassen
   Select macro for first button: Makro für erste Taste auswählen
   Select macro for second button: Makro für zweite Taste auswählen
   Select sensor: Sensor auswählen
   Select which devices the home screen power button controls: Wählen Sie, welche Geräte der Startbildschirm-Schalter steuert
+  Select your label media: ''
   Selecting slot...: Slot wird ausgewählt...
   Self-Test: Selbsttest
   Semantic Size Parameter Tests: Semantische Größenparameter-Tests
@@ -1054,11 +1081,13 @@ translations:
   Separate on/off macros. HelixScreen tracks the state.: Separate Ein-/Aus-Makros. HelixScreen verfolgt den Status.
   'Set ': 'Setzen '
   Set Active: Aktiv setzen
+  Set up your label printer in Settings: ''
   Settings: Einstellungen
   Settings reset to defaults. Restarting...: Einstellungen auf Standardwerte zurückgesetzt. Neustart...
   Setup Timelapse: Zeitraffer einrichten
   Shadow Intensity: Schattenintensität
   Share Usage Data: Nutzungsdaten teilen
+  Share anonymous usage statistics to help us make HelixScreen better. No personal data is ever collected.: ''
   'Share this code in Discord or support:': 'Code in Discord oder Support teilen:'
   'Shininess:': 'Glanz:'
   Show detailed print preparation status: Detaillierten Druckvorbereitungsstatus anzeigen
@@ -1099,6 +1128,7 @@ translations:
   Spoolman unavailable — filament weights may be stale: Spoolman nicht verfügbar — Filamentgewichte können veraltet sein
   Square Corner Velocity: Eckgeschwindigkeit
   Stable: Stabil
+  Standard: ''
   Standby: Bereitschaft
   Starfield: Starfield
   Start: Start
@@ -1156,7 +1186,9 @@ translations:
   Tertiary: Tertiär
   Test Connection: Verbindung testen
   Test Network: Netzwerk testen
+  Test Print: ''
   Test Sound: Testton
+  Test label printed: ''
   Test probe repeatability: Taster-Wiederholbarkeit testen
   'Testing rotation: %d\xc2\xb0 (%d/%d) - %ds remaining': 'Drehung testen: %d\xc2\xb0 (%d/%d) - %ds verbleibend'
   Thanks! Anonymous usage data helps improve HelixScreen.: Danke! Anonyme Nutzungsdaten helfen, HelixScreen zu verbessern.
@@ -1187,6 +1219,7 @@ translations:
   ? This will collect system info, logs, settings, and printer data to help diagnose issues. No passwords or sensitive data will be included.
   : Systemdaten, Protokolle, Einstellungen und Druckerdaten werden gesammelt. Keine Passwörter oder sensiblen Daten.
   This will immediately halt all printer operations. The printer will require a restart to resume.: Dies stoppt sofort alle Druckeroperationen. Der Drucker erfordert einen Neustart, um fortzufahren.
+  This will remove all entries from the display.: ''
   This will reset all settings to defaults. This action cannot be undone.: Dies setzt alle Einstellungen auf die Standardwerte zurück. Diese Aktion kann nicht rückgängig gemacht werden.
   This will restart Klipper firmware. Any active operations will be interrupted.: Klipper-Firmware wird neu gestartet. Aktive Vorgänge werden unterbrochen.
   This will restart Klipper.: Dies startet Klipper neu.
@@ -1337,6 +1370,7 @@ translations:
   disable: deaktivieren
   disabled: deaktiviert
   e.g. Jet Black: z.B. Tiefschwarz
+  e.g. NAME=my_var VALUE=123: ''
   e.g. Polymaker: z.B. Polymaker
   eSpooler: eSpooler
   elapsed: vergangen

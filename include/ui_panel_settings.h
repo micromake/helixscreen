@@ -171,7 +171,6 @@ class SettingsPanel : public PanelBase {
 
     void handle_dark_mode_changed(bool enabled);
     void handle_animations_changed(bool enabled);
-    void handle_gcode_3d_changed(bool enabled);
     void handle_display_sleep_changed(int index);
     void handle_led_light_changed(bool enabled);
     void handle_led_settings_clicked();
@@ -225,7 +224,6 @@ class SettingsPanel : public PanelBase {
     // These are registered before settings_panel.xml is parsed [L013]
     //
     static void on_animations_changed(lv_event_t* e);
-    static void on_gcode_3d_changed(lv_event_t* e);
     static void on_led_light_changed(lv_event_t* e);
     static void on_led_settings_clicked(lv_event_t* e);
     static void on_sound_settings_clicked(lv_event_t* e);

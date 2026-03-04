@@ -168,8 +168,6 @@
     "_drm_device_comment": "Override DRM device path (e.g., '/dev/dri/card1'). Empty string enables auto-detection. Pi 5 has multiple DRM cards: card0 (v3d, 3D only), card1 (DSI touchscreen), card2 (vc4/HDMI). Auto-detection finds the first with dumb buffer support and a connected display.",
     "gcode_render_mode": 2,
     "_gcode_render_mode_comment": "G-code visualization mode. 0=Auto, 1=3D GLES, 2=2D Layer (default). Can also be overridden via HELIX_GCODE_MODE env var (3D/2D).",
-    "gcode_3d_enabled": true,
-    "_gcode_3d_enabled_comment": "Enable 3D G-code preview capability. When false, only 2D layer view is available. Default: true.",
     "bed_mesh_render_mode": 0,
     "_bed_mesh_render_mode_comment": "Bed mesh visualization mode. 0=3D surface (default), 1=2D heatmap. Default: 0.",
     "bed_mesh_show_zero_plane": true,

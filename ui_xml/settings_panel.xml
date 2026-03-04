@@ -16,16 +16,23 @@
     <setting_dropdown_row name="row_language"
                           label="Language" label_tag="Language" icon="translate" description="Choose display language"
                           description_tag="Choose display language" callback="on_language_changed"/>
+    <!-- Time Format Dropdown -->
+    <setting_dropdown_row name="row_time_format"
+                          label="Time Format" label_tag="Time Format" icon="clock"
+                          description="Choose 12-hour or 24-hour time display"
+                          description_tag="Choose 12-hour or 24-hour time display" options="12 Hour&#10;24 Hour"
+                          options_tag="12 Hour&#10;24 Hour" callback="on_time_format_changed"/>
     <!-- Animations Toggle -->
     <setting_toggle_row name="row_animations"
                         label="Animations" label_tag="Animations" icon="animation"
                         description="Enable UI motion effects" description_tag="Enable UI motion effects"
                         callback="on_animations_changed"/>
-    <!-- 3D Preview Toggle -->
-    <setting_toggle_row name="row_gcode_3d"
-                        label="3D Preview" label_tag="3D Preview" icon="rotate_3d"
-                        description="Interactive 3D G-code during prints"
-                        description_tag="Interactive 3D G-code during prints" callback="on_gcode_3d_changed"/>
+    <!-- G-code Preview Dropdown (options set in C++ - 3D View only on capable hardware) -->
+    <setting_dropdown_row name="row_gcode_mode"
+                          label="G-code Preview" label_tag="G-code Preview" icon="printer_3d"
+                          description="Choose rendering mode for G-code visualization"
+                          description_tag="Choose rendering mode for G-code visualization"
+                          options="Auto&#10;3D View&#10;2D Layers&#10;Thumbnail Only" options_tag="Auto&#10;3D View&#10;2D Layers&#10;Thumbnail Only" callback="on_gcode_mode_changed"/>
     <!-- Display Settings (opens overlay for brightness + sleep timeout; hidden on Android) -->
     <lv_obj name="container_display_settings" width="100%" style_pad_all="0" scrollable="false">
       <bind_flag_if_eq subject="show_backlight_settings" flag="hidden" ref_value="0"/>

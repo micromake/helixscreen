@@ -165,7 +165,18 @@ static void on_z_movement_style_changed(lv_event_t* e) {
 // Static callback for G-code render mode dropdown
 static void on_gcode_mode_changed(lv_event_t* e) {
     lv_obj_t* dropdown = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    int mode = static_cast<int>(lv_dropdown_get_selected(dropdown));
+    int index = static_cast<int>(lv_dropdown_get_selected(dropdown));
+
+    // Map dropdown index to render mode value
+    // With GLES: indices match mode values directly (0=Auto, 1=3D, 2=2D, 3=Thumbnail)
+    // Without GLES: reduced set (0=Auto, 1=2D Layers, 2=Thumbnail Only)
+#ifndef ENABLE_GLES_3D
+    static const int INDEX_TO_MODE[] = {0, 2, 3}; // Auto, 2D Layers, Thumbnail Only
+    int mode = (index >= 0 && index <= 2) ? INDEX_TO_MODE[index] : 0;
+#else
+    int mode = index;
+#endif
+
     static const char* MODE_NAMES[] = {"Auto", "3D", "2D Layers", "Thumbnail Only"};
     spdlog::info("[SettingsPanel] G-code render mode changed: {} ({})", mode,
                  (mode >= 0 && mode <= 3) ? MODE_NAMES[mode] : "Unknown");
@@ -287,7 +298,6 @@ void SettingsPanel::init_subjects() {
         // Toggle switches
         {"on_dark_mode_changed", on_dark_mode_changed},
         {"on_animations_changed", on_animations_changed},
-        {"on_gcode_3d_changed", on_gcode_3d_changed},
         {"on_led_light_changed", on_led_light_changed},
         {"on_led_settings_clicked", on_led_settings_clicked},
         // Note: on_retraction_row_clicked is registered by RetractionSettingsOverlay
@@ -490,6 +500,45 @@ void SettingsPanel::setup_toggle_handlers() {
         }
     }
 
+    // === Time Format Dropdown ===
+    // Event handler wired via XML <event_cb>, just set initial value here (options set in XML)
+    lv_obj_t* time_format_row = lv_obj_find_by_name(panel_, "row_time_format");
+    if (time_format_row) {
+        lv_obj_t* time_format_dropdown = lv_obj_find_by_name(time_format_row, "dropdown");
+        if (time_format_dropdown) {
+            auto current_format = display_settings.get_time_format();
+            lv_dropdown_set_selected(time_format_dropdown, static_cast<uint32_t>(current_format));
+            spdlog::trace("[{}]   ✓ Time format dropdown (format={})", get_name(),
+                          static_cast<int>(current_format));
+        }
+    }
+
+    // === G-code Preview Dropdown ===
+    // Event handler wired via XML <event_cb>, set initial value and conditionally adjust options
+    lv_obj_t* gcode_mode_row = lv_obj_find_by_name(panel_, "row_gcode_mode");
+    if (gcode_mode_row) {
+        lv_obj_t* gcode_dropdown = lv_obj_find_by_name(gcode_mode_row, "dropdown");
+        if (gcode_dropdown) {
+#ifndef ENABLE_GLES_3D
+            // Without GLES, remove "3D View" option — use reduced set
+            // Indices: 0=Auto, 1=2D Layers, 2=Thumbnail Only
+            lv_dropdown_set_options(gcode_dropdown, "Auto\n2D Layers\nThumbnail Only");
+            // Map stored render mode to reduced dropdown index
+            int mode = display_settings.get_gcode_render_mode();
+            int index = 0; // Auto
+            if (mode == 2) index = 1;      // 2D Layers
+            else if (mode == 3) index = 2; // Thumbnail Only
+            // mode == 1 (3D) falls through to Auto on non-GLES
+            lv_dropdown_set_selected(gcode_dropdown, index);
+#else
+            // Full options: Auto(0), 3D View(1), 2D Layers(2), Thumbnail Only(3)
+            int mode = display_settings.get_gcode_render_mode();
+            lv_dropdown_set_selected(gcode_dropdown, mode);
+#endif
+            spdlog::trace("[{}]   ✓ G-code mode dropdown", get_name());
+        }
+    }
+
     // === E-Stop Confirmation Toggle ===
     // Event handler wired via XML <event_cb>, just set initial state here
     lv_obj_t* estop_confirm_row = lv_obj_find_by_name(panel_, "row_estop_confirm");
@@ -597,11 +646,6 @@ void SettingsPanel::handle_dark_mode_changed(bool enabled) {
 void SettingsPanel::handle_animations_changed(bool enabled) {
     spdlog::info("[{}] Animations toggled: {}", get_name(), enabled ? "ON" : "OFF");
     DisplaySettingsManager::instance().set_animations_enabled(enabled);
-}
-
-void SettingsPanel::handle_gcode_3d_changed(bool enabled) {
-    spdlog::info("[{}] G-code 3D preview toggled: {}", get_name(), enabled ? "ON" : "OFF");
-    DisplaySettingsManager::instance().set_gcode_3d_enabled(enabled);
 }
 
 void SettingsPanel::handle_display_sleep_changed(int index) {
@@ -995,14 +1039,6 @@ void SettingsPanel::on_animations_changed(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
-void SettingsPanel::on_gcode_3d_changed(lv_event_t* e) {
-    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_gcode_3d_changed");
-    auto* toggle = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    bool enabled = lv_obj_has_state(toggle, LV_STATE_CHECKED);
-    get_global_settings_panel().handle_gcode_3d_changed(enabled);
-    LVGL_SAFE_EVENT_CB_END();
-}
-
 void SettingsPanel::on_display_sleep_changed(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_display_sleep_changed");
     auto* dropdown = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
@@ -1242,7 +1278,6 @@ void register_settings_panel_callbacks() {
     register_xml_callbacks({
         // Toggle callbacks used in settings_panel.xml
         {"on_animations_changed", SettingsPanel::on_animations_changed},
-        {"on_gcode_3d_changed", SettingsPanel::on_gcode_3d_changed},
         {"on_led_light_changed", SettingsPanel::on_led_light_changed},
         {"on_led_settings_clicked", SettingsPanel::on_led_settings_clicked},
         {"on_sound_settings_clicked", SettingsPanel::on_sound_settings_clicked},

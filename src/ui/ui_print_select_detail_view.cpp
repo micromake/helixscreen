@@ -752,16 +752,6 @@ void PrintSelectDetailView::load_gcode_for_preview() {
         return;
     }
 
-    // Check config option to disable 3D rendering entirely
-    auto* cfg = Config::get_instance();
-    bool gcode_3d_enabled = cfg->get<bool>("/display/gcode_3d_enabled", true);
-    if (!gcode_3d_enabled) {
-        spdlog::info("[DetailView] G-code 3D rendering disabled via config - using thumbnail");
-        lv_subject_set_int(&detail_gcode_loading_, 0);
-        show_gcode_viewer(false);
-        return;
-    }
-
     // Detail page only shows the 3D viewer — skip download/parse on 2D-only platforms
     if (ui_gcode_viewer_is_using_2d_mode(gcode_viewer_)) {
         spdlog::debug("[DetailView] 2D-only platform — skipping G-code preview (thumbnail only)");

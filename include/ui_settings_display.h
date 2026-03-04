@@ -230,19 +230,9 @@ class DisplaySettingsOverlay : public OverlayBase {
     void init_bed_mesh_dropdown();
 
     /**
-     * @brief Initialize G-code mode dropdown
-     */
-    void init_gcode_dropdown();
-
-    /**
      * @brief Initialize theme preset dropdown
      */
     void init_theme_preset_dropdown(lv_obj_t* root);
-
-    /**
-     * @brief Initialize time format dropdown
-     */
-    void init_time_format_dropdown();
 
 #ifdef HELIX_ENABLE_SCREENSAVER
     /**

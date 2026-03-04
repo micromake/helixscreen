@@ -88,6 +88,7 @@ translations:
   Add Hidden Network: 非公開ネットワークを追加
   Add Vendor: ベンダーを追加
   Add Widget: ウィジェットを追加
+  Address: ''
   Adjust screen brightness level: 画面の明るさを調整します
   Adjust screws, then re-probe.: ネジを調整して、再度プローブしてください。
   Adjustments stay active until restart. Save after print completes.: 調整は再起動まで有効です。印刷完了後に保存してください。
@@ -221,6 +222,7 @@ translations:
   Clear: クリア
   Clear All: すべてクリア
   Clear All Events: すべてのイベントをクリア
+  Clear Console?: ''
   Clear Spool: スプールを解除
   Clipboard unavailable - use SSH: クリップボード利用不可 - SSHを使用してください
   Clog Detection: '詰まり検出'
@@ -232,6 +234,7 @@ translations:
   Color: 色
   Color Mismatch: 色の不一致
   Color Sensors: カラーセンサー
+  Compact: ''
   Complete: 完了
   Complete!: 完了！
   Completed: 完了
@@ -244,6 +247,7 @@ translations:
   Configure: 設定
   Configure G10/G11 firmware retraction: G10/G11 ファームウェアリトラクションを設定
   Configure PRINT_START: PRINT_START を設定
+  Configure QR label printing: ''
   Configure Spoolman integration and weight sync settings.: Spoolman 連携と重量同期設定を行います。
   Configure devices in Moonraker: Moonraker でデバイスを設定
   Configure filament detection sensors: フィラメント検出センサーを設定
@@ -301,6 +305,7 @@ translations:
   Currently printing: 印刷中
   Custom: カスタム
   Custom...: カスタム...
+  Customize Macro: ''
   Customize preset temperatures: プリセット温度をカスタマイズ
   Cutting filament...: フィラメントを切断中...
   DIAGNOSTICS: 診断
@@ -380,6 +385,7 @@ translations:
   Enable UI motion effects: UIモーションエフェクトを有効化
   Enable WiFi to scan: WiFi を有効にしてスキャン
   Enable WiFi to scan for networks: WiFi を有効にしてネットワークをスキャン
+  Enable anonymous statistics: ''
   Enable audio feedback: 音声フィードバックを有効化
   Enable detailed print preparation tracking (Recommended): 詳細な印刷準備トラッキングを有効化（推奨）
   Enabled: 有効
@@ -392,6 +398,7 @@ translations:
   'Enter a name for your custom theme:': 'カスタムテーマの名前を入力してください:'
   Enter a name to save this profile: このプロファイルを保存する名前を入力
   Enter password: パスワードを入力
+  Enter printer IP address first: ''
   Error: エラー
   Error state: エラー状態
   Escalate to emergency stop if cancel doesn't respond: キャンセルが応答しない場合は緊急停止にエスカレート
@@ -427,11 +434,13 @@ translations:
   Failed to download moonraker.conf.\nCheck printer connection.: moonraker.confのダウンロードに失敗しました。\nプリンター接続を確認してください。
   Failed to enable tuning tower: チューニングタワーの有効化に失敗しました
   Failed to get limits: 制限の取得に失敗しました
+  Failed to load history: ''
   Failed to load overlay: オーバーレイの読み込みに失敗しました
   Failed to load spools: スプールの読み込みに失敗しました
   Failed to open history: 履歴を開けませんでした
   Failed to open history list: 履歴リストを開けませんでした
   Failed to open wizard: ウィザードを開けませんでした
+  Failed to render label: ''
   Failed to reset theme: テーマのリセットに失敗しました
   Failed to restart Moonraker.: Moonrakerの再起動に失敗しました。
   Failed to save changes to Spoolman: 'Spoolman への変更の保存に失敗しました'
@@ -519,6 +528,7 @@ translations:
   HelixScreen Crashed: HelixScreen がクラッシュしました
   HelixScreen is detecting your display orientation: HelixScreenがディスプレイの向きを検出しています
   HelixScreen will integrate with your filament changer for multi-spool/color print operations.: HelixScreen はマルチスプール/カラー印刷操作のためにフィラメントチェンジャーと連携します。
+  Help Improve HelixScreen: ''
   Help improve HelixScreen?: HelixScreenの改善に協力しますか？
   Higher = faster: 高い = 速い
   Home: ホーム
@@ -538,6 +548,7 @@ translations:
   Hyperlapse: ハイパーラプス
   IMPORT FROM USB: USBからインポート
   'IP:': 'IP:'
+  Icon: ''
   Idle: アイドル
   Ignore: 無視
   In Progress: 進行中
@@ -567,6 +578,7 @@ translations:
   Interactive 3D G-code during prints: 印刷中のインタラクティブ 3D G-code
   Interactive probe calibration: インタラクティブプローブキャリブレーション
   Interactive probe offset adjustment: 対話型プローブオフセット調整
+  Invalid port number: ''
   Issue description: 問題の説明
   Job Queue: ジョブキュー
   Just now: たった今
@@ -592,6 +604,10 @@ translations:
   LEDs controlled by the light button: ライトボタンで制御される LED
   LOADED: 装填済み
   LOT-2024-001: LOT-2024-001
+  Label Preset: ''
+  Label Printer: ''
+  Label Size: ''
+  Label printed: ''
   Label printing coming soon: ラベル印刷は近日公開
   Language: 言語
   Last print cancelled: 前回の印刷がキャンセルされました
@@ -602,6 +618,7 @@ translations:
   Layer mode captures one frame per layer change. Best for most prints.: レイヤーモードはレイヤー変更ごとに1フレームをキャプチャします。ほとんどの印刷に最適です。
   'Layer:': 'レイヤー:'
   Layers: レイヤー
+  Layout style for labels: ''
   Learn More: 詳細を見る
   'Length:': '長さ:'
   Leveling Gantry...: ガントリーレベリング中...
@@ -635,6 +652,7 @@ translations:
   MOTION: 動作
   MPC: MPC
   Machine Limits: 機械制限
+  Macro: ''
   Macro Browser: マクロブラウザ
   Macro Button: 'マクロボタン'
   Macro Buttons: マクロボタン
@@ -678,6 +696,7 @@ translations:
   Mesh Complete: メッシュ完了
   Method: 方法
   Min: 最小
+  Minimal: ''
   Mode: モード
   Modified: 変更日時
   Monitor a custom temperature sensor: 'カスタム温度センサーを監視'
@@ -740,6 +759,7 @@ translations:
   No images found on USB drive: USBドライブに画像が見つかりません
   No jobs in queue: キューにジョブがありません
   No macros available: 利用可能なマクロがありません
+  No macros found: ''
   No matching prints: 一致する印刷なし
   No mesh data: メッシュデータなし
   No mesh loaded: メッシュが読み込まれていません
@@ -810,6 +830,7 @@ translations:
   PRE-PRINT STEPS: 印刷前の手順
   PRINTER: プリンター
   Paper Test Calibration: 紙テストキャリブレーション
+  Parameters: ''
   Part Cooling Fan: パーツ冷却ファン
   Part Fan: パーツファン
   Part, hotend, and auxiliary fan speeds: 'パーツ、ホットエンド、補助ファン速度'
@@ -875,6 +896,8 @@ translations:
   Print Status: 印刷ステータス
   Print Time: 印刷時間
   Print Tuning: 印刷チューニング
+  Print a test label: ''
+  Print failed: ''
   Print history statistics: '印刷履歴統計'
   Print progress and file selection: '印刷進捗とファイル選択'
   Printer: プリンター
@@ -888,6 +911,8 @@ translations:
   Printer name: プリンター名
   Printer ready: プリンター準備完了
   Printing: 印刷中
+  Printing label...: ''
+  Printing test label...: ''
   Prints: '印刷'
   Prints Trend: 印刷傾向
   'Private:': 'プライベート:'
@@ -1036,12 +1061,14 @@ translations:
   Select G-Code File: G-Codeファイルを選択
   Select Macro: マクロを選択
   Select Sensor: センサーを選択
+  Select Sensors: ''
   Select Spool: スプールを選択
   Select a material or adjust temperature: 素材を選択するか温度を調整
   Select macro for first button: 最初のボタンのマクロを選択
   Select macro for second button: 2番目のボタンのマクロを選択
   Select sensor: センサーを選択
   Select which devices the home screen power button controls: ホーム画面の電源ボタンで制御するデバイスを選択
+  Select your label media: ''
   Selecting slot...: スロットを選択中...
   Self-Test: セルフテスト
   Semantic Size Parameter Tests: セマンティックサイズパラメータテスト
@@ -1054,11 +1081,13 @@ translations:
   Separate on/off macros. HelixScreen tracks the state.: 個別のオン/オフマクロ。HelixScreenが状態を追跡します。
   'Set ': '設定 '
   Set Active: アクティブに設定
+  Set up your label printer in Settings: ''
   Settings: 設定
   Settings reset to defaults. Restarting...: 設定をデフォルトにリセットしました。再起動中...
   Setup Timelapse: タイムラプスを設定
   Shadow Intensity: 影の強度
   Share Usage Data: 使用データを共有
+  Share anonymous usage statistics to help us make HelixScreen better. No personal data is ever collected.: ''
   'Share this code in Discord or support:': 'このコードをDiscordまたはサポートで共有してください:'
   'Shininess:': '光沢:'
   Show detailed print preparation status: 詳細な印刷準備ステータスを表示
@@ -1099,6 +1128,7 @@ translations:
   Spoolman unavailable — filament weights may be stale: Spoolmanが利用できません — フィラメント重量が古い可能性があります
   Square Corner Velocity: 直角コーナー速度
   Stable: 安定版
+  Standard: ''
   Standby: スタンバイ
   Starfield: '星空'
   Start: 開始
@@ -1156,7 +1186,9 @@ translations:
   Tertiary: ターシャリ
   Test Connection: 接続テスト
   Test Network: ネットワークテスト
+  Test Print: ''
   Test Sound: テストサウンド
+  Test label printed: ''
   Test probe repeatability: プローブの再現性をテスト
   'Testing rotation: %d\xc2\xb0 (%d/%d) - %ds remaining': '回転テスト: %d\xc2\xb0 (%d/%d) - %ds残り'
   Thanks! Anonymous usage data helps improve HelixScreen.: ご協力ありがとうございます！匿名の使用データが HelixScreen の改善に役立ちます。
@@ -1187,6 +1219,7 @@ translations:
   ? This will collect system info, logs, settings, and printer data to help diagnose issues. No passwords or sensitive data will be included.
   : システム情報、ログ、設定、プリンターデータを収集して問題の診断に役立てます。パスワードや個人情報は含まれません。
   This will immediately halt all printer operations. The printer will require a restart to resume.: これはすべてのプリンター操作を直ちに停止します。再開するにはプリンターの再起動が必要です。
+  This will remove all entries from the display.: ''
   This will reset all settings to defaults. This action cannot be undone.: これはすべての設定をデフォルトにリセットします。この操作は元に戻せません。
   This will restart Klipper firmware. Any active operations will be interrupted.: Klipperファームウェアを再起動します。実行中の操作は中断されます。
   This will restart Klipper.: これにより Klipper が再起動します。
@@ -1337,6 +1370,7 @@ translations:
   disable: 無効化
   disabled: 無効
   e.g. Jet Black: 例：ジェットブラック
+  e.g. NAME=my_var VALUE=123: ''
   e.g. Polymaker: 例：Polymaker
   eSpooler: 'eSpooler'
   elapsed: 経過

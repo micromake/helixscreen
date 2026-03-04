@@ -174,8 +174,6 @@ void DisplaySettingsOverlay::on_activate() {
     init_sleep_dropdown();
     init_sleep_while_printing_toggle();
     init_bed_mesh_dropdown();
-    init_gcode_dropdown();
-    init_time_format_dropdown();
 
 #ifdef HELIX_ENABLE_SCREENSAVER
     init_screensaver_dropdown();
@@ -285,34 +283,6 @@ void DisplaySettingsOverlay::init_bed_mesh_dropdown() {
     }
 }
 
-void DisplaySettingsOverlay::init_gcode_dropdown() {
-    if (!overlay_root_)
-        return;
-
-    lv_obj_t* gcode_row = lv_obj_find_by_name(overlay_root_, "row_gcode_mode");
-    if (!gcode_row)
-        return;
-
-        // The row's parent container is hidden by default in XML.
-        // Show it only when 3D rendering is compiled in.
-#ifdef ENABLE_GLES_3D
-    lv_obj_t* container = lv_obj_get_parent(gcode_row);
-    if (container) {
-        lv_obj_remove_flag(container, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_set_height(container, LV_SIZE_CONTENT);
-    }
-#endif
-
-    lv_obj_t* gcode_dropdown = lv_obj_find_by_name(gcode_row, "dropdown");
-    if (gcode_dropdown) {
-        int current_mode = DisplaySettingsManager::instance().get_gcode_render_mode();
-        lv_dropdown_set_selected(gcode_dropdown, current_mode);
-
-        spdlog::debug("[{}] G-code mode dropdown initialized to {} ({})", get_name(), current_mode,
-                      current_mode == 0 ? "Auto" : (current_mode == 1 ? "3D" : "2D Layers"));
-    }
-}
-
 void DisplaySettingsOverlay::init_theme_preset_dropdown(lv_obj_t* root) {
     if (!root)
         return;
@@ -329,24 +299,6 @@ void DisplaySettingsOverlay::init_theme_preset_dropdown(lv_obj_t* root) {
 
         spdlog::debug("[{}] Theme dropdown initialized to index {} ({})", get_name(), current_index,
                       DisplaySettingsManager::instance().get_theme_name());
-    }
-}
-
-void DisplaySettingsOverlay::init_time_format_dropdown() {
-    if (!overlay_root_)
-        return;
-
-    lv_obj_t* time_format_row = lv_obj_find_by_name(overlay_root_, "row_time_format");
-    lv_obj_t* time_format_dropdown =
-        time_format_row ? lv_obj_find_by_name(time_format_row, "dropdown") : nullptr;
-    if (time_format_dropdown) {
-        // Set initial selection based on current setting (options set in XML)
-        auto current_format = DisplaySettingsManager::instance().get_time_format();
-        lv_dropdown_set_selected(time_format_dropdown, static_cast<uint32_t>(current_format));
-
-        spdlog::debug("[{}] Time format dropdown initialized to {} ({})", get_name(),
-                      static_cast<int>(current_format),
-                      current_format == TimeFormat::HOUR_12 ? "12H" : "24H");
     }
 }
 

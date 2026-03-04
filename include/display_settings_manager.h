@@ -26,9 +26,8 @@ enum class TimeFormat { HOUR_12 = 0, HOUR_24 = 1 };
  * - has_backlight (ephemeral, hardware detection)
  * - sleep_while_printing (allow sleep during prints)
  * - animations_enabled (UI animation toggle)
- * - gcode_3d_enabled (3D G-code preview toggle)
  * - bed_mesh_render_mode (Auto/3D/2D)
- * - gcode_render_mode (Auto/3D/2D)
+ * - gcode_render_mode (Auto/3D/2D/Thumbnail Only)
  * - time_format (12H/24H)
  * - printer_image (config-only, no subject)
  * - bed_mesh_show_zero_plane (config-only, no subject)
@@ -123,12 +122,6 @@ class DisplaySettingsManager {
 
     /** @brief Set animations enabled state (updates subject + persists) */
     void set_animations_enabled(bool enabled);
-
-    /** @brief Get G-code 3D preview enabled state */
-    bool get_gcode_3d_enabled() const;
-
-    /** @brief Set G-code 3D preview enabled state (updates subject + persists) */
-    void set_gcode_3d_enabled(bool enabled);
 
     /** @brief Get bed mesh render mode (0=Auto, 1=3D, 2=2D) */
     int get_bed_mesh_render_mode() const;
@@ -265,11 +258,6 @@ class DisplaySettingsManager {
         return &animations_enabled_subject_;
     }
 
-    /** @brief G-code 3D preview subject (integer: 0=off, 1=on) */
-    lv_subject_t* subject_gcode_3d_enabled() {
-        return &gcode_3d_enabled_subject_;
-    }
-
     /** @brief Bed mesh render mode subject (integer: 0=auto, 1=3D, 2=2D) */
     lv_subject_t* subject_bed_mesh_render_mode() {
         return &bed_mesh_render_mode_subject_;
@@ -308,7 +296,6 @@ class DisplaySettingsManager {
     lv_subject_t has_dimming_subject_;
     lv_subject_t sleep_while_printing_subject_;
     lv_subject_t animations_enabled_subject_;
-    lv_subject_t gcode_3d_enabled_subject_;
     lv_subject_t bed_mesh_render_mode_subject_;
     lv_subject_t gcode_render_mode_subject_;
     lv_subject_t time_format_subject_;

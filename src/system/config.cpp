@@ -64,7 +64,7 @@ json get_default_printer_config(const std::string& moonraker_host) {
 /// Used for both new configs and ensuring display section exists with defaults
 json get_default_display_config() {
     return {{"sleep_sec", 600},         {"dim_sec", 300},         {"dim_brightness", 30},
-            {"drm_device", ""},         {"gcode_render_mode", 0}, {"gcode_3d_enabled", true},
+            {"drm_device", ""},         {"gcode_render_mode", 0},
             {"bed_mesh_render_mode", 0}};
 }
 

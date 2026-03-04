@@ -145,11 +145,6 @@ void DisplaySettingsManager::init_subjects() {
     UI_MANAGED_SUBJECT_INT(animations_enabled_subject_, animations ? 1 : 0,
                            "settings_animations_enabled", subjects_);
 
-    // G-code 3D preview enabled (default: true)
-    bool gcode_3d = config->get<bool>("/display/gcode_3d_enabled", true);
-    UI_MANAGED_SUBJECT_INT(gcode_3d_enabled_subject_, gcode_3d ? 1 : 0, "settings_gcode_3d_enabled",
-                           subjects_);
-
     // Bed mesh render mode (default: 0 = Auto)
     int bed_mesh_mode = config->get<int>("/display/bed_mesh_render_mode", 0);
     bed_mesh_mode = std::clamp(bed_mesh_mode, 0, 2);
@@ -462,20 +457,6 @@ void DisplaySettingsManager::set_animations_enabled(bool enabled) {
 
     Config* config = Config::get_instance();
     config->set<bool>("/display/animations_enabled", enabled);
-    config->save();
-}
-
-bool DisplaySettingsManager::get_gcode_3d_enabled() const {
-    return lv_subject_get_int(const_cast<lv_subject_t*>(&gcode_3d_enabled_subject_)) != 0;
-}
-
-void DisplaySettingsManager::set_gcode_3d_enabled(bool enabled) {
-    spdlog::info("[DisplaySettingsManager] set_gcode_3d_enabled({})", enabled);
-
-    lv_subject_set_int(&gcode_3d_enabled_subject_, enabled ? 1 : 0);
-
-    Config* config = Config::get_instance();
-    config->set<bool>("/display/gcode_3d_enabled", enabled);
     config->save();
 }
 

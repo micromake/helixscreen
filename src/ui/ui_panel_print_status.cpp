@@ -2037,16 +2037,6 @@ void PrintStatusPanel::load_gcode_for_viewing(const std::string& filename) {
         return;
     }
 
-    // Check config option to disable 3D rendering entirely
-    auto* cfg = Config::get_instance();
-    bool gcode_3d_enabled = cfg->get<bool>("/display/gcode_3d_enabled", true);
-    if (!gcode_3d_enabled) {
-        spdlog::info("[{}] G-code 3D rendering disabled via config - using thumbnail only",
-                     get_name());
-        show_gcode_viewer(false); // Ensure thumbnail is shown, not empty viewer
-        return;
-    }
-
     // Generate temp file path - check if we already have a cached copy
     // Use persistent cache directory (not /tmp which may be RAM-backed on embedded)
     std::string cache_dir = get_helix_cache_dir("gcode_temp");

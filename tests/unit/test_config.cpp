@@ -750,7 +750,6 @@ TEST_CASE_METHOD(ConfigTestFixture, "Config: display settings readable when popu
                                 {"sleep_sec", 300},
                                 {"dim_sec", 120},
                                 {"dim_brightness", 50},
-                                {"gcode_3d_enabled", false},
                                 {"calibration", {{"valid", true}, {"a", 2.0}}}}}});
 
     // Run migration to move calibration from /display/ to /input/
@@ -761,7 +760,6 @@ TEST_CASE_METHOD(ConfigTestFixture, "Config: display settings readable when popu
     REQUIRE(config.get<int>("/display/sleep_sec") == 300);
     REQUIRE(config.get<int>("/display/dim_sec") == 120);
     REQUIRE(config.get<int>("/display/dim_brightness") == 50);
-    REQUIRE(config.get<bool>("/display/gcode_3d_enabled") == false);
     REQUIRE(config.get<bool>("/input/calibration/valid") == true);
     REQUIRE(config.get<double>("/input/calibration/a") == Catch::Approx(2.0));
 }
@@ -1054,14 +1052,6 @@ TEST_CASE_METHOD(ConfigTestFixture, "Config: default display/gcode_render_mode i
     REQUIRE(gcode_render_mode == 0);
 }
 
-TEST_CASE_METHOD(ConfigTestFixture, "Config: default display/gcode_3d_enabled is true",
-                 "[config][display][defaults]") {
-    set_data_empty();
-
-    bool gcode_3d_enabled = config.get<bool>("/display/gcode_3d_enabled", true);
-    REQUIRE(gcode_3d_enabled == true);
-}
-
 TEST_CASE_METHOD(ConfigTestFixture, "Config: default display/bed_mesh_render_mode is 0",
                  "[config][display][defaults]") {
     set_data_empty();
@@ -1163,17 +1153,6 @@ TEST_CASE_METHOD(ConfigTestFixture, "Config: set and get input/touch_device",
 
     config.set<std::string>("/input/touch_device", "/dev/input/event0");
     REQUIRE(config.get<std::string>("/input/touch_device") == "/dev/input/event0");
-}
-
-TEST_CASE_METHOD(ConfigTestFixture, "Config: set and get display/gcode_3d_enabled",
-                 "[config][display][readwrite]") {
-    set_data_for_plural_test({{"display", json::object()}});
-
-    config.set<bool>("/display/gcode_3d_enabled", false);
-    REQUIRE(config.get<bool>("/display/gcode_3d_enabled") == false);
-
-    config.set<bool>("/display/gcode_3d_enabled", true);
-    REQUIRE(config.get<bool>("/display/gcode_3d_enabled") == true);
 }
 
 // ----------------------------------------------------------------------------
