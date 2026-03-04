@@ -17,6 +17,8 @@
 
 #include "memory_utils.h"
 
+#include <spdlog/common.h>
+
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -109,8 +111,10 @@ class MemoryMonitor {
     /**
      * @brief Log current memory stats immediately (useful for specific events)
      * @param context Optional context string to include in log
+     * @param level Log level (default: TRACE for backward compat with periodic loop callers)
      */
-    static void log_now(const char* context = nullptr);
+    static void log_now(const char* context = nullptr,
+                        spdlog::level::level_enum level = spdlog::level::trace);
 
     /**
      * @brief Set callback for memory pressure warnings

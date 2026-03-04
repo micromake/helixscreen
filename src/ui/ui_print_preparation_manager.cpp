@@ -822,7 +822,7 @@ void PrintPreparationManager::start_print(const std::string& filename,
     bool needs_macro_params = !macro_skip_params.empty();
 
     if (needs_file_modification || needs_macro_params) {
-        helix::MemoryMonitor::log_now("print_modification_start");
+        helix::MemoryMonitor::log_now("print_modification_start", spdlog::level::debug);
         // SAFETY CHECK: Verify we can safely modify the G-code file
         // On resource-constrained devices (e.g., AD5M with 512MB RAM), loading large
         // G-code files into memory can exhaust resources and crash both Moonraker and Klipper.
@@ -1315,7 +1315,7 @@ void PrintPreparationManager::modify_and_print_streaming(
             spdlog::info("[PrintPreparationManager] Modification complete ({} lines modified), "
                          "uploading {}",
                          result.lines_modified, result.modified_path);
-            helix::MemoryMonitor::log_now("print_modification_done");
+            helix::MemoryMonitor::log_now("print_modification_done", spdlog::level::debug);
 
             // Step 3: Upload modified file from disk
             std::string modified_path = result.modified_path; // Copy for lambda
@@ -1343,7 +1343,7 @@ void PrintPreparationManager::modify_and_print_streaming(
                     spdlog::info("[PrintPreparationManager] Modified file uploaded, starting "
                                  "print (use_plugin={})",
                                  use_plugin);
-                    helix::MemoryMonitor::log_now("print_start_dispatched");
+                    helix::MemoryMonitor::log_now("print_start_dispatched", spdlog::level::debug);
 
                     // Step 4: Start print with modified file
                     // If plugin available, use path-based API for symlink/history patching

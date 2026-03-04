@@ -146,20 +146,21 @@ MemoryStats MemoryMonitor::get_current_stats() {
     return stats;
 }
 
-void MemoryMonitor::log_now(const char* context) {
+void MemoryMonitor::log_now(const char* context, spdlog::level::level_enum level) {
     MemoryStats stats = get_current_stats();
 
     if (context) {
-        spdlog::trace(
-            "[MemoryMonitor] [{}] RSS={}kB VmSize={}kB VmData={}kB Swap={}kB (Peak: RSS={}kB "
-            "Vm={}kB)",
-            context, stats.vm_rss_kb, stats.vm_size_kb, stats.vm_data_kb, stats.vm_swap_kb,
-            stats.vm_hwm_kb, stats.vm_peak_kb);
+        spdlog::log(level,
+                    "[MemoryMonitor] [{}] RSS={}kB VmSize={}kB VmData={}kB Swap={}kB (Peak: "
+                    "RSS={}kB Vm={}kB)",
+                    context, stats.vm_rss_kb, stats.vm_size_kb, stats.vm_data_kb, stats.vm_swap_kb,
+                    stats.vm_hwm_kb, stats.vm_peak_kb);
     } else {
-        spdlog::trace("[MemoryMonitor] RSS={}kB VmSize={}kB VmData={}kB Swap={}kB (Peak: RSS={}kB "
-                      "Vm={}kB)",
-                      stats.vm_rss_kb, stats.vm_size_kb, stats.vm_data_kb, stats.vm_swap_kb,
-                      stats.vm_hwm_kb, stats.vm_peak_kb);
+        spdlog::log(level,
+                    "[MemoryMonitor] RSS={}kB VmSize={}kB VmData={}kB Swap={}kB (Peak: RSS={}kB "
+                    "Vm={}kB)",
+                    stats.vm_rss_kb, stats.vm_size_kb, stats.vm_data_kb, stats.vm_swap_kb,
+                    stats.vm_hwm_kb, stats.vm_peak_kb);
     }
 }
 

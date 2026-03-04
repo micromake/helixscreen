@@ -1379,7 +1379,7 @@ void PrintStatusPanel::on_print_state_changed(PrintJobState job_state) {
 
     // Transition remaining display from preprint observer back to Moonraker's time_left
     if (result.new_state == PrintState::Printing) {
-        helix::MemoryMonitor::log_now("print_state->printing");
+        helix::MemoryMonitor::log_now("print_state->printing", spdlog::level::debug);
         format_time(lifecycle_.remaining_seconds(), remaining_buf_, sizeof(remaining_buf_));
         lv_subject_copy_string(&remaining_subject_, remaining_buf_);
     }
@@ -1450,7 +1450,7 @@ void PrintStatusPanel::on_print_filename_changed(const char* filename) {
     }
 
     if (has_filename) {
-        helix::MemoryMonitor::log_now("print_filename_changed");
+        helix::MemoryMonitor::log_now("print_filename_changed", spdlog::level::debug);
         std::string raw_filename = filename;
 
         // Auto-resolve temp file patterns to original filename.
@@ -1907,7 +1907,7 @@ void PrintStatusPanel::load_gcode_for_viewing(const std::string& filename) {
     if (DisplaySettingsManager::instance().get_gcode_render_mode() == 3) {
         spdlog::info("[{}] G-code render mode is Thumbnail Only - skipping G-code load",
                      get_name());
-        helix::MemoryMonitor::log_now("gcode_load_skipped_thumb_only");
+        helix::MemoryMonitor::log_now("gcode_load_skipped_thumb_only", spdlog::level::debug);
         show_gcode_viewer(false);
         return;
     }
@@ -1975,7 +1975,7 @@ void PrintStatusPanel::load_gcode_for_viewing(const std::string& filename) {
 
             spdlog::debug("[{}] G-code size {} bytes - safe to render, streaming to disk...",
                           get_name(), metadata.size);
-            helix::MemoryMonitor::log_now("gcode_download_start");
+            helix::MemoryMonitor::log_now("gcode_download_start", spdlog::level::debug);
 
             // Clean up previous temp file if any
             if (!temp_gcode_path_.empty() && temp_gcode_path_ != temp_path) {
@@ -1998,7 +1998,7 @@ void PrintStatusPanel::load_gcode_for_viewing(const std::string& filename) {
 
                     spdlog::debug("[{}] Streamed G-code to disk, loading into viewer: {}",
                                   get_name(), path);
-                    helix::MemoryMonitor::log_now("gcode_download_done");
+                    helix::MemoryMonitor::log_now("gcode_download_done", spdlog::level::debug);
 
                     // Load into the viewer widget
                     load_gcode_file(path.c_str());

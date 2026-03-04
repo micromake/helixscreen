@@ -82,7 +82,7 @@ void PrintStartCollector::start() {
         phase_enter_times_.clear();
     }
     fallbacks_enabled_.store(false); // Will be enabled after initial window
-    helix::MemoryMonitor::log_now("print_start_collector_start");
+    helix::MemoryMonitor::log_now("print_start_collector_start", spdlog::level::debug);
 
     // Load prediction history from config
     load_prediction_history();
