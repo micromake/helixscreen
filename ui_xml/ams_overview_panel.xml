@@ -51,7 +51,7 @@
           </lv_obj>
           <!-- Slot grid card (populated dynamically with ams_slot widgets) -->
           <ui_card name="detail_unit_card"
-                   width="100%" height="content" style_radius="#border_radius" style_pad_all="#space_sm"
+                   width="100%" height="content" style_radius="4" style_pad_all="#space_sm"
                    style_border_width="0" scrollable="false">
             <lv_obj name="detail_slot_area"
                     width="100%" height="content" style_pad_all="0" scrollable="false">
