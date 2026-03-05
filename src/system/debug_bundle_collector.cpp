@@ -242,7 +242,15 @@ std::string DebugBundleCollector::collect_log_tail(int num_lines) {
     }
     log_paths.push_back("/tmp/helixscreen.log");
 
-    return collect_log_tail_from_paths(log_paths, num_lines);
+    auto result = collect_log_tail_from_paths(log_paths, num_lines);
+    if (!result.empty()) {
+        return result;
+    }
+
+    // Fallback: on embedded platforms (AD5M, AD5X), the app logs to syslog which
+    // goes to /var/log/messages. Filter for our entries since the file contains
+    // all system messages.
+    return collect_syslog_tail(num_lines);
 }
 
 // =============================================================================
@@ -259,6 +267,11 @@ std::string DebugBundleCollector::collect_crash_txt() {
     if (home && home[0] != '\0') {
         crash_paths.push_back(std::string(home) + "/helixscreen/config/crash.txt");
     }
+
+    // Absolute paths for embedded platforms (AD5M, AD5X, K1, etc.)
+    crash_paths.push_back("/opt/helixscreen/config/crash.txt");
+    crash_paths.push_back("/srv/helixscreen/config/crash.txt");
+    crash_paths.push_back("/usr/data/helixscreen/config/crash.txt");
 
     for (const auto& path : crash_paths) {
         std::ifstream file(path);
@@ -740,6 +753,56 @@ std::string DebugBundleCollector::collect_log_tail_from_paths(const std::vector<
         }
 
         spdlog::debug("[DebugBundle] Read {} log lines from {}", lines.size(), path);
+        return result.str();
+    }
+
+    return {};
+}
+
+// =============================================================================
+// Syslog tail (fallback for embedded platforms using syslog → /var/log/messages)
+// =============================================================================
+
+std::string DebugBundleCollector::collect_syslog_tail(int num_lines) {
+    // On embedded Linux (AD5M, AD5X), the app logs via syslog to /var/log/messages.
+    // Filter for helix-screen entries only.
+    static const std::vector<std::string> syslog_paths = {
+        "/var/log/messages",
+        "/var/log/syslog",
+    };
+
+    for (const auto& path : syslog_paths) {
+        std::ifstream file(path);
+        if (!file.good()) {
+            continue;
+        }
+
+        std::deque<std::string> lines;
+        std::string line;
+        while (std::getline(file, line)) {
+            if (line.find("helix-screen") != std::string::npos ||
+                line.find("helix-watchdog") != std::string::npos ||
+                line.find("helix-splash") != std::string::npos) {
+                lines.push_back(std::move(line));
+                if (static_cast<int>(lines.size()) > num_lines) {
+                    lines.pop_front();
+                }
+            }
+        }
+
+        if (lines.empty()) {
+            continue;
+        }
+
+        std::ostringstream result;
+        for (size_t i = 0; i < lines.size(); ++i) {
+            if (i > 0) {
+                result << '\n';
+            }
+            result << lines[i];
+        }
+
+        spdlog::debug("[DebugBundle] Read {} syslog lines from {}", lines.size(), path);
         return result.str();
     }
 
