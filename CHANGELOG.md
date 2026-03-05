@@ -5,6 +5,30 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.96.6] - 2026-03-05
+
+### Added
+- CJK glyph support in text fonts with automatic font regeneration on translation changes
+
+### Fixed
+- Bed mesh 3D graph not refreshing on profile switch; row clicks falling through to panel beneath (#307)
+- AMS filament edit modal opening on picker view instead of form view
+- Spoolman spool list race condition causing incomplete filament data (#311)
+- MPC calibration control type incorrectly detected on non-Kalico printers (#306)
+- Async observer use-after-free crash on ARM32 with enhanced diagnostics (#317)
+- Display waking with blank screen due to FBIOBLANK race on software overlay (#303)
+- Slider knob clipped at edges in fan and PID tuning menus (#306)
+- Dim/sleep constraint applied on devices without dimming support (#313)
+- Installer modifying init scripts during self-update (#314)
+- Display orientation probe not applying LVGL rotation (#315)
+- Grid widget selection before layout update causing misalignment (#308)
+- Toast dismissal crash from synchronous deletion during event processing (#316)
+- Console log output suppressed by isatty check
+- Crash diagnostics: recover actual crash location from CPU registers on shallow ARM32 backtraces
+
+### Changed
+- About screen uses native LVGL scroll with prerendered logo replacing custom marquee animation (#312)
+
 ## [0.96.5] - 2026-03-05
 
 ### Added
@@ -1583,6 +1607,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.96.6]: https://github.com/prestonbrown/helixscreen/compare/v0.96.5...v0.96.6
 [0.96.5]: https://github.com/prestonbrown/helixscreen/compare/v0.96.4...v0.96.5
 [0.96.4]: https://github.com/prestonbrown/helixscreen/compare/v0.96.3...v0.96.4
 [0.96.3]: https://github.com/prestonbrown/helixscreen/compare/v0.96.2...v0.96.3
