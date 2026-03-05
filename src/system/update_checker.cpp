@@ -507,6 +507,22 @@ int extract_tar_member(const std::string& tarball_path, const std::string& extra
 #define flog_debug(...) FLOG(debug, __VA_ARGS__)
 // NOLINTEND(cppcoreguidelines-macro-usage)
 
+/// Strip ANSI escape sequences (\033[...m) for display in the UI
+std::string strip_ansi_codes(const std::string& s) {
+    std::string clean;
+    clean.reserve(s.size());
+    for (size_t i = 0; i < s.size(); ++i) {
+        if (s[i] == '\033' && i + 1 < s.size() && s[i + 1] == '[') {
+            i += 2;
+            while (i < s.size() && s[i] != 'm')
+                ++i;
+        } else {
+            clean += s[i];
+        }
+    }
+    return clean;
+}
+
 } // anonymous namespace
 
 // ============================================================================
@@ -1203,6 +1219,8 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
     // process is killed by systemd's stop_service during the install step.
     int ret = -1;
     bool timed_out = false;
+    std::string last_error_line;   // last line containing ERROR or FAILED
+    std::string last_warning_line;  // last line containing WARNING (lower priority)
     {
         int log_fd = open(install_log.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0640);
         if (log_fd < 0) {
@@ -1287,7 +1305,8 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
             }
         }
 
-        // Read back the install log and emit every line through spdlog
+        // Read install log: emit to spdlog, and capture the last error/warning
+        // line to show in the UI (the user can't see the log file from the touchscreen).
         {
             struct stat log_stat {};
             if (stat(install_log.c_str(), &log_stat) == 0) {
@@ -1297,7 +1316,6 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
                            strerror(errno));
             }
         }
-
         FILE* lf = fopen(install_log.c_str(), "r");
         if (lf) {
             char line[512];
@@ -1311,6 +1329,16 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
                 }
                 spdlog::info("[install.sh] {}", line);
                 line_count++;
+                // Capture last ERROR/WARNING line for UI display.
+                // Prioritize ERROR/FAILED over WARNING so rollback messages
+                // don't mask the actual failure reason.
+                std::string s(line);
+                if (s.find("ERROR") != std::string::npos ||
+                    s.find("FAILED") != std::string::npos) {
+                    last_error_line = strip_ansi_codes(s);
+                } else if (s.find("WARNING") != std::string::npos) {
+                    last_warning_line = strip_ansi_codes(s);
+                }
             }
             flog_info("[UpdateChecker] ---- end install.sh output ({} lines) ----", line_count);
             fclose(lf);
@@ -1331,7 +1359,13 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
 
     if (ret != 0) {
         flog_error("[UpdateChecker] Install script failed with code {}", ret);
-        report_download_status(DownloadStatus::Error, 0, "Error: Installation failed",
+        // Build a user-visible error message with detail from the install log
+        std::string ui_text = timed_out ? "Installation timed out" : "Installation failed";
+        const auto& detail = !last_error_line.empty() ? last_error_line : last_warning_line;
+        if (!detail.empty()) {
+            ui_text += "\n" + detail;
+        }
+        report_download_status(DownloadStatus::Error, 0, ui_text,
                                "install.sh returned error code " + std::to_string(ret));
         std::string reason = timed_out ? "install_timeout" : "install_failed";
         TelemetryManager::instance().record_update_failure(reason, version, get_platform_key(), -1,

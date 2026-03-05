@@ -919,11 +919,23 @@ install_runtime_deps() {
     done
 
     if [ -n "$missing" ]; then
+        # Under NoNewPrivileges (self-update from the running app), sudo is blocked.
+        # Warn about missing deps but don't fail — the binary may still work, and
+        # verify_binary_deps() will catch truly fatal missing libraries later.
+        if _has_no_new_privs; then
+            log_warn "Missing runtime libraries (cannot install under self-update): $missing"
+            log_warn "Install manually after update: sudo apt-get install $missing"
+            return 0
+        fi
         log_info "Installing missing libraries: $missing"
         $SUDO apt-get update -qq
         # shellcheck disable=SC2086
-        $SUDO apt-get install -y --no-install-recommends $missing
-        log_success "Runtime libraries installed"
+        if ! $SUDO apt-get install -y --no-install-recommends $missing; then
+            log_warn "Failed to install some runtime libraries: $missing"
+            log_warn "The update will continue. Install manually: sudo apt-get install $missing"
+        else
+            log_success "Runtime libraries installed"
+        fi
     else
         log_success "All runtime libraries already installed"
     fi
@@ -1143,6 +1155,20 @@ verify_binary_deps() {
                         log_warn "Install GPU libraries for hardware acceleration: sudo apt install libgbm1 libegl1 libgles2"
                         return 0
                     fi
+                fi
+                # Under NoNewPrivileges (self-update), we can't install libs.
+                # Warn but don't block — the binary may still start with reduced
+                # functionality (e.g. no SIMD camera decode).
+                if _has_no_new_privs; then
+                    log_warn "Missing libraries (cannot install during self-update):"
+                    echo "$missing_libs" | while IFS= read -r line; do
+                        log_warn "  $line"
+                    done
+                    # Extract library basenames (e.g. "libturbojpeg.so.0") for user guidance
+                    local lib_names
+                    lib_names=$(echo "$missing_libs" | awk '{print $1}' | tr '\n' ' ')
+                    log_warn "Install manually: sudo apt-get install packages providing: $lib_names"
+                    return 0
                 fi
                 # No usable fallback — original error behavior
                 log_error "Could not resolve all missing libraries:"
