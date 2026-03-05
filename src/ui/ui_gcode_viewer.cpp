@@ -1574,9 +1574,10 @@ void ui_gcode_viewer_clear(lv_obj_t* obj) {
     st->tool_color_overrides.clear();        // Clear per-tool AMS colors
     st->viewer_state = GcodeViewerState::Empty;
 
-    // Clear cached framebuffer so stale frames aren't blitted on next show
+    // Release all GPU and CPU geometry resources
 #ifdef ENABLE_3D_RENDERER
     if (st->renderer_) {
+        st->renderer_->release_geometry();
         st->renderer_->clear_cached_frame();
     }
 #endif

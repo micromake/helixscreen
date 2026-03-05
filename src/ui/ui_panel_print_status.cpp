@@ -619,6 +619,15 @@ void PrintStatusPanel::on_deactivate() {
     // Pause G-code viewer rendering when panel is hidden (CPU optimization)
     if (gcode_viewer_) {
         ui_gcode_viewer_set_paused(gcode_viewer_, true);
+
+        // Release heavy 3D resources when leaving the panel if the print is no
+        // longer active. Keeps resources during printing/paused/preparing so the
+        // user can return without a full reload. New prints clear via load_gcode_file.
+        auto state = lifecycle_.state();
+        if (state != PrintState::Printing && state != PrintState::Paused &&
+            state != PrintState::Preparing) {
+            ui_gcode_viewer_clear(gcode_viewer_);
+        }
     }
 
     // Hide runout guidance modal if panel is deactivated (e.g., navbar navigation)

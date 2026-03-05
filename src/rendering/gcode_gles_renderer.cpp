@@ -1038,6 +1038,21 @@ void GCodeGLESRenderer::render(lv_layer_t* layer, const ParsedGCodeFile& gcode,
             geometry_uploaded_ = true;
             upload_next_layer_ = 0;
             upload_total_layers_ = 0;
+            // Free pre-computed interleaved buffers — all data is now in GPU VBOs.
+            // The CPU fallback path (for tool color re-upload) re-expands from
+            // the compact vertices/strips directly, so these aren't needed.
+            size_t freed = 0;
+            for (auto& pb : geometry_->prepared_buffers) {
+                freed += pb.data.capacity() * sizeof(float);
+                pb.data.clear();
+                pb.data.shrink_to_fit();
+            }
+            geometry_->prepared_buffers.clear();
+            geometry_->prepared_buffers.shrink_to_fit();
+            if (freed > 0) {
+                spdlog::info("[GCode GLES] Freed {} MB of upload buffers after VBO upload",
+                             freed / (1024 * 1024));
+            }
             // Defer first GPU render by a few frames to avoid blocking panel animations
             render_defer_frames_ = 3;
         } else {
@@ -1606,6 +1621,43 @@ int GCodeGLESRenderer::get_max_layer_index() const {
     if (geometry_)
         return static_cast<int>(geometry_->max_layer_index);
     return 0;
+}
+
+// ============================================================
+// Geometry Release
+// ============================================================
+
+void GCodeGLESRenderer::release_geometry() {
+    size_t freed = geometry_ ? geometry_->memory_usage() : 0;
+
+    // Free GPU VBOs (requires GL context)
+    if (gl_initialized_ && !layer_vbos_.empty()) {
+#if LV_USE_SDL
+        SdlGlContextGuard guard(sdl_gl_window_, sdl_gl_context_);
+#else
+        EglContextGuard guard(egl_display_, egl_surface_, egl_context_);
+#endif
+        if (guard.ok()) {
+            free_vbos(layer_vbos_);
+        }
+    }
+
+    // Free CPU geometry
+    geometry_.reset();
+    active_geometry_ = nullptr;
+    current_filename_.clear();
+    geometry_uploaded_ = false;
+    upload_next_layer_ = 0;
+    upload_total_layers_ = 0;
+
+    // Free readback buffer
+    freed += readback_buf_.capacity();
+    readback_buf_.clear();
+    readback_buf_.shrink_to_fit();
+
+    if (freed > 0) {
+        spdlog::info("[GCode GLES] Released geometry: {} MB freed", freed / (1024 * 1024));
+    }
 }
 
 // ============================================================

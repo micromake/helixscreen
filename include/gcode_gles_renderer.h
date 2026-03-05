@@ -215,6 +215,9 @@ class GCodeGLESRenderer {
                                const std::string& filename);
     void set_prebuilt_coarse_geometry(std::unique_ptr<RibbonGeometry> geometry);
 
+    /// Release CPU geometry and GPU VBOs. Keeps GL context alive for future loads.
+    void release_geometry();
+
     // ====== Statistics ======
 
     size_t get_segments_rendered() const {
