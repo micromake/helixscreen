@@ -362,9 +362,48 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
         safe_write(fd, "\n");
     }
 
-    // Write backtrace if available
-    // backtrace() is not formally async-signal-safe but is widely used
-    // in crash handlers on Linux (glibc) and macOS
+    // Inject ucontext PC and LR as the first backtrace entries.
+    // On ARM32 (static binary), backtrace() cannot unwind past the signal
+    // frame — it only returns crash_handler + signal_restorer (useless).
+    // The ucontext registers contain the actual crash location.
+    // Writing them as bt: entries ensures downstream resolvers (resolve-backtrace.sh,
+    // telemetry-crashes.py) symbolize them with load_base adjustment.
+    if (ucontext) {
+        const auto* uctx = static_cast<const ucontext_t*>(ucontext);
+#if defined(__arm__)
+        safe_write(fd, "bt:");
+        safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), uctx->uc_mcontext.arm_pc));
+        safe_write(fd, "\n");
+        safe_write(fd, "bt:");
+        safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), uctx->uc_mcontext.arm_lr));
+        safe_write(fd, "\n");
+#elif defined(__aarch64__)
+        safe_write(fd, "bt:");
+        safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), uctx->uc_mcontext.pc));
+        safe_write(fd, "\n");
+        safe_write(fd, "bt:");
+        safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), uctx->uc_mcontext.regs[30]));
+        safe_write(fd, "\n");
+#elif defined(__APPLE__) && defined(__aarch64__)
+        safe_write(fd, "bt:");
+        safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), uctx->uc_mcontext->__ss.__pc));
+        safe_write(fd, "\n");
+        safe_write(fd, "bt:");
+        safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), uctx->uc_mcontext->__ss.__lr));
+        safe_write(fd, "\n");
+#elif defined(__APPLE__) && defined(__x86_64__)
+        safe_write(fd, "bt:");
+        safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), uctx->uc_mcontext->__ss.__rip));
+        safe_write(fd, "\n");
+#elif defined(__x86_64__)
+        safe_write(fd, "bt:");
+        safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), uctx->uc_mcontext.gregs[REG_RIP]));
+        safe_write(fd, "\n");
+#endif
+    }
+
+    // Write backtrace from unwinder (may duplicate ucontext frames above,
+    // but provides additional frames when unwinding succeeds)
 #ifdef HAVE_BACKTRACE
     void* frames[64];
     int frame_count = backtrace(frames, 64);
