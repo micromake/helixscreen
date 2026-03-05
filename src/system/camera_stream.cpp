@@ -35,6 +35,10 @@ void CameraStream::start(const std::string& stream_url, const std::string& snaps
         stop();
     }
 
+    // Fresh alive guard — old weak_ptrs from any detached thread
+    // will either fail to lock or see false
+    alive_ = std::make_shared<std::atomic<bool>>(true);
+
     stream_url_ = stream_url;
     snapshot_url_ = snapshot_url;
     on_frame_ = std::move(on_frame);
@@ -58,23 +62,26 @@ void CameraStream::start(const std::string& stream_url, const std::string& snaps
 }
 
 void CameraStream::stop() {
+    // Invalidate alive guard FIRST — http_cb closures capture a weak_ptr
+    // and bail out before accessing any member state
+    alive_->store(false);
+
     bool was_running = running_.exchange(false);
 
     if (was_running) {
         spdlog::info("[CameraStream] Stopping");
+    }
 
-        // Cancel any in-flight HTTP request to unblock the stream thread
-        {
-            std::lock_guard<std::mutex> lock(req_mutex_);
-            if (active_req_) {
-                active_req_->Cancel();
-            }
+    // Cancel any in-flight HTTP request to unblock the stream thread
+    {
+        std::lock_guard<std::mutex> lock(req_mutex_);
+        if (active_req_) {
+            active_req_->Cancel();
         }
     }
 
-    // Always join/detach a joinable thread — even if running_ was already
-    // false (e.g. called from ~CameraStream after an earlier stop()).
-    // Destroying a joinable std::thread calls std::terminate().
+    // Join the stream thread with periodic re-cancellation. Use a helper
+    // thread for timed join — destroying a joinable std::thread is fatal.
     bool thread_joined = true;
     if (stream_thread_.joinable()) {
         auto joined = std::make_shared<std::atomic<bool>>(false);
@@ -83,19 +90,28 @@ void CameraStream::stop() {
             joined->store(true);
         });
 
-        auto start = std::chrono::steady_clock::now();
-        constexpr auto kJoinTimeout = std::chrono::seconds(2);
-        constexpr auto kPollInterval = std::chrono::milliseconds(50);
+        constexpr auto kJoinTimeout = std::chrono::seconds(5);
+        constexpr auto kCancelInterval = std::chrono::milliseconds(200);
+        auto deadline = std::chrono::steady_clock::now() + kJoinTimeout;
 
         while (!joined->load()) {
-            if (std::chrono::steady_clock::now() - start > kJoinTimeout) {
-                spdlog::warn("[CameraStream] Stream thread join timed out, detaching");
+            if (std::chrono::steady_clock::now() > deadline) {
+                spdlog::error("[CameraStream] Thread join timed out after 5s, "
+                              "detaching (alive_ guard prevents UAF)");
                 join_helper.detach();
                 stream_thread_.detach();
                 thread_joined = false;
                 break;
             }
-            std::this_thread::sleep_for(kPollInterval);
+
+            // Re-cancel — thread may have started a new HTTP request
+            {
+                std::lock_guard<std::mutex> lock(req_mutex_);
+                if (active_req_) {
+                    active_req_->Cancel();
+                }
+            }
+            std::this_thread::sleep_for(kCancelInterval);
         }
 
         if (join_helper.joinable()) {
@@ -105,23 +121,23 @@ void CameraStream::stop() {
 
     if (was_running) {
         if (thread_joined) {
-            // Safe to free — stream thread has exited
+            // Thread exited — safe to free everything
             free_buffers();
+            recv_buf_.clear();
+            boundary_.clear();
+            on_frame_ = nullptr;
+            on_error_ = nullptr;
         } else {
-            // Stream thread still running — leak buffers to avoid UAF.
-            // They are small (~1.8MB for 640x480 double buffer) and this
-            // only happens when the camera connection is stuck on shutdown.
-            spdlog::warn("[CameraStream] Leaking draw buffers (stream thread still running)");
+            // Thread still running with alive_=false — don't touch state it
+            // may reference. Leak buffers and callbacks to avoid UAF.
+            spdlog::warn("[CameraStream] Leaking state (stream thread still running)");
+            std::lock_guard<std::mutex> lock(buf_mutex_);
             front_buf_ = nullptr;
             back_buf_ = nullptr;
             retired_bufs_.clear();
             frame_width_ = 0;
             frame_height_ = 0;
         }
-        recv_buf_.clear();
-        boundary_.clear();
-        on_frame_ = nullptr;
-        on_error_ = nullptr;
     }
 }
 
@@ -168,6 +184,10 @@ std::string CameraStream::parse_boundary(const std::string& content_type) {
 // ============================================================================
 
 void CameraStream::stream_thread_func() {
+    // Hold a shared reference to alive_ so exception handlers can check
+    // object validity even after CameraStream may be destroyed
+    auto thread_alive = alive_;
+
     try {
     spdlog::debug("[CameraStream] Stream thread started for {}", stream_url_);
     recv_buf_.clear();
@@ -197,8 +217,14 @@ void CameraStream::stream_thread_func() {
         // Set up http_cb for incremental MJPEG parsing. The callback fires as
         // HTTP data arrives: HP_HEADERS_COMPLETE once headers are ready, then
         // HP_BODY repeatedly with each chunk of the multipart body.
-        req->http_cb = [this](HttpMessage* resp, http_parser_state state,
+        // Capture alive_ as weak_ptr — safe to check even after object destruction
+        std::weak_ptr<std::atomic<bool>> weak_alive = alive_;
+        req->http_cb = [this, weak_alive](HttpMessage* resp, http_parser_state state,
                               const char* data, size_t size) {
+            // Check alive_ first — object may be destroyed or shutting down
+            auto alive = weak_alive.lock();
+            if (!alive || !alive->load()) return;
+
             if (!running_.load()) {
                 // Cancel the request from within the callback
                 std::lock_guard<std::mutex> lock(req_mutex_);
@@ -306,12 +332,14 @@ void CameraStream::stream_thread_func() {
     spdlog::debug("[CameraStream] Stream thread exiting");
     } catch (const std::bad_alloc& e) {
         spdlog::error("[CameraStream] Out of memory in stream thread: {}", e.what());
-        recv_buf_.clear();
-        recv_buf_.shrink_to_fit();
-        if (on_error_) on_error_("Out of memory");
+        if (thread_alive->load()) {
+            recv_buf_.clear();
+            recv_buf_.shrink_to_fit();
+            if (on_error_) on_error_("Out of memory");
+        }
     } catch (const std::exception& e) {
         spdlog::error("[CameraStream] Uncaught exception in stream thread: {}", e.what());
-        if (on_error_) on_error_(e.what());
+        if (thread_alive->load() && on_error_) on_error_(e.what());
     }
 }
 
@@ -402,7 +430,19 @@ void CameraStream::fetch_snapshot() {
     req->url = snapshot_url_;
     req->timeout = kStreamTimeoutSec;
 
+    // Store for cancellation by stop()
+    {
+        std::lock_guard<std::mutex> lock(req_mutex_);
+        active_req_ = req;
+    }
+
     auto resp = requests::request(req);
+
+    // Clear active request
+    {
+        std::lock_guard<std::mutex> lock(req_mutex_);
+        active_req_ = nullptr;
+    }
 
     // Check running_ after blocking HTTP call — stop() may have been called
     if (!running_.load()) {
@@ -559,6 +599,8 @@ void CameraStream::destroy_draw_buf(lv_draw_buf_t* buf) {
 }
 
 void CameraStream::ensure_buffers(int width, int height) {
+    std::lock_guard<std::mutex> lock(buf_mutex_);
+
     if (front_buf_ && frame_width_ == width && frame_height_ == height) {
         return;
     }

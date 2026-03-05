@@ -112,7 +112,9 @@ class CameraStream {
     std::shared_ptr<HttpRequest> active_req_;
     std::mutex req_mutex_;
 
-    // State
+    // State — alive_ is captured as weak_ptr by http_cb closures so they
+    // can detect object destruction and bail out before touching members
+    std::shared_ptr<std::atomic<bool>> alive_ = std::make_shared<std::atomic<bool>>(true);
     std::atomic<bool> running_{false};
     std::atomic<bool> frame_pending_{false};
     std::atomic<bool> got_stream_data_{false}; // Set by http_cb when data arrives
