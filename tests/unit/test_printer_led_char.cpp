@@ -307,6 +307,59 @@ TEST_CASE("LED characterization: updates ignored without tracked LED",
 }
 
 // ============================================================================
+// Subscription Empty Response Tests - Verify LED state populated by query
+// ============================================================================
+
+TEST_CASE("LED characterization: empty subscription response then explicit query",
+          "[characterization][led][subscription]") {
+    lv_init_safe();
+
+    PrinterState& state = get_printer_state();
+    PrinterStateTestAccess::reset(state);
+    state.init_subjects(false);
+    state.set_tracked_led("neopixel case_lights");
+
+    SECTION("empty subscription data leaves state at default OFF") {
+        // Klipper subscription returns empty {} when LED state was set before subscribe
+        json sub_status = {{"neopixel case_lights", json::object()}};
+        state.update_from_status(sub_status);
+
+        // State should remain at initial defaults (OFF)
+        REQUIRE(lv_subject_get_int(state.get_led_state_subject()) == 0);
+        REQUIRE(lv_subject_get_int(state.get_led_brightness_subject()) == 0);
+    }
+
+    SECTION("explicit query after empty subscription populates correct state") {
+        // Step 1: subscription returns empty (simulates Klipper behavior with LED effects)
+        json sub_status = {{"neopixel case_lights", json::object()}};
+        state.update_from_status(sub_status);
+        REQUIRE(lv_subject_get_int(state.get_led_state_subject()) == 0);
+
+        // Step 2: explicit printer.objects.query returns actual state
+        // (warm white: R=1.0, G=0.98, B=0.59, W=0.0)
+        json query_status = {
+            {"neopixel case_lights", {{"color_data", {{1.0, 0.98, 0.59, 0.0}}}}}};
+        state.update_from_status(query_status);
+
+        REQUIRE(lv_subject_get_int(state.get_led_state_subject()) == 1);
+        REQUIRE(lv_subject_get_int(state.get_led_r_subject()) == 255);
+        REQUIRE(lv_subject_get_int(state.get_led_g_subject()) == 250);
+        REQUIRE(lv_subject_get_int(state.get_led_b_subject()) == 150);
+        REQUIRE(lv_subject_get_int(state.get_led_brightness_subject()) == 100);
+    }
+
+    SECTION("subscription with color_data works normally") {
+        // When LEDs are set after subscription, color_data is included
+        json status = {
+            {"neopixel case_lights", {{"color_data", {{0.5, 0.5, 0.5, 0.0}}}}}};
+        state.update_from_status(status);
+
+        REQUIRE(lv_subject_get_int(state.get_led_state_subject()) == 1);
+        REQUIRE(lv_subject_get_int(state.get_led_r_subject()) == 128);
+    }
+}
+
+// ============================================================================
 // Observer Notification Tests - Verify observers fire on LED changes
 // ============================================================================
 

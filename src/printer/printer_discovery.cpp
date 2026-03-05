@@ -10,6 +10,7 @@
 #include "moonraker_api.h"
 #include "moonraker_client.h"
 #include "runtime_config.h"
+#include "ui_update_queue.h"
 #include "spdlog/spdlog.h"
 #include "standard_macros.h"
 #include "temperature_sensor_manager.h"
@@ -155,6 +156,30 @@ void init_subsystems_from_hardware(const PrinterDiscovery& hardware, MoonrakerAP
     const auto& strips = led_ctrl.selected_strips();
     if (!strips.empty()) {
         printer_state.set_tracked_led(strips.front());
+
+        // Query the tracked LED's current state explicitly.
+        // The subscription response may return empty data for LEDs whose state was
+        // set before we subscribed (e.g., LED effects enabled by Klipper macros at
+        // startup).  A direct query always returns the current values.
+        std::string tracked = strips.front();
+        nlohmann::json query_objects = nlohmann::json::object();
+        query_objects[tracked] = nullptr;
+        client->send_jsonrpc(
+            "printer.objects.query", {{"objects", query_objects}},
+            [tracked](nlohmann::json response) {
+                if (!response.contains("result") ||
+                    !response["result"].contains("status")) {
+                    return;
+                }
+                const auto& status = response["result"]["status"];
+                if (!status.contains(tracked)) {
+                    return;
+                }
+                // Feed into PrinterState on the UI thread
+                helix::ui::queue_update([status]() {
+                    get_printer_state().update_from_status(status);
+                });
+            });
     }
 
     spdlog::info("[PrinterDiscovery] Subsystem initialization complete");
