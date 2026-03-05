@@ -239,6 +239,32 @@ bool DisplayManager::init(const Config& config) {
             rotation_degrees = helix::Config::get_instance()->get<int>("/display/rotate", 0);
         }
 
+        // If no rotation from config/CLI/env, try kernel auto-detection.
+        // Must happen here (before pointer creation) so the DRM→fbdev fallback
+        // works cleanly — the pointer hasn't been bound to a display yet.
+        if (rotation_degrees == 0) {
+            int kernel_orientation = DisplayBackend::detect_panel_orientation();
+            if (kernel_orientation > 0) {
+                spdlog::info("[DisplayManager] Kernel panel orientation: {}°",
+                             kernel_orientation);
+                rotation_degrees = kernel_orientation;
+
+                // Save to config so subsequent boots use the config path directly
+                helix::Config::get_instance()->set("/display/rotate", kernel_orientation);
+                helix::Config::get_instance()->set("/display/rotation_probed", true);
+                helix::Config::get_instance()->save();
+            } else if (kernel_orientation == 0) {
+                spdlog::info("[DisplayManager] Kernel panel orientation: Normal (0°)");
+                helix::Config::get_instance()->set("/display/rotate", 0);
+                helix::Config::get_instance()->set("/display/rotation_probed", true);
+                helix::Config::get_instance()->save();
+            } else {
+                spdlog::debug("[DisplayManager] Kernel panel orientation not detected "
+                              "(deferred to interactive probe)");
+            }
+        }
+
+        // Apply rotation (from config, env, CLI, or kernel detection above)
         if (rotation_degrees != 0) {
 #ifdef HELIX_DISPLAY_SDL
             // LVGL's SDL driver only supports software rotation in PARTIAL render mode,
@@ -248,7 +274,6 @@ bool DisplayManager::init(const Config& config) {
                          "support software rotation (DIRECT render mode). Ignoring on desktop.",
                          rotation_degrees);
 #else
-            // Capture physical dimensions before rotation changes them
             int phys_w = m_width;
             int phys_h = m_height;
 
@@ -256,30 +281,11 @@ bool DisplayManager::init(const Config& config) {
 
             // If DRM backend can't do hardware rotation, fall back to fbdev
             // which handles software rotation flicker-free via LVGL's native path.
-            if (m_backend->type() == DisplayBackendType::DRM &&
-                !m_backend->supports_hardware_rotation(lv_rot)) {
-                spdlog::warn("[DisplayManager] DRM lacks hardware rotation for {}°, "
-                             "falling back to fbdev (flicker-free software rotation)",
-                             rotation_degrees);
-                lv_display_delete(m_display);
-                m_display = nullptr;
+            if (!try_drm_to_fbdev_fallback(lv_rot, config.splash_active)) {
                 m_backend.reset();
-                m_backend = DisplayBackend::create(DisplayBackendType::FBDEV);
-                if (m_backend && m_backend->is_available()) {
-                    if (config.splash_active) {
-                        m_backend->set_splash_active(true);
-                    }
-                    m_display = m_backend->create_display(m_width, m_height);
-                }
-                if (!m_display) {
-                    spdlog::error("[DisplayManager] Fbdev fallback for rotation also failed");
-                    m_backend.reset();
-                    lv_xml_deinit();
-                    lv_deinit();
-                    return false;
-                }
-                spdlog::info("[DisplayManager] Fbdev fallback succeeded at {}x{}", m_width,
-                             m_height);
+                lv_xml_deinit();
+                lv_deinit();
+                return false;
             }
 
             lv_display_set_rotation(m_display, lv_rot);
@@ -998,6 +1004,37 @@ void DisplayManager::install_sleep_aware_input_wrapper() {
 }
 
 // ============================================================================
+// DRM→fbdev Fallback
+// ============================================================================
+
+bool DisplayManager::try_drm_to_fbdev_fallback(lv_display_rotation_t rot, bool splash_active) {
+    if (m_backend->type() != DisplayBackendType::DRM ||
+        m_backend->supports_hardware_rotation(rot)) {
+        return true; // No fallback needed
+    }
+
+    spdlog::warn("[DisplayManager] DRM lacks hardware rotation for {}°, "
+                 "falling back to fbdev (flicker-free software rotation)",
+                 static_cast<int>(rot) * 90);
+    lv_display_delete(m_display);
+    m_display = nullptr;
+    m_backend.reset();
+    m_backend = DisplayBackend::create(DisplayBackendType::FBDEV);
+    if (m_backend && m_backend->is_available()) {
+        if (splash_active) {
+            m_backend->set_splash_active(true);
+        }
+        m_display = m_backend->create_display(m_width, m_height);
+    }
+    if (!m_display) {
+        spdlog::error("[DisplayManager] Fbdev fallback for rotation also failed");
+        return false;
+    }
+    spdlog::info("[DisplayManager] Fbdev fallback succeeded at {}x{}", m_width, m_height);
+    return true;
+}
+
+// ============================================================================
 // Rotation Probe (first-boot auto-detect)
 // ============================================================================
 
@@ -1016,6 +1053,15 @@ void DisplayManager::apply_rotation(int degrees) {
     int phys_h = m_height;
 
     lv_display_rotation_t lv_rot = degrees_to_lv_rotation(degrees);
+
+    // DRM backend may not support hardware rotation for this angle —
+    // fall back to fbdev. Note: splash_active=false since apply_rotation()
+    // is only called after init() completes (splash is already managed).
+    if (!try_drm_to_fbdev_fallback(lv_rot, false)) {
+        spdlog::error("[DisplayManager] Cannot apply {}° rotation — DRM fallback failed", degrees);
+        return;
+    }
+
     lv_display_set_rotation(m_display, lv_rot);
 
     m_width = lv_display_get_horizontal_resolution(m_display);

@@ -769,45 +769,12 @@ bool Application::init_display() {
         return false;
     }
 
-    // Update screen dimensions from what the display actually resolved to
-    // (may differ from requested if auto-detection was used)
+    // Update screen dimensions from what the display actually resolved to.
+    // DisplayManager::init() handles config rotation AND kernel panel orientation
+    // auto-detection (with DRM→fbdev fallback), so dimensions already reflect
+    // any rotation applied.
     m_screen_width = m_display->width();
     m_screen_height = m_display->height();
-
-    // The interactive rotation probe is deferred to after init_translations()
-    // (Phase 8b) so that lv_tr() is available for its user-facing strings.
-    // However, kernel-detected orientation (panel_orientation=upside_down) can
-    // be applied immediately — no UI needed. This ensures the splash screen
-    // renders right-side up.
-    {
-        int config_rotation = m_config->get<int>("/display/rotate", 0);
-        if (config_rotation == 0 && m_args.rotation == 0) {
-            int kernel_orientation = DisplayBackend::detect_panel_orientation();
-            if (kernel_orientation >= 0) {
-                // Orientation detected (0=Normal, 90, 180, 270).
-                // 0 means Normal — no rotation needed, but mark as probed.
-                if (kernel_orientation > 0) {
-                    spdlog::info(
-                        "[Application] Applying kernel panel orientation: {}° (pre-splash)",
-                        kernel_orientation);
-                    m_display->apply_rotation(kernel_orientation);
-                    m_screen_width = m_display->width();
-                    m_screen_height = m_display->height();
-                } else {
-                    spdlog::info("[Application] Kernel panel orientation: Normal (0°, pre-splash)");
-                }
-                m_config->set("/display/rotate", kernel_orientation);
-                m_config->set("/display/rotation_probed", true);
-                m_config->save();
-            }
-        } else if (config_rotation > 0) {
-            spdlog::info("[Application] Applying config rotation: {}° (pre-splash)",
-                         config_rotation);
-            m_display->apply_rotation(config_rotation);
-            m_screen_width = m_display->width();
-            m_screen_height = m_display->height();
-        }
-    }
 
     // Register LVGL log handler AFTER lv_init() (called inside display->init())
     // Must be after lv_init() because it resets global state and clears callbacks

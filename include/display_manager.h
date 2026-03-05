@@ -474,4 +474,16 @@ class DisplayManager {
      * Called during init() to wrap the backend's read callback.
      */
     void install_sleep_aware_input_wrapper();
+
+    /**
+     * @brief Fall back from DRM to fbdev if hardware rotation is unsupported
+     *
+     * Checks if current DRM backend supports the requested rotation.
+     * If not, destroys the DRM display and recreates on fbdev.
+     *
+     * @param rot Requested LVGL rotation
+     * @param splash_active Whether splash process owns framebuffer
+     * @return true if display is usable (no fallback needed, or fallback succeeded)
+     */
+    bool try_drm_to_fbdev_fallback(lv_display_rotation_t rot, bool splash_active);
 };
