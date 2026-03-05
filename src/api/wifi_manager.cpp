@@ -133,11 +133,11 @@ void WiFiManager::start_scan(
     spdlog::debug("[WiFiManager] start_scan ENTRY, callback is {}",
                   on_networks_updated ? "NOT NULL" : "NULL");
 
+    // Stop existing timer if running (also clears old callback)
+    stop_scan();
+
     scan_callback_ = on_networks_updated;
     spdlog::debug("[WiFiManager] Scan callback registered");
-
-    // Stop existing timer if running
-    stop_scan();
 
     spdlog::info("[WiFiManager] Starting periodic network scan (every 7 seconds)");
 
@@ -163,7 +163,9 @@ void WiFiManager::stop_scan() {
         scan_timer_ = nullptr;
         spdlog::info("[WiFiManager] Stopped network scanning");
     }
-    // Note: Callback is NOT cleared here - callers can clear it explicitly if needed
+    // Clear callback to prevent stale callbacks firing after the caller
+    // deactivates/destroys (the callback captures a raw overlay pointer).
+    scan_callback_ = nullptr;
 }
 
 void WiFiManager::scan_timer_callback(lv_timer_t* timer) {

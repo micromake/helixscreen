@@ -234,8 +234,7 @@ TEST_CASE_METHOD(WiFiManagerTestFixture, "Scan callback preservation",
 #endif
     }
 
-    SECTION("CRITICAL: stop_scan does NOT clear callback") {
-        // This test catches the callback clearing bug!
+    SECTION("stop_scan clears callback to prevent stale-pointer crashes") {
         wifi_manager->set_enabled(true);
 
         auto callback = [this](const std::vector<WiFiNetwork>& networks) {
@@ -244,22 +243,23 @@ TEST_CASE_METHOD(WiFiManagerTestFixture, "Scan callback preservation",
 
         wifi_manager->start_scan(callback);
 
-        // Stop scanning (should only stop timer, NOT clear callback)
+        // stop_scan() clears the callback — prevents use-after-free when the
+        // overlay that registered the callback is destroyed before a pending
+        // scan result is dispatched to the LVGL thread.
         wifi_manager->stop_scan();
 
-        // Start again with same callback still registered
+        // Re-starting with the same callback re-registers it
         wifi_manager->start_scan(callback);
 
 #ifdef __APPLE__
         bool got_callback = wait_for_condition([this]() { return scan_callback_count > 0; }, 3000);
 
-        // If callback was cleared by stop_scan(), this would fail
         REQUIRE(got_callback);
         REQUIRE(scan_callback_count >= 1);
 #endif
     }
 
-    SECTION("Callback survives multiple stop/start cycles") {
+    SECTION("Callback works across multiple stop/start cycles") {
         wifi_manager->set_enabled(true);
 
         auto callback = [this](const std::vector<WiFiNetwork>& networks) {

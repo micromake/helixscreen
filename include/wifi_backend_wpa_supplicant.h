@@ -260,7 +260,8 @@ class WifiBackendWpaSupplicant : public WifiBackend, private hv::EventLoopThread
     struct wpa_ctrl* mon_conn; ///< Monitor connection for receiving events (FIXED LEAK)
     hio_t* mon_io_{nullptr};   ///< libhv I/O handle for monitor socket (must cleanup on re-init)
 
-    // Thread safety for callbacks (accessed from multiple threads)
+    // Thread safety
+    std::mutex cmd_mutex_;       ///< Protects conn from concurrent send_command() calls
     std::mutex callbacks_mutex_; ///< Protects callbacks map from race conditions
     std::map<std::string, std::function<void(const std::string&)>>
         callbacks; ///< Registered event handlers

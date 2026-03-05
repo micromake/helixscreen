@@ -504,11 +504,14 @@ void WifiBackendWpaSupplicant::cleanup_wpa() {
         mon_conn = nullptr;
     }
 
-    // Close control connection
-    if (conn) {
-        spdlog::trace("[WifiBackend] Closing wpa_supplicant control connection");
-        wpa_ctrl_close(conn);
-        conn = nullptr;
+    // Close control connection (under lock to avoid closing while send_command is using it)
+    {
+        std::lock_guard<std::mutex> lock(cmd_mutex_);
+        if (conn) {
+            spdlog::trace("[WifiBackend] Closing wpa_supplicant control connection");
+            wpa_ctrl_close(conn);
+            conn = nullptr;
+        }
     }
 
     spdlog::debug("[WifiBackend] wpa_supplicant connections cleaned up");
@@ -616,6 +619,10 @@ static std::string sanitize_command_for_log(const std::string& cmd) {
 }
 
 std::string WifiBackendWpaSupplicant::send_command(const std::string& cmd) {
+    // Lock to prevent concurrent access from LVGL thread (get_status) and
+    // event loop thread (get_scan_results) — wpa_ctrl is not thread-safe.
+    std::lock_guard<std::mutex> lock(cmd_mutex_);
+
     if (conn == nullptr) {
         LOG_WARN_INTERNAL("send_command called but not connected to wpa_supplicant");
         return "";
