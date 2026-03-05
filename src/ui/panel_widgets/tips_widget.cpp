@@ -127,6 +127,11 @@ void TipsWidget::detach() {
 }
 
 void TipsWidget::on_activate() {
+    // Reset label opacity in case deactivation interrupted a mid-fade animation
+    if (tip_label_) {
+        lv_obj_set_style_opa(tip_label_, LV_OPA_COVER, LV_PART_MAIN);
+    }
+
     if (!tip_rotation_timer_) {
         tip_rotation_timer_ =
             lv_timer_create(tip_rotation_timer_cb, TIP_ROTATION_INTERVAL_MS, this);
