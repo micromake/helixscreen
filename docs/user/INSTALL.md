@@ -972,6 +972,16 @@ Common Pi 5 DRM devices:
 - `/dev/dri/card1` - DSI touchscreen (if connected)
 - `/dev/dri/card2` - HDMI output
 
+### Camera Streaming Performance
+
+If you use a webcam with HelixScreen, install `libturbojpeg0` for faster camera feed rendering:
+
+```bash
+sudo apt install libturbojpeg0
+```
+
+The installer attempts this automatically, but it's listed here in case your Pi was offline during installation. HelixScreen detects and uses it automatically for 3-5x faster JPEG decoding via hardware SIMD acceleration.
+
 ### Low Memory Systems (Pi 3, Pi Zero 2 W)
 
 HelixScreen is optimized for low memory, but if you experience issues:

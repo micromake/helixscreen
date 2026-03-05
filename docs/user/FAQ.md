@@ -201,7 +201,15 @@ The web frontend you use (Mainsail, Fluidd, etc.) doesn't matter - HelixScreen t
 
 ### Can I use my webcam?
 
-**Coming soon.** Camera/webcam support is on the roadmap but not yet implemented.
+**Yes.** HelixScreen shows your webcam feed on the home dashboard and during printing. It automatically detects webcams configured in Moonraker (crowsnest, camera-streamer, etc.) and displays the MJPEG stream.
+
+For the best camera performance on Raspberry Pi, install `libturbojpeg0`:
+
+```bash
+sudo apt install libturbojpeg0
+```
+
+This enables SIMD-accelerated (hardware-optimized) JPEG decoding, which is 3-5x faster than the built-in software decoder. HelixScreen automatically uses it if available — no configuration needed. Without it, everything still works, just with slightly higher CPU usage during camera streaming.
 
 ### Does it work with Spoolman?
 

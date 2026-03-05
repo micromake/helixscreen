@@ -114,6 +114,7 @@ Some widgets have settings you can change directly from Edit Mode. When you sele
 | **Fan Speeds** | Toggles between Stack and Carousel display mode |
 | **Macro Button 1** | Opens the macro picker — choose which macro to assign |
 | **Macro Button 2** | Opens the macro picker — choose which macro to assign |
+| **Clog Detection** | Opens the Clog Detection config modal — set detection source, mode, and thresholds |
 
 **To configure a widget:**
 
@@ -171,7 +172,9 @@ Every widget available for your dashboard, with sizing constraints:
 | **Thermistor** | Monitor a custom temperature sensor (chamber, enclosure heater, etc.). | 1x1 | 1x1 | 2x1 | Horizontal only | Extra temp sensors |
 | **Macro Button 1** | One-tap button to run a configured macro. Assign a macro via the gear icon in Edit Mode. | 1x1 | 1x1 | 2x1 | Horizontal only | — |
 | **Macro Button 2** | A second one-tap macro button, independently configurable. | 1x1 | 1x1 | 2x1 | Horizontal only | — |
-| **G-code Console** | One-tap shortcut to open the [G-code Console](advanced.md#g-code-console) overlay for sending commands and viewing Klipper responses. | 1x1 | 1x1 | 2x1 | Horizontal only | — |
+| **Clog Detection** | Filament clog and flow health monitor. Shows a clog/flow arc meter, and a buffer sync meter on Happy Hare printers. Tap to open the Buffer Status detail modal. Configurable via the gear icon in Edit Mode. See [Clog Detection Widget](#clog-detection-widget) below. | 1x1 | 1x1 | 2x2 | Yes | AMS/MMU detected |
+| **G-code Console** | One-tap shortcut to open the [G-code Console](advanced.md#g-code-console) overlay for sending commands and viewing Klipper responses. See [G-code Console Widget](#g-code-console-widget) below. | 1x1 | 1x1 | 1x1 | No | — |
+| **Camera** | Live webcam feed from your MJPEG stream. Tap to go fullscreen. Automatically detects webcams configured in Moonraker. See [Camera Widget](#camera-widget) below for setup tips. | 2x2 | 1x1 | 4x3 | Yes | Webcam configured |
 | **Job Queue** | Shows the number of queued print jobs. Tap to open the Job Queue Manager modal (see [Job Queue Manager](#job-queue-manager) below). | 2x2 | 2x1 | 4x3 | Yes | — |
 
 > **Sizes** are listed as columns x rows. For example, "2x1" means 2 columns wide and 1 row tall.
@@ -187,7 +190,9 @@ Some widgets depend on specific hardware being detected by Klipper. If the hardw
 
 | Widget | Required Hardware |
 |--------|-------------------|
+| Camera | Webcam configured in Moonraker (crowsnest, camera-streamer, etc.) |
 | AMS Status | AMS, AFC (Box Turtle), Happy Hare, ValgACE, or compatible MMU system |
+| Clog Detection | AMS, AFC, Happy Hare, or compatible MMU with clog/flow detection |
 | LED Light | Any LED strip configured in Klipper (neopixel, dotstar, output_pin) |
 | Power | Moonraker power devices (PSU control, smart plugs) |
 | Filament Sensor | `[filament_switch_sensor]` or `[filament_motion_sensor]` in Klipper |
@@ -243,6 +248,8 @@ While **not** in Edit Mode, widgets respond to taps and other gestures:
 | Network | — (display only) |
 | Notifications | Opens notification history |
 | Tips | Opens the full tip article |
+| Clog Detection | Opens the Buffer Status detail modal |
+| G-code Console | Opens the G-code Console overlay |
 | Macro Button | Runs the configured macro immediately |
 | Job Queue | Opens Job Queue Manager modal |
 | Humidity | — (display only) |
@@ -285,6 +292,101 @@ Below the state indicator, all queued jobs are listed with:
 ### Sync with Other Interfaces
 
 The job queue is managed by Moonraker, so jobs added from Mainsail, Fluidd, or the Moonraker API appear here automatically. Likewise, jobs deleted or started from HelixScreen are reflected in those other interfaces.
+
+---
+
+## Clog Detection Widget
+
+The Clog Detection widget monitors your filament path health in real time — detecting clogs, flow issues, and buffer sync problems. It only appears when a compatible filament system is detected (Happy Hare, AFC, or another MMU with clog detection).
+
+### What It Shows
+
+The widget displays a **carousel** with one or two pages depending on your hardware:
+
+**Page 1 — Clog/Flow Arc Meter** (always shown)
+
+A 270-degree arc gauge that fills based on your clog or flow detection reading. The color shifts from green (healthy) through orange (warning) to red (danger) as the value increases. A red danger zone arc shows the warning threshold, and a peak marker tracks the highest reading seen.
+
+The meter adapts to your detection backend:
+
+| Backend | What the meter shows |
+|---------|---------------------|
+| **Encoder** | Clog percentage (0–100%) — how much the encoder reading deviates from expected |
+| **Flowguard** | Symmetrical flow deviation (−100 to +100) — negative means tangle risk, positive means clog risk |
+| **AFC** | Buffer fault proximity (0–100%) — how close the buffer is to a fault condition |
+
+**Page 2 — Buffer Sync Meter** (Happy Hare with sync feedback only)
+
+A visual representation of the physical buffer plunger position. Two nested rectangles show the buffer housing and plunger — the plunger slides up or down to indicate filament tension:
+
+- **Center position** = balanced, healthy tension
+- **Shifted up** = filament under compression (being pushed)
+- **Shifted down** = filament under tension (being pulled)
+- Color shifts from green → orange → red as the bias increases
+
+A percentage label shows the exact bias reading (e.g., "+5%", "−10%"). Swipe between pages using the indicator dots at the bottom.
+
+### Tapping the Widget
+
+Tap the Clog Detection widget to open the **Buffer Status** modal — a detailed read-only view of your filament path health:
+
+**Happy Hare printers show:**
+- Filament tension description (e.g., "Slight tension", "Balanced")
+- Spool motor state
+- Gear sync status
+- Clog detection mode and flow rate
+- Full-size buffer meter visualization
+
+**AFC printers show:**
+- Advancing/trailing buffer state
+- Distance to fault (in mm)
+- Fault detection status
+
+### Configuring Clog Detection
+
+In Edit Mode, select the Clog Detection widget and tap the **gear icon** to open the configuration modal:
+
+| Setting | Options |
+|---------|---------|
+| **Detection Source** | Auto (recommended), Encoder, Flowguard, or AFC |
+| **Detection Mode** | Auto or Manual — in Manual mode, a G-code command is sent to the firmware |
+| **Detection Length** | Filament distance threshold (Manual mode only) |
+| **Danger Threshold** | Override the computed danger zone percentage |
+
+**Auto** mode is recommended — HelixScreen automatically selects the best source based on your detected hardware.
+
+---
+
+## G-code Console Widget
+
+The G-code Console widget gives you quick access to a full-featured command console for sending G-code commands directly to Klipper.
+
+### Opening the Console
+
+Tap the G-code Console widget on the Home Panel. A full-screen console overlay opens with your recent command history.
+
+### Using the Console
+
+**Sending commands:**
+- Type a G-code command in the text field at the bottom (e.g., `G28`, `M114`, `FIRMWARE_RESTART`)
+- Press **Enter** to send
+
+**Navigating history:**
+- Press the **Up arrow** to recall previous commands
+- Press the **Down arrow** to move forward through history
+- Commands are loaded from Moonraker's G-code store (up to 200 entries)
+
+**Reading output:**
+- Commands you sent appear in the scrolling log
+- Klipper responses appear below each command
+- **Error messages** are highlighted in red
+- Color-coded output from plugins like AFC and Happy Hare is preserved
+- Periodic temperature status messages (T:/B: reports) are filtered out to reduce noise
+
+**Scrolling:**
+- The console auto-scrolls to the newest entry as responses arrive
+- Scroll up manually to pause auto-scroll and read older output
+- Scroll back to the bottom to resume auto-scrolling
 
 ---
 
@@ -390,6 +492,34 @@ Custom macro devices you've configured in [LED Settings](settings/led-settings.m
 - **On/Off devices**: Separate "Turn On" and "Turn Off" buttons
 - **Toggle devices**: A single "Toggle" button
 - **Preset devices**: Named buttons for each preset action
+
+---
+
+## Camera Widget
+
+The Camera widget shows a live view from your webcam. It works with any MJPEG stream configured in Moonraker (crowsnest, camera-streamer, ustreamer, etc.).
+
+### Setup
+
+1. Make sure your webcam is working in Mainsail or Fluidd first
+2. Open **Edit Mode** on the Home Panel (long-press)
+3. Tap **+** to open the Widget Catalog
+4. Add the **Camera** widget
+5. Resize to your preferred size (up to 4x3)
+
+Tap the camera feed to open a **fullscreen view**. Tap again or press back to return.
+
+### Performance Tip
+
+For the best camera streaming performance on Raspberry Pi, install `libturbojpeg0`:
+
+```bash
+sudo apt install libturbojpeg0
+```
+
+This enables SIMD-accelerated JPEG decoding, which is **3-5x faster** than the built-in software decoder. HelixScreen detects and uses it automatically — no configuration needed. Without it, the camera still works fine, just with slightly higher CPU usage.
+
+> **Note:** This only applies to Raspberry Pi. The installer attempts to install this package automatically, but if it fails (e.g., offline install), you can add it later with the command above.
 
 ---
 
