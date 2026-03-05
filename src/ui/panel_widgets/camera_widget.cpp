@@ -110,6 +110,7 @@ void CameraWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     parent_screen_ = parent_screen;
     camera_image_ = lv_obj_find_by_name(widget_obj_, "camera_image");
     camera_overlay_ = lv_obj_find_by_name(widget_obj_, "camera_overlay");
+    camera_status_ = lv_obj_find_by_name(widget_obj_, "camera_status");
 
     lv_obj_set_user_data(widget_obj_, this);
 
@@ -128,9 +129,13 @@ void CameraWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     if (gate) {
         webcam_observer_ = helix::ui::observe_int_sync<CameraWidget>(gate, this, [](CameraWidget* self, int val) {
             if (val > 0) {
-                self->set_status_text("Connecting Camera...");
-                if (self->active_) {
-                    self->start_stream();
+                if (self->compact_) {
+                    // Compact mode: icon only, status text already hidden
+                } else {
+                    self->set_status_text("Connecting Camera...");
+                    if (self->active_) {
+                        self->start_stream();
+                    }
                 }
             } else {
                 // Only stop if the stream isn't being actively displayed.
@@ -170,6 +175,7 @@ void CameraWidget::detach() {
     parent_screen_ = nullptr;
     camera_image_ = nullptr;
     camera_overlay_ = nullptr;
+    camera_status_ = nullptr;
 
     spdlog::debug("[CameraWidget] Detached (stream preserved)");
 }
@@ -193,7 +199,7 @@ void CameraWidget::on_activate() {
                     spdlog::debug("[CameraWidget] Display sleeping — stopping camera stream");
                     stop_stream();
                 }
-            } else if (active_ || fullscreen_overlay_) {
+            } else if (fullscreen_overlay_ || (active_ && !compact_)) {
                 spdlog::debug("[CameraWidget] Display waking — restarting camera stream");
                 start_stream();
             }
@@ -201,7 +207,17 @@ void CameraWidget::on_activate() {
         sleep_cb_registered_ = true;
     }
 
-    start_stream();
+    if (!compact_) {
+        start_stream();
+    } else {
+        // Compact mode: just show the icon overlay, no stream
+        if (camera_overlay_) {
+            lv_obj_remove_flag(camera_overlay_, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (camera_status_) {
+            lv_obj_add_flag(camera_status_, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
 }
 
 void CameraWidget::on_deactivate() {
@@ -214,11 +230,38 @@ void CameraWidget::on_deactivate() {
     }
 }
 
-void CameraWidget::on_size_changed(int /*colspan*/, int /*rowspan*/, int /*width_px*/,
+void CameraWidget::on_size_changed(int colspan, int rowspan, int /*width_px*/,
                                    int /*height_px*/) {
+    bool was_compact = compact_;
+    compact_ = (colspan <= 1 && rowspan <= 1);
+
     // Ensure scale-to-cover after any resize
     if (camera_image_) {
         lv_image_set_inner_align(camera_image_, LV_IMAGE_ALIGN_COVER);
+    }
+
+    if (compact_ && !was_compact) {
+        // Transitioning to compact: stop stream, show icon-only overlay
+        if (!fullscreen_overlay_) {
+            stop_stream();
+        }
+        if (camera_image_) {
+            lv_image_set_src(camera_image_, nullptr);
+        }
+        if (camera_overlay_) {
+            lv_obj_remove_flag(camera_overlay_, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (camera_status_) {
+            lv_obj_add_flag(camera_status_, LV_OBJ_FLAG_HIDDEN);
+        }
+    } else if (!compact_ && was_compact) {
+        // Transitioning from compact to larger: show status text, start streaming
+        if (camera_status_) {
+            lv_obj_remove_flag(camera_status_, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (active_) {
+            start_stream();
+        }
     }
 }
 
@@ -356,8 +399,16 @@ void CameraWidget::set_status_text(const char* text) {
 }
 
 void CameraWidget::open_fullscreen() {
-    if (fullscreen_overlay_ || !parent_screen_ || !stream_) {
+    if (fullscreen_overlay_ || !parent_screen_) {
         return;
+    }
+
+    // In compact mode, the stream isn't running yet — start it now
+    if (!stream_) {
+        start_stream();
+    }
+    if (!stream_) {
+        return; // No URLs available
     }
     // Only one fullscreen camera at a time across all instances
     if (s_fullscreen_owner) {
@@ -410,6 +461,17 @@ void CameraWidget::open_fullscreen() {
 
         // Delete the overlay widget tree
         helix::ui::safe_delete_obj(fullscreen_overlay_);
+
+        // In compact mode, stop the stream — the widget only shows an icon
+        if (compact_) {
+            stop_stream();
+            if (camera_overlay_) {
+                lv_obj_remove_flag(camera_overlay_, LV_OBJ_FLAG_HIDDEN);
+            }
+            if (camera_status_) {
+                lv_obj_add_flag(camera_status_, LV_OBJ_FLAG_HIDDEN);
+            }
+        }
 
         spdlog::debug("[CameraWidget] Fullscreen overlay closed");
     });

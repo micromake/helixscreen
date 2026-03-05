@@ -9,15 +9,15 @@
               clickable="false" event_bubble="true"/>
     <lv_obj name="camera_overlay" align="center"
             width="100%" height="100%"
-            style_pad_all="#space_lg"
+            style_pad_all="#space_lg" scrollbar_mode="off"
             style_bg_color="#card_bg" style_bg_opa="cover"
             style_radius="#border_radius" style_clip_corner="true"
             flex_flow="column" style_flex_cross_place="center"
-            style_layout="flex" style_flex_main_place="center"
+            style_layout="flex" style_flex_main_place="center" style_flex_track_place="center"
             style_gap_row="#space_sm"
             clickable="false" event_bubble="true">
       <icon name="camera_icon" src="video" size="lg" variant="secondary"
-            clickable="false" event_bubble="true"/>
+            align="center" clickable="false" event_bubble="true"/>
       <text_body name="camera_status" width="100%"
                  style_text_color="#text_muted"
                  style_text_align="center"

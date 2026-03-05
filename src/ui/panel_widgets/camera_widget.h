@@ -40,7 +40,8 @@ class CameraWidget : public PanelWidget {
     lv_obj_t* widget_obj_ = nullptr;
     lv_obj_t* parent_screen_ = nullptr;
     lv_obj_t* camera_image_ = nullptr;
-    lv_obj_t* camera_overlay_ = nullptr; // Spinner overlay, hidden on first frame
+    lv_obj_t* camera_overlay_ = nullptr;  // Spinner overlay, hidden on first frame
+    lv_obj_t* camera_status_ = nullptr;   // Status text label inside overlay
 
     // Fullscreen overlay state
     lv_obj_t* fullscreen_overlay_ = nullptr;
@@ -48,6 +49,7 @@ class CameraWidget : public PanelWidget {
 
     std::unique_ptr<CameraStream> stream_;
     bool active_ = false;              // true when on_activate() has been called
+    bool compact_ = false;             // true at 1x1 — icon only, no live stream
     bool sleep_cb_registered_ = false; // true after display sleep callback registered
 
     // Observer for webcam availability — starts stream when URLs arrive
