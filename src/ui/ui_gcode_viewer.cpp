@@ -1493,6 +1493,11 @@ static void ui_gcode_viewer_load_file_async(lv_obj_t* obj, const char* file_path
                         spdlog::debug("[GCode Viewer] Invoking load callback");
                         st->load_callback(obj, st->load_callback_user_data, true);
                     }
+
+                    // Re-invalidate after load callback — the callback may have
+                    // changed visibility (e.g. show_gcode_viewer), and the earlier
+                    // invalidate (above) would have been ignored while hidden.
+                    lv_obj_invalidate(obj);
                 } else {
                     spdlog::error("[GCode Viewer] Async load failed: {}", r->error_msg);
                     st->viewer_state = GcodeViewerState::Error;
