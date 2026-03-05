@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <lvgl.h>
+#include <unistd.h>
 #include <vector>
 
 // Define the global callback pointer for LVGL assert handler
@@ -183,14 +184,19 @@ void init_early() {
 void init(const LogConfig& config) {
     std::vector<spdlog::sink_ptr> sinks;
 
-    // Console sink (always, unless explicitly disabled)
-    if (config.enable_console) {
-        sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
-    }
-
-    // Resolve auto-detection
+    // Resolve auto-detection first so we can decide about console
     LogTarget effective_target =
         (config.target == LogTarget::Auto) ? detect_best_target() : config.target;
+
+    // Console sink — skip when a system sink (journal/syslog) will be used AND
+    // stdout is not a terminal. Under systemd, stdout is captured into the
+    // journal, so logging to both the journal sink and stdout produces duplicate
+    // entries in journalctl. Interactive users (terminal) still get console output.
+    bool system_sink_active =
+        (effective_target == LogTarget::Journal || effective_target == LogTarget::Syslog);
+    if (config.enable_console && !(system_sink_active && !isatty(STDOUT_FILENO))) {
+        sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
+    }
 
     // Add system sink
     add_system_sink(sinks, effective_target, config.file_path);

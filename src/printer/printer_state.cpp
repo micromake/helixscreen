@@ -712,23 +712,30 @@ void PrinterState::set_printer_type_sync(const std::string& type) {
 }
 
 void PrinterState::set_printer_type_internal(const std::string& type) {
-    printer_type_ = type;
-    print_start_capabilities_ = PrinterDetector::get_print_start_capabilities(type);
-
-    // Determine Z-offset calibration strategy from database
+    // Determine what the z-cal strategy would be for this type so we can
+    // skip redundant updates (auto-detect often confirms the saved type).
+    auto new_caps = PrinterDetector::get_print_start_capabilities(type);
     std::string strategy_str = PrinterDetector::get_z_offset_calibration_strategy(type);
+    ZOffsetCalibrationStrategy new_strategy;
     if (strategy_str == "gcode_offset") {
-        z_offset_calibration_strategy_ = ZOffsetCalibrationStrategy::GCODE_OFFSET;
+        new_strategy = ZOffsetCalibrationStrategy::GCODE_OFFSET;
     } else if (strategy_str == "endstop") {
-        z_offset_calibration_strategy_ = ZOffsetCalibrationStrategy::ENDSTOP;
+        new_strategy = ZOffsetCalibrationStrategy::ENDSTOP;
     } else if (strategy_str == "probe_calibrate") {
-        z_offset_calibration_strategy_ = ZOffsetCalibrationStrategy::PROBE_CALIBRATE;
+        new_strategy = ZOffsetCalibrationStrategy::PROBE_CALIBRATE;
     } else {
-        // Auto-detect: probe_calibrate if has probe, endstop otherwise
-        z_offset_calibration_strategy_ = capabilities_state_.has_probe()
-                                             ? ZOffsetCalibrationStrategy::PROBE_CALIBRATE
-                                             : ZOffsetCalibrationStrategy::ENDSTOP;
+        new_strategy = capabilities_state_.has_probe()
+                           ? ZOffsetCalibrationStrategy::PROBE_CALIBRATE
+                           : ZOffsetCalibrationStrategy::ENDSTOP;
     }
+
+    if (type == printer_type_ && new_strategy == z_offset_calibration_strategy_) {
+        return;
+    }
+
+    printer_type_ = type;
+    print_start_capabilities_ = new_caps;
+    z_offset_calibration_strategy_ = new_strategy;
 
     // Update printer_has_purge_line_ based on capabilities database
     // "priming" is the capability key for purge/prime line in the database

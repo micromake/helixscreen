@@ -10,7 +10,9 @@
 
 #include "active_print_media_manager.h"
 #include "app_globals.h"
+#include "macro_modification_manager.h"
 #include "memory_monitor.h"
+#include "moonraker_manager.h"
 #include "memory_utils.h"
 #include "observer_factory.h"
 #include "operation_registry.h"
@@ -67,8 +69,9 @@ void PrintPreparationManager::set_dependencies(MoonrakerAPI* api, PrinterState* 
     api_ = api;
     printer_state_ = printer_state;
 
-    // Set up observer to trigger PRINT_START analysis when connected
-    // This avoids making requests before the WebSocket connection is established
+    // Trigger PRINT_START analysis when connected.
+    // analyze_print_start_macro() checks MacroModificationManager's cache first
+    // to avoid a duplicate HTTP download of printer config files.
     if (printer_state_) {
         connection_observer_ = helix::ui::observe_int_sync<PrintPreparationManager>(
             printer_state_->get_printer_connection_state_subject(), this,
@@ -127,6 +130,23 @@ void PrintPreparationManager::analyze_print_start_macro() {
             on_macro_analysis_complete_(*macro_analysis_);
         }
         return;
+    }
+
+    // Check if MacroModificationManager already has a cached analysis from
+    // the discovery-triggered check_and_notify(). Reusing it avoids a
+    // duplicate HTTP download of printer config files (~500ms saved).
+    if (auto* mgr = get_moonraker_manager()) {
+        if (auto* macro_mgr = mgr->macro_analysis()) {
+            const auto& cached = macro_mgr->get_cached_analysis();
+            if (cached.found) {
+                spdlog::debug("[PrintPreparationManager] Reusing MacroModificationManager analysis");
+                macro_analysis_ = cached;
+                if (on_macro_analysis_complete_) {
+                    on_macro_analysis_complete_(cached);
+                }
+                return;
+            }
+        }
     }
 
     // Reset retry counter when starting fresh

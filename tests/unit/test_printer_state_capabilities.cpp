@@ -323,6 +323,58 @@ TEST_CASE("PrinterState: setting same type twice is idempotent",
     REQUIRE(caps2.params.size() == caps1.params.size());
 }
 
+TEST_CASE("PrinterState: set_printer_type deduplicates redundant calls",
+          "[printer_state][capabilities][startup]") {
+    lv_init_safe();
+
+    PrinterState& state = get_printer_state();
+    PrinterStateTestAccess::reset(state);
+    state.init_subjects(false);
+
+    // First call sets type and capabilities
+    state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
+    REQUIRE(state.get_printer_type() == "FlashForge Adventurer 5M Pro");
+    REQUIRE_FALSE(state.get_print_start_capabilities().empty());
+
+    // Capture the capabilities object address — if dedup works, the internal
+    // object won't be reassigned, so the address stays the same.
+    const auto* caps_ptr = &state.get_print_start_capabilities();
+
+    // Second call with same type should be a no-op (dedup early return)
+    state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
+
+    // The capabilities reference should point to the exact same object
+    // (not a freshly-assigned copy) because the early-return skipped assignment
+    REQUIRE(&state.get_print_start_capabilities() == caps_ptr);
+    REQUIRE(state.get_printer_type() == "FlashForge Adventurer 5M Pro");
+
+    // But changing to a different type should NOT be deduped
+    state.set_printer_type_sync("FlashForge Adventurer 5M");
+    REQUIRE(state.get_printer_type() == "FlashForge Adventurer 5M");
+}
+
+TEST_CASE("PrinterState: set_printer_type dedup detects strategy changes",
+          "[printer_state][capabilities][startup]") {
+    lv_init_safe();
+
+    PrinterState& state = get_printer_state();
+    PrinterStateTestAccess::reset(state);
+    state.init_subjects(false);
+
+    // Set to an unknown printer (no DB entry → strategy from probe state)
+    state.set_printer_type_sync("Unknown Printer");
+    REQUIRE(state.get_printer_type() == "Unknown Printer");
+
+    // Setting the same unknown type again should still dedup (same strategy)
+    const auto* caps_ptr = &state.get_print_start_capabilities();
+    state.set_printer_type_sync("Unknown Printer");
+    REQUIRE(&state.get_print_start_capabilities() == caps_ptr);
+
+    // But switching to a known type (different strategy) must NOT dedup
+    state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
+    REQUIRE_FALSE(state.get_print_start_capabilities().empty());
+}
+
 TEST_CASE("PrinterState: get_printer_type returns const reference",
           "[printer_state][capabilities][edge]") {
     lv_init_safe();
