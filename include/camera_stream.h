@@ -3,7 +3,8 @@
 
 #include "lvgl.h"
 
-// Camera features available on Pi/desktop. JPEG decoding uses stb_image.
+// Camera features available on Pi/desktop. JPEG decoding tries libturbojpeg
+// (SIMD-accelerated, loaded via dlopen) at runtime, falling back to stb_image.
 #if HELIX_HAS_CAMERA
 
 #include <atomic>
@@ -22,7 +23,8 @@ namespace helix {
  * @brief MJPEG camera stream decoder with snapshot fallback
  *
  * Connects to an MJPEG stream URL, parses multipart boundaries, decodes
- * JPEG frames via stb_image, and delivers decoded RGB888 frames via callback.
+ * JPEG frames via libturbojpeg (SIMD-accelerated, runtime-loaded) or
+ * stb_image (fallback), and delivers decoded RGB888 frames via callback.
  * Falls back to periodic snapshot polling if streaming fails.
  *
  * Threading: decode happens on a background thread. The on_frame callback is
@@ -34,7 +36,7 @@ class CameraStream {
     using FrameCallback = std::function<void(lv_draw_buf_t* frame)>;
     using ErrorCallback = std::function<void(const char* message)>;
 
-    CameraStream() = default;
+    CameraStream();
     ~CameraStream();
 
     CameraStream(const CameraStream&) = delete;
@@ -46,14 +48,21 @@ class CameraStream {
     }
 
     /**
-     * @brief Copy RGB pixels to LVGL BGR format with optional flip.
+     * @brief Copy pixels to LVGL BGR format with optional flip.
      *
-     * stb_image outputs R,G,B byte order but LVGL's RGB888 stores B,G,R in
-     * memory (matching lv_color_t layout). This helper swaps R↔B during copy.
+     * When using stb_image (fallback), source is RGB and R↔B swap is needed.
+     * When using turbojpeg, source is already BGR — only flip is applied.
      * Exposed as public static for unit testing.
      */
+    static void copy_pixels_to_lvgl(const uint8_t* src, uint8_t* dst, int width, int height,
+                                    int src_stride, int dst_stride, bool flip_h, bool flip_v,
+                                    bool swap_rb);
+
+    // Legacy name kept for test compatibility
     static void copy_pixels_rgb_to_lvgl(const uint8_t* src, uint8_t* dst, int width, int height,
-                                        int src_stride, int dst_stride, bool flip_h, bool flip_v);
+                                        int src_stride, int dst_stride, bool flip_h, bool flip_v) {
+        copy_pixels_to_lvgl(src, dst, width, height, src_stride, dst_stride, flip_h, flip_v, true);
+    }
 
     /**
      * @brief Parse a boundary string from a Content-Type header value.
@@ -77,6 +86,8 @@ class CameraStream {
     void snapshot_poll_loop();
     void fetch_snapshot();
     bool decode_jpeg(const uint8_t* data, size_t len);
+    bool decode_jpeg_turbojpeg(const uint8_t* data, size_t len);
+    bool decode_jpeg_stb(const uint8_t* data, size_t len);
     void deliver_frame();
     void ensure_buffers(int width, int height);
     void free_buffers();
@@ -119,12 +130,29 @@ class CameraStream {
     std::atomic<bool> frame_pending_{false};
     std::atomic<bool> got_stream_data_{false}; // Set by http_cb when data arrives
     int stream_fail_count_ = 0;
+    bool thread_detached_ = false; // Set by stop() if thread join times out
     std::thread stream_thread_;
 
     static constexpr int kMaxStreamFailures = 3;
     static constexpr int kSnapshotIntervalMs = 2000;
     static constexpr int kStreamConnectTimeoutSec = 5;   // Initial connection attempt
     static constexpr int kStreamTimeoutSec = 300;       // Active stream — reconnects on timeout
+
+    // libturbojpeg runtime loading (dlopen) — nullptr if unavailable
+    void* tj_lib_ = nullptr;   // dlopen handle
+    void* tj_ = nullptr;       // tjhandle (decompressor instance)
+    // Function pointers loaded via dlsym
+    using TjInitDecompress_t = void* (*)();
+    using TjDecompressHeader3_t = int (*)(void*, const unsigned char*, unsigned long,
+                                          int*, int*, int*, int*);
+    using TjDecompress2_t = int (*)(void*, const unsigned char*, unsigned long,
+                                    unsigned char*, int, int, int, int, int);
+    using TjDestroy_t = int (*)(void*);
+    using TjGetErrorStr2_t = char* (*)(void*);
+    TjDecompressHeader3_t fn_decompress_header_ = nullptr;
+    TjDecompress2_t fn_decompress_ = nullptr;
+    TjDestroy_t fn_destroy_ = nullptr;
+    TjGetErrorStr2_t fn_get_error_ = nullptr;
 };
 
 } // namespace helix

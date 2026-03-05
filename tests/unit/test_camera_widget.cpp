@@ -168,6 +168,49 @@ TEST_CASE("CameraStream: copy_pixels_rgb_to_lvgl with both flips", "[camera]") {
 }
 
 // ============================================================================
+// Pixel copy: BGR no-swap paths (turbojpeg output)
+// ============================================================================
+
+TEST_CASE("CameraStream: copy_pixels_to_lvgl BGR no-swap fast path", "[camera]") {
+    const int W = 2, H = 1;
+    const int stride = W * 3;
+    uint8_t src[6] = {0xAA, 0xBB, 0xCC, 0x11, 0x22, 0x33};
+    uint8_t dst[6] = {};
+
+    CameraStream::copy_pixels_to_lvgl(src, dst, W, H, stride, stride, false, false, false);
+
+    // No swap, no flip: straight memcpy
+    CHECK(dst[0] == 0xAA); CHECK(dst[1] == 0xBB); CHECK(dst[2] == 0xCC);
+    CHECK(dst[3] == 0x11); CHECK(dst[4] == 0x22); CHECK(dst[5] == 0x33);
+}
+
+TEST_CASE("CameraStream: copy_pixels_to_lvgl BGR with horizontal flip", "[camera]") {
+    const int W = 2, H = 1;
+    const int stride = W * 3;
+    uint8_t src[6] = {0xAA, 0xBB, 0xCC, 0x11, 0x22, 0x33};
+    uint8_t dst[6] = {};
+
+    CameraStream::copy_pixels_to_lvgl(src, dst, W, H, stride, stride, true, false, false);
+
+    // Flip H only, no swap: pixel order reversed, channels preserved
+    CHECK(dst[0] == 0x11); CHECK(dst[1] == 0x22); CHECK(dst[2] == 0x33);
+    CHECK(dst[3] == 0xAA); CHECK(dst[4] == 0xBB); CHECK(dst[5] == 0xCC);
+}
+
+TEST_CASE("CameraStream: copy_pixels_to_lvgl BGR with vertical flip", "[camera]") {
+    const int W = 1, H = 2;
+    const int stride = W * 3;
+    uint8_t src[6] = {0xAA, 0xBB, 0xCC, 0x11, 0x22, 0x33};
+    uint8_t dst[6] = {};
+
+    CameraStream::copy_pixels_to_lvgl(src, dst, W, H, stride, stride, false, true, false);
+
+    // Flip V only, no swap: row order reversed, channels preserved
+    CHECK(dst[0] == 0x11); CHECK(dst[1] == 0x22); CHECK(dst[2] == 0x33);
+    CHECK(dst[3] == 0xAA); CHECK(dst[4] == 0xBB); CHECK(dst[5] == 0xCC);
+}
+
+// ============================================================================
 // Boundary parsing from Content-Type
 // ============================================================================
 

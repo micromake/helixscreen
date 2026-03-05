@@ -13,7 +13,12 @@
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <dlfcn.h>
 #include <string_view>
+
+// TurboJPEG pixel format and flag constants (avoid header dependency)
+static constexpr int kTJPF_BGR = 1;
+static constexpr int kTJFLAG_FASTDCT = 2048;
 
 namespace helix {
 
@@ -21,8 +26,51 @@ namespace helix {
 // Construction / Destruction
 // ============================================================================
 
+CameraStream::CameraStream() {
+    // Try to load libturbojpeg at runtime for SIMD-accelerated JPEG decode.
+    // Falls back to stb_image (scalar) if the library isn't installed.
+    tj_lib_ = dlopen("libturbojpeg.so.0", RTLD_LAZY);
+    if (tj_lib_) {
+        auto fn_init = reinterpret_cast<TjInitDecompress_t>(dlsym(tj_lib_, "tjInitDecompress"));
+        fn_decompress_header_ = reinterpret_cast<TjDecompressHeader3_t>(
+            dlsym(tj_lib_, "tjDecompressHeader3"));
+        fn_decompress_ = reinterpret_cast<TjDecompress2_t>(dlsym(tj_lib_, "tjDecompress2"));
+        fn_destroy_ = reinterpret_cast<TjDestroy_t>(dlsym(tj_lib_, "tjDestroy"));
+        fn_get_error_ = reinterpret_cast<TjGetErrorStr2_t>(dlsym(tj_lib_, "tjGetErrorStr2"));
+
+        if (fn_init && fn_decompress_header_ && fn_decompress_ && fn_destroy_ && fn_get_error_) {
+            tj_ = fn_init();
+            if (tj_) {
+                spdlog::info("[CameraStream] Using libturbojpeg (SIMD-accelerated JPEG decode)");
+            } else {
+                spdlog::warn("[CameraStream] tjInitDecompress() failed, falling back to stb_image");
+            }
+        } else {
+            spdlog::warn("[CameraStream] libturbojpeg loaded but missing symbols, "
+                         "falling back to stb_image");
+            dlclose(tj_lib_);
+            tj_lib_ = nullptr;
+        }
+    } else {
+        spdlog::info("[CameraStream] libturbojpeg not available, using stb_image for JPEG decode");
+    }
+}
+
 CameraStream::~CameraStream() {
     stop();
+    // Only clean up turbojpeg if stop() successfully joined the thread.
+    // If the thread was detached (join timeout), it may still be calling
+    // turbojpeg functions — dlclose would unmap the code and crash.
+    if (!thread_detached_) {
+        if (tj_ && fn_destroy_) {
+            fn_destroy_(tj_);
+            tj_ = nullptr;
+        }
+        if (tj_lib_) {
+            dlclose(tj_lib_);
+            tj_lib_ = nullptr;
+        }
+    }
 }
 
 // ============================================================================
@@ -101,6 +149,7 @@ void CameraStream::stop() {
                 join_helper.detach();
                 stream_thread_.detach();
                 thread_joined = false;
+                thread_detached_ = true;
                 break;
             }
 
@@ -466,28 +515,37 @@ void CameraStream::fetch_snapshot() {
 }
 
 // ============================================================================
-// Pixel Copy: RGB (stb_image) → BGR (LVGL RGB888)
+// Pixel Copy with optional R↔B swap and flip
 // ============================================================================
 
-void CameraStream::copy_pixels_rgb_to_lvgl(const uint8_t* src, uint8_t* dst, int width,
-                                            int height, int src_stride, int dst_stride,
-                                            bool flip_h, bool flip_v) {
+void CameraStream::copy_pixels_to_lvgl(const uint8_t* src, uint8_t* dst, int width, int height,
+                                        int src_stride, int dst_stride, bool flip_h, bool flip_v,
+                                        bool swap_rb) {
     for (int y = 0; y < height; y++) {
         int src_y = flip_v ? (height - 1 - y) : y;
         const uint8_t* src_row = src + src_y * src_stride;
         uint8_t* dst_row = dst + y * dst_stride;
 
-        if (flip_h) {
+        if (!flip_h && !swap_rb) {
+            // Fast path: straight memcpy (turbojpeg BGR, no flip)
+            std::memcpy(dst_row, src_row, static_cast<size_t>(width) * 3);
+        } else if (flip_h && swap_rb) {
             for (int x = 0; x < width; x++) {
                 int src_x = width - 1 - x;
-                // Swap R↔B: src is R,G,B → dst is B,G,R
                 dst_row[x * 3 + 0] = src_row[src_x * 3 + 2];
                 dst_row[x * 3 + 1] = src_row[src_x * 3 + 1];
                 dst_row[x * 3 + 2] = src_row[src_x * 3 + 0];
             }
-        } else {
+        } else if (flip_h) {
             for (int x = 0; x < width; x++) {
-                // Swap R↔B: src is R,G,B → dst is B,G,R
+                int src_x = width - 1 - x;
+                dst_row[x * 3 + 0] = src_row[src_x * 3 + 0];
+                dst_row[x * 3 + 1] = src_row[src_x * 3 + 1];
+                dst_row[x * 3 + 2] = src_row[src_x * 3 + 2];
+            }
+        } else {
+            // swap_rb only, no flip
+            for (int x = 0; x < width; x++) {
                 dst_row[x * 3 + 0] = src_row[x * 3 + 2];
                 dst_row[x * 3 + 1] = src_row[x * 3 + 1];
                 dst_row[x * 3 + 2] = src_row[x * 3 + 0];
@@ -497,7 +555,7 @@ void CameraStream::copy_pixels_rgb_to_lvgl(const uint8_t* src, uint8_t* dst, int
 }
 
 // ============================================================================
-// JPEG Decode (using stb_image — no external dependency)
+// JPEG Decode
 // ============================================================================
 
 bool CameraStream::decode_jpeg(const uint8_t* data, size_t len) {
@@ -511,11 +569,74 @@ bool CameraStream::decode_jpeg(const uint8_t* data, size_t len) {
         return false;
     }
 
+    // Use turbojpeg if available, otherwise stb_image
+    if (tj_) {
+        return decode_jpeg_turbojpeg(data, len);
+    }
+    return decode_jpeg_stb(data, len);
+}
+
+bool CameraStream::decode_jpeg_turbojpeg(const uint8_t* data, size_t len) {
+    int width = 0;
+    int height = 0;
+    int subsamp = 0;
+    int colorspace = 0;
+
+    if (fn_decompress_header_(tj_, data, static_cast<unsigned long>(len),
+                              &width, &height, &subsamp, &colorspace) != 0) {
+        spdlog::debug("[CameraStream] JPEG header parse failed: {}", fn_get_error_(tj_));
+        return false;
+    }
+
+    if (width <= 0 || height <= 0 || width > 4096 || height > 4096) {
+        spdlog::warn("[CameraStream] Invalid JPEG dimensions: {}x{}", width, height);
+        return false;
+    }
+
+    ensure_buffers(width, height);
+
+    if (!back_buf_) {
+        return false;
+    }
+
+    auto* dst = static_cast<uint8_t*>(back_buf_->data);
+    int dst_stride = static_cast<int>(back_buf_->header.stride);
+    bool need_flip = flip_h_.load() || flip_v_.load();
+
+    if (!need_flip) {
+        // Fast path: decode directly into LVGL buffer as BGR
+        if (fn_decompress_(tj_, data, static_cast<unsigned long>(len),
+                           dst, width, dst_stride, height,
+                           kTJPF_BGR, kTJFLAG_FASTDCT) != 0) {
+            spdlog::debug("[CameraStream] JPEG decode failed: {}", fn_get_error_(tj_));
+            return false;
+        }
+    } else {
+        // Flip path: decode to temp buffer, then copy with flip
+        int src_stride = width * 3;
+        auto temp_size = static_cast<size_t>(src_stride) * static_cast<size_t>(height);
+        auto temp = std::make_unique<uint8_t[]>(temp_size);
+
+        if (fn_decompress_(tj_, data, static_cast<unsigned long>(len),
+                           temp.get(), width, src_stride, height,
+                           kTJPF_BGR, kTJFLAG_FASTDCT) != 0) {
+            spdlog::debug("[CameraStream] JPEG decode failed: {}", fn_get_error_(tj_));
+            return false;
+        }
+
+        copy_pixels_to_lvgl(temp.get(), dst, width, height, src_stride, dst_stride,
+                            flip_h_.load(), flip_v_.load(), false);
+    }
+
+    spdlog::trace("[CameraStream] Decoded frame {}x{} (turbojpeg)", width, height);
+    return true;
+}
+
+bool CameraStream::decode_jpeg_stb(const uint8_t* data, size_t len) {
     int width = 0;
     int height = 0;
     int channels = 0;
 
-    // Decode JPEG to RGB (3 channels)
     uint8_t* pixels = stbi_load_from_memory(data, static_cast<int>(len), &width, &height,
                                             &channels, 3);
     if (!pixels) {
@@ -536,16 +657,16 @@ bool CameraStream::decode_jpeg(const uint8_t* data, size_t len) {
         return false;
     }
 
-    // Copy pixels from stb_image RGB to LVGL BGR, applying flip if configured
+    // stb_image outputs RGB, LVGL stores BGR — need R↔B swap
     auto* dst = static_cast<uint8_t*>(back_buf_->data);
     int dst_stride = static_cast<int>(back_buf_->header.stride);
     int src_stride = width * 3;
 
-    copy_pixels_rgb_to_lvgl(pixels, dst, width, height, src_stride, dst_stride,
-                            flip_h_.load(), flip_v_.load());
+    copy_pixels_to_lvgl(pixels, dst, width, height, src_stride, dst_stride,
+                        flip_h_.load(), flip_v_.load(), true);
 
     stbi_image_free(pixels);
-    spdlog::trace("[CameraStream] Decoded frame {}x{}", width, height);
+    spdlog::trace("[CameraStream] Decoded frame {}x{} (stb_image)", width, height);
     return true;
 }
 
