@@ -1240,8 +1240,10 @@ void DisplayManager::run_rotation_probe() {
         for (int i = 0; i < num_rotations; i++) {
             // Apply rotation (skip on SDL — DIRECT render mode can't rotate)
             if (!is_sdl) {
-                // Let the backend handle rotation (hardware or software fallback).
-                // The backend manages matrix_rotation internally.
+                // Set the LVGL display rotation so the rendering actually
+                // changes on screen, then let the backend handle any
+                // hardware-specific adjustments (touch coords, etc.).
+                lv_display_set_rotation(m_display, rotations[i]);
                 m_backend->set_display_rotation(rotations[i], phys_w, phys_h);
                 m_width = lv_display_get_horizontal_resolution(m_display);
                 m_height = lv_display_get_vertical_resolution(m_display);
@@ -1316,6 +1318,7 @@ void DisplayManager::run_rotation_probe() {
     // Ensure display is at the confirmed rotation
     if (!is_sdl) {
         lv_display_rotation_t confirmed_lv_rot = degrees_to_lv_rotation(confirmed_rotation);
+        lv_display_set_rotation(m_display, confirmed_lv_rot);
         m_backend->set_display_rotation(confirmed_lv_rot, phys_w, phys_h);
         m_width = lv_display_get_horizontal_resolution(m_display);
         m_height = lv_display_get_vertical_resolution(m_display);
