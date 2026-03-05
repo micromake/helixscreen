@@ -328,8 +328,8 @@ void PIDCalibrationPanel::on_activate() {
         }
     }
 
-    // Detect heater control type (also infers Kalico as fallback)
-    if (api_) {
+    // Detect heater control type (only relevant for Kalico/MPC)
+    if (api_ && is_kalico_) {
         detect_heater_control_type();
     }
 

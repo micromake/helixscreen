@@ -2130,9 +2130,12 @@ void MoonrakerAdvancedAPI::get_heater_control_type(
                     !response["result"]["status"]["configfile"].contains("settings")) {
                     spdlog::debug(
                         "[Moonraker API] configfile.settings not available for control type query");
-                    // Default to pid when settings unavailable
-                    if (on_complete) {
-                        on_complete("pid");
+                    if (on_error) {
+                        on_error(MoonrakerError{MoonrakerErrorType::UNKNOWN,
+                                                0,
+                                                "configfile.settings not available",
+                                                "get_heater_control_type",
+                                                {}});
                     }
                     return;
                 }
