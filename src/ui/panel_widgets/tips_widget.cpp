@@ -94,14 +94,6 @@ void TipsWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     // Set initial tip of the day
     update_tip_of_day();
 
-    // Start tip rotation timer (60 seconds)
-    if (!tip_rotation_timer_) {
-        tip_rotation_timer_ =
-            lv_timer_create(tip_rotation_timer_cb, TIP_ROTATION_INTERVAL_MS, this);
-        spdlog::debug("[TipsWidget] Started tip rotation timer ({}ms interval)",
-                      TIP_ROTATION_INTERVAL_MS);
-    }
-
     spdlog::debug("[TipsWidget] Attached");
 }
 
@@ -132,6 +124,29 @@ void TipsWidget::detach() {
     parent_screen_ = nullptr;
 
     spdlog::debug("[TipsWidget] Detached");
+}
+
+void TipsWidget::on_activate() {
+    if (!tip_rotation_timer_) {
+        tip_rotation_timer_ =
+            lv_timer_create(tip_rotation_timer_cb, TIP_ROTATION_INTERVAL_MS, this);
+        spdlog::debug("[TipsWidget] Started tip rotation timer ({}ms interval)",
+                      TIP_ROTATION_INTERVAL_MS);
+    }
+}
+
+void TipsWidget::on_deactivate() {
+    // Cancel any in-flight tip fade animations before the timer
+    if (tip_animating_) {
+        tip_animating_ = false;
+        lv_anim_delete(this, nullptr);
+    }
+
+    if (tip_rotation_timer_) {
+        lv_timer_delete(tip_rotation_timer_);
+        tip_rotation_timer_ = nullptr;
+        spdlog::debug("[TipsWidget] Stopped tip rotation timer");
+    }
 }
 
 void TipsWidget::on_size_changed(int colspan, int /*rowspan*/, int /*width_px*/,
