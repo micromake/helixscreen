@@ -8,6 +8,7 @@
 #include "touch_calibration.h"
 
 #include <lvgl.h>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -210,6 +211,19 @@ class DisplayManager {
     }
 
     /**
+     * @brief Register callback for display sleep/wake transitions
+     *
+     * Callbacks are invoked with true on sleep entry, false on wake.
+     * Used by camera stream and other background tasks to suspend
+     * work while the display is off, reducing idle CPU usage.
+     *
+     * @param cb Callback receiving true=sleep, false=wake
+     */
+    void register_sleep_callback(std::function<void(bool sleeping)> cb) {
+        m_sleep_callbacks.push_back(std::move(cb));
+    }
+
+    /**
      * @brief Check if display is currently dimmed
      * @return true if backlight is at reduced brightness
      */
@@ -394,6 +408,9 @@ class DisplayManager {
 
     // Original pointer read callback (before sleep-aware wrapper)
     lv_indev_read_cb_t m_original_pointer_read_cb = nullptr;
+
+    // Sleep/wake callbacks (e.g. camera stream suspend)
+    std::vector<std::function<void(bool sleeping)>> m_sleep_callbacks;
 
     // Resize handler state
     std::vector<ResizeCallback> m_resize_callbacks;

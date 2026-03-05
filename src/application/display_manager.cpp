@@ -607,6 +607,11 @@ void DisplayManager::enter_sleep(int timeout_sec) {
         spdlog::info("[DisplayManager] Display sleeping (software overlay{}) after {}s",
                      m_sleep_backlight_off ? "" : ", backlight kept on", timeout_sec);
     }
+
+    // Notify subscribers (camera stream, etc.) to suspend background work
+    for (auto& cb : m_sleep_callbacks) {
+        cb(true);
+    }
 }
 
 // ============================================================================
@@ -814,6 +819,11 @@ void DisplayManager::wake_display() {
     }
     spdlog::info("[DisplayManager] Display woken from {}, brightness restored to {}%",
                  was_sleeping ? "sleep" : "dim", brightness);
+
+    // Notify subscribers (camera stream, etc.) to resume background work
+    for (auto& cb : m_sleep_callbacks) {
+        cb(false);
+    }
 }
 
 void DisplayManager::ensure_display_on() {

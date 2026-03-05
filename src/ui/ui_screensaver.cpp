@@ -24,9 +24,9 @@ static constexpr int NUM_TOASTER_FRAMES =
 // CSS reference: translate(-1600px, 1600px) — fixed travel distance
 static constexpr int FLIGHT_DISTANCE = 1600;
 
-// Single timer period — ~30fps for smooth diagonal flight.
-// CPU-safe now that sprites are pre-decoded RAM buffers (no per-frame file I/O).
-static constexpr uint32_t TICK_PERIOD_MS = 33;
+// Single timer period — ~20fps balances smoothness and CPU usage.
+// Each tick moves 26 LVGL objects, triggering dirty-region recalculation.
+static constexpr uint32_t TICK_PERIOD_MS = 50;
 
 // Object definition matching the exact CSS classes and positions.
 // CSS uses right/top percentages. Negative right = off-screen to the right.

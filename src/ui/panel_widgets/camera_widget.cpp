@@ -7,6 +7,7 @@
 #if HELIX_HAS_CAMERA
 
 #include "app_globals.h"
+#include "display_manager.h"
 #include "moonraker_api.h"
 #include "panel_widget_registry.h"
 #include "printer_state.h"
@@ -168,6 +169,26 @@ void CameraWidget::detach() {
 
 void CameraWidget::on_activate() {
     active_ = true;
+
+    // Register for display sleep/wake notifications to suspend the camera
+    // stream while the screen is off (saves ~20% CPU on Pi).
+    // Uses weak_ptr to alive_ so the callback safely no-ops after destruction.
+    if (!sleep_cb_registered_) {
+        std::weak_ptr<bool> weak_alive = alive_;
+        DisplayManager::instance()->register_sleep_callback([this, weak_alive](bool sleeping) {
+            auto alive = weak_alive.lock();
+            if (!alive || !*alive) return;
+            if (sleeping) {
+                spdlog::debug("[CameraWidget] Display sleeping — stopping camera stream");
+                stop_stream();
+            } else if (active_) {
+                spdlog::debug("[CameraWidget] Display waking — restarting camera stream");
+                start_stream();
+            }
+        });
+        sleep_cb_registered_ = true;
+    }
+
     start_stream();
 }
 

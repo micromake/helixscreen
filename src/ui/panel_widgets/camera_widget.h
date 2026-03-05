@@ -46,7 +46,8 @@ class CameraWidget : public PanelWidget {
     lv_obj_t* fullscreen_image_ = nullptr;
 
     std::unique_ptr<CameraStream> stream_;
-    bool active_ = false; // true when on_activate() has been called
+    bool active_ = false;              // true when on_activate() has been called
+    bool sleep_cb_registered_ = false; // true after display sleep callback registered
 
     // Observer for webcam availability — starts stream when URLs arrive
     ObserverGuard webcam_observer_;
