@@ -392,10 +392,14 @@ void AmsBackendAfc::handle_status_update(const nlohmann::json& notification) {
         // post-scan should not override it (newer AFC versions are authoritative)
         bool has_explicit_filament_loaded = false;
         if (params.contains("AFC") && params["AFC"].is_object()) {
-            has_explicit_filament_loaded = params["AFC"].contains("filament_loaded");
+            const auto& afc = params["AFC"];
+            has_explicit_filament_loaded =
+                afc.contains("filament_loaded") && afc["filament_loaded"].is_boolean();
         }
         if (!has_explicit_filament_loaded && params.contains("afc") && params["afc"].is_object()) {
-            has_explicit_filament_loaded = params["afc"].contains("filament_loaded");
+            const auto& afc = params["afc"];
+            has_explicit_filament_loaded =
+                afc.contains("filament_loaded") && afc["filament_loaded"].is_boolean();
         }
 
         // Track whether parse_afc_state set current_slot from current_load/current_lane.
@@ -529,12 +533,14 @@ void AmsBackendAfc::handle_status_update(const nlohmann::json& notification) {
 void AmsBackendAfc::parse_afc_state(const nlohmann::json& afc_data,
                                     std::string& deferred_error_event,
                                     bool& current_slot_set_by_afc_state) {
-    // Parse current lane — try "current_lane" first, fall back to "current_load"
-    // Some AFC versions use "current_load" instead of "current_lane"
+    // Parse current lane — try "current_lane" first, fall back to "current_load".
+    // An empty string is treated as absent (fall through to check the other field).
     std::string loaded_lane;
     if (afc_data.contains("current_lane") && afc_data["current_lane"].is_string()) {
         loaded_lane = afc_data["current_lane"].get<std::string>();
-    } else if (afc_data.contains("current_load") && afc_data["current_load"].is_string()) {
+    }
+    if (loaded_lane.empty() && afc_data.contains("current_load") &&
+        afc_data["current_load"].is_string()) {
         loaded_lane = afc_data["current_load"].get<std::string>();
     }
 
@@ -550,8 +556,12 @@ void AmsBackendAfc::parse_afc_state(const nlohmann::json& afc_data,
                 spdlog::trace("[AMS AFC] Derived current_tool T{} from slot {}", mapped,
                               slot_index);
             }
-            spdlog::trace("[AMS AFC] Current lane: {} (slot {})", loaded_lane,
+            spdlog::debug("[AMS AFC] Current lane: '{}' (slot {})", loaded_lane,
                           system_info_.current_slot);
+        } else {
+            spdlog::warn("[AMS AFC] Current lane '{}' not found in slot registry ({} slots) "
+                         "— toolhead loaded state will not display correctly",
+                         loaded_lane, slots_.slot_count());
         }
     }
 
@@ -563,19 +573,31 @@ void AmsBackendAfc::parse_afc_state(const nlohmann::json& afc_data,
 
     // Parse filament loaded state — try explicit field first, derive from current_load
     if (afc_data.contains("filament_loaded") && afc_data["filament_loaded"].is_boolean()) {
-        system_info_.filament_loaded = afc_data["filament_loaded"].get<bool>();
-        spdlog::trace("[AMS AFC] Filament loaded: {}", system_info_.filament_loaded);
+        bool explicit_loaded = afc_data["filament_loaded"].get<bool>();
+        system_info_.filament_loaded = explicit_loaded;
+        if (!explicit_loaded && !loaded_lane.empty()) {
+            spdlog::warn("[AMS AFC] Firmware says filament_loaded=false but current_lane='{}' "
+                         "— may indicate in-progress load; UI will not show loaded",
+                         loaded_lane);
+        } else {
+            spdlog::debug("[AMS AFC] Filament loaded={} (explicit)", explicit_loaded);
+        }
     } else if (!loaded_lane.empty()) {
-        // AFC versions without "filament_loaded" field: derive from current_load
-        // If a lane is reported as currently loaded, filament is at the toolhead
+        // AFC versions without "filament_loaded" field: best-effort derivation.
+        // current_load/current_lane being set to a lane name is treated as "loaded" —
+        // may briefly show loaded during in-progress operations on some firmware versions,
+        // but is the best signal available.
         system_info_.filament_loaded = true;
-        spdlog::trace("[AMS AFC] Filament loaded (derived from current_load={})", loaded_lane);
-    } else if (afc_data.contains("current_load") && afc_data["current_load"].is_null()) {
-        // current_load went null (unloaded) — clear filament state
+        spdlog::debug("[AMS AFC] Filament loaded=true (derived from current_lane='{}')",
+                      loaded_lane);
+    } else if ((afc_data.contains("current_load") && afc_data["current_load"].is_null()) ||
+               (afc_data.contains("current_lane") && afc_data["current_lane"].is_null())) {
+        // current_load/current_lane went null (unloaded) — clear filament state
         system_info_.filament_loaded = false;
         system_info_.current_slot = -1;
         system_info_.current_tool = -1;
-        spdlog::trace("[AMS AFC] Filament unloaded (current_load=null)");
+        current_slot_set_by_afc_state = true;
+        spdlog::debug("[AMS AFC] Filament unloaded (current lane/load=null)");
     }
 
     // Parse action/status
