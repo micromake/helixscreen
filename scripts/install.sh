@@ -2303,6 +2303,105 @@ extract_release() {
             log_info "Backed up existing helixscreen.env"
         fi
 
+        # Self-update under NoNewPrivileges: the parent directory (e.g. /opt)
+        # is read-only under ProtectSystem=strict, so we can't do an atomic
+        # directory rename.  Instead, replace contents in-place within
+        # INSTALL_DIR — this only needs write access to INSTALL_DIR itself
+        # (covered by ReadWritePaths in the service file).
+        if _has_no_new_privs; then
+            # Verify INSTALL_DIR is writable.  Older service files only grant
+            # ReadWritePaths to config/, so ProtectSystem=strict blocks writes
+            # to the rest.  If so, the ExecStartPre ownership fix in the new
+            # service file will resolve this on next restart.
+            if ! touch "${INSTALL_DIR}/.update_test" 2>/dev/null; then
+                log_error "Cannot write to ${INSTALL_DIR} (read-only under ProtectSystem)."
+                log_error "The systemd service file needs updating to allow self-updates."
+                log_error "Fix: re-run the installer once with:"
+                log_error "  curl -fsSL https://install.helixscreen.org | bash"
+                rm -rf "$extract_dir"
+                exit 1
+            fi
+            rm -f "${INSTALL_DIR}/.update_test" 2>/dev/null
+
+            log_info "Self-update: replacing install contents in-place..."
+
+            # Remove old contents (except config/).
+            # Don't use || true — if rm fails, we must not proceed to mv
+            # because mv can't overwrite a non-empty directory.
+            local _inplace_failed=false
+            for _item in "${INSTALL_DIR}"/*; do
+                [ -e "$_item" ] || continue
+                _base=$(basename "$_item")
+                [ "$_base" = "config" ] && continue
+                if ! rm -rf "$_item"; then
+                    log_error "Failed to remove old ${_base}"
+                    _inplace_failed=true
+                fi
+            done
+            # Hidden files too
+            for _item in "${INSTALL_DIR}"/.*; do
+                [ -e "$_item" ] || continue
+                _base=$(basename "$_item")
+                case "$_base" in .|..) continue ;; esac
+                rm -rf "$_item" 2>/dev/null || true
+            done
+
+            if [ "$_inplace_failed" = true ]; then
+                log_error "In-place update failed. Install may be in a broken state."
+                log_error "Fix: re-run the installer: curl -fsSL https://install.helixscreen.org | bash"
+                rm -rf "$extract_dir"
+                exit 1
+            fi
+
+            # Move new contents in (except config/)
+            for _item in "${new_install}"/*; do
+                [ -e "$_item" ] || continue
+                _base=$(basename "$_item")
+                [ "$_base" = "config" ] && continue
+                if ! mv "$_item" "${INSTALL_DIR}/${_base}"; then
+                    log_error "Failed to install: ${_base}"
+                    rm -rf "$extract_dir"
+                    exit 1
+                fi
+            done
+            # Hidden files too
+            for _item in "${new_install}"/.*; do
+                [ -e "$_item" ] || continue
+                _base=$(basename "$_item")
+                case "$_base" in .|..) continue ;; esac
+                mv "$_item" "${INSTALL_DIR}/${_base}" 2>/dev/null || true
+            done
+
+            # Merge new config defaults without overwriting user files.
+            # New versions may ship config files that didn't exist before.
+            if [ -d "${new_install}/config" ]; then
+                for _item in "${new_install}/config"/*; do
+                    [ -e "$_item" ] || continue
+                    _base=$(basename "$_item")
+                    if [ ! -e "${INSTALL_DIR}/config/${_base}" ]; then
+                        mv "$_item" "${INSTALL_DIR}/config/${_base}" 2>/dev/null || true
+                        log_info "Added new config default: ${_base}"
+                    elif [ -d "$_item" ] && [ -d "${INSTALL_DIR}/config/${_base}" ]; then
+                        # Merge directory contents (e.g. printer_database.d/)
+                        for _subitem in "$_item"/*; do
+                            [ -e "$_subitem" ] || continue
+                            _subbase=$(basename "$_subitem")
+                            if [ ! -e "${INSTALL_DIR}/config/${_base}/${_subbase}" ]; then
+                                mv "$_subitem" "${INSTALL_DIR}/config/${_base}/${_subbase}" 2>/dev/null || true
+                            fi
+                        done
+                    fi
+                done
+            fi
+
+            rm -rf "$extract_dir"
+            log_success "Updated in-place at ${INSTALL_DIR}"
+            return 0
+        fi
+
+        # Standard path (fresh install or non-self-update with sudo access):
+        # atomic directory swap via rename in parent directory.
+
         # Choose backup dir name for atomic swap.
         # Prefer INSTALL_DIR.old; if it exists and can't be removed (e.g. root-owned
         # under NoNewPrivileges), fall back to a timestamped name so the swap succeeds.
@@ -2695,20 +2794,22 @@ deploy_platform_hooks() {
     log_info "Deployed platform hooks: $platform"
 }
 
-# Fix ownership of config directory for non-root Klipper users
-# Binaries stay root-owned for security; only config needs user write access
+# Fix ownership of install directory for non-root service users.
+# The entire INSTALL_DIR must be user-owned so that in-app self-updates
+# (which run under NoNewPrivileges=true, blocking sudo) can replace
+# files without root access.  ProtectSystem=strict in the service file
+# limits filesystem writes to ReadWritePaths regardless of ownership.
+# Uses -h to avoid following symlinks outside INSTALL_DIR.
 fix_install_ownership() {
     local user="${KLIPPER_USER:-}"
     if [ -n "$user" ] && [ "$user" != "root" ] && [ -d "$INSTALL_DIR" ]; then
         log_info "Setting ownership to ${user}..."
-        if [ -d "${INSTALL_DIR}/config" ]; then
-            # Try without sudo first: during self-update under NoNewPrivileges,
-            # sudo is blocked but config is already user-owned so chown succeeds
-            # without it (or is a no-op).  Fall back to sudo for fresh installs
-            # where root may own the directory.
-            chown -R "${user}:${user}" "${INSTALL_DIR}/config" 2>/dev/null || \
-                $SUDO chown -R "${user}:${user}" "${INSTALL_DIR}/config" 2>/dev/null || true
-        fi
+        # Try without sudo first: during self-update under NoNewPrivileges,
+        # sudo is blocked but files are already user-owned so chown succeeds
+        # without it (or is a no-op).  Fall back to sudo for fresh installs
+        # where root may own the directory.
+        chown -Rh "${user}:${user}" "${INSTALL_DIR}" 2>/dev/null || \
+            $SUDO chown -Rh "${user}:${user}" "${INSTALL_DIR}" 2>/dev/null || true
     fi
 }
 

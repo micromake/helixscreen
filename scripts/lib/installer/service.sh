@@ -265,20 +265,22 @@ deploy_platform_hooks() {
     log_info "Deployed platform hooks: $platform"
 }
 
-# Fix ownership of config directory for non-root Klipper users
-# Binaries stay root-owned for security; only config needs user write access
+# Fix ownership of install directory for non-root service users.
+# The entire INSTALL_DIR must be user-owned so that in-app self-updates
+# (which run under NoNewPrivileges=true, blocking sudo) can replace
+# files without root access.  ProtectSystem=strict in the service file
+# limits filesystem writes to ReadWritePaths regardless of ownership.
+# Uses -h to avoid following symlinks outside INSTALL_DIR.
 fix_install_ownership() {
     local user="${KLIPPER_USER:-}"
     if [ -n "$user" ] && [ "$user" != "root" ] && [ -d "$INSTALL_DIR" ]; then
         log_info "Setting ownership to ${user}..."
-        if [ -d "${INSTALL_DIR}/config" ]; then
-            # Try without sudo first: during self-update under NoNewPrivileges,
-            # sudo is blocked but config is already user-owned so chown succeeds
-            # without it (or is a no-op).  Fall back to sudo for fresh installs
-            # where root may own the directory.
-            chown -R "${user}:${user}" "${INSTALL_DIR}/config" 2>/dev/null || \
-                $SUDO chown -R "${user}:${user}" "${INSTALL_DIR}/config" 2>/dev/null || true
-        fi
+        # Try without sudo first: during self-update under NoNewPrivileges,
+        # sudo is blocked but files are already user-owned so chown succeeds
+        # without it (or is a no-op).  Fall back to sudo for fresh installs
+        # where root may own the directory.
+        chown -Rh "${user}:${user}" "${INSTALL_DIR}" 2>/dev/null || \
+            $SUDO chown -Rh "${user}:${user}" "${INSTALL_DIR}" 2>/dev/null || true
     fi
 }
 
