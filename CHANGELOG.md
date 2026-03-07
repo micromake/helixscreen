@@ -7,14 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.97.0] - 2026-03-06
 
-Multi-printer support (beta) and selectable toolhead renderers. Configure multiple printers in a single HelixScreen instance and switch between them from the navbar or settings. The Armored Turtle (A4T) toolhead style is now available alongside the default and Stealthburner renderers.
+Multi-printer support (beta) and selectable toolhead renderers. Configure multiple printers in a single HelixScreen instance and switch between them from the navbar or settings. The A4T toolhead style is now available alongside the default and Stealthburner renderers.
 
 ### Added
 - Multi-printer support: configure, switch, and manage multiple Klipper printers from one device (beta feature flag)
 - Printer switcher badge in navbar with connection status indicator
 - Printer management overlay for adding, switching, and deleting printers
 - Toolhead style selector in display settings (Auto, Default, Stealthburner, A4T)
-- Armored Turtle (A4T) toolhead renderer with SVG-traced polygon geometry
+- A4T toolhead renderer with SVG-traced polygon geometry
 
 ### Fixed
 - Self-update crash from CWD deletion causing SIGABRT on re-exec

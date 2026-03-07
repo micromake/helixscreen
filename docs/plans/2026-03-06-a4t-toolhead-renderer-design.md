@@ -5,7 +5,7 @@
 
 ## Summary
 
-Add an Armored Turtle (A4T) toolhead renderer and convert the toolhead style system from a boolean (Bambu vs Stealthburner) to a user-selectable enum with auto-detection fallback.
+Add an A4T toolhead renderer and convert the toolhead style system from a boolean (Bambu vs Stealthburner) to a user-selectable enum with auto-detection fallback.
 
 ## Renderer Design
 
@@ -39,7 +39,7 @@ enum class ToolheadStyle { AUTO = 0, DEFAULT = 1, STEALTHBURNER = 2, A4T = 3 };
 - Subject: `lv_subject_t toolhead_style_subject_`
 - Config path: `/appearance/toolhead_style`
 - Methods: `get_toolhead_style()`, `set_toolhead_style()`, `get_effective_toolhead_style()`
-- Options string: `"Auto\nDefault\nStealthburner\nArmored Turtle"`
+- Options string: `"Auto\nDefault\nStealthburner\nA4T"`
 - `get_effective_toolhead_style()` resolves AUTO using `PrinterDetector::is_voron_printer()` (returns STEALTHBURNER for Voron, DEFAULT otherwise — A4T not auto-detected yet)
 
 ## Integration Changes

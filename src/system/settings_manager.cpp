@@ -26,7 +26,7 @@ using namespace helix;
 
 // Z movement style options (Auto=0, Bed Moves=1, Nozzle Moves=2)
 static const char* Z_MOVEMENT_STYLE_OPTIONS_TEXT = "Auto\nBed Moves\nNozzle Moves";
-static const char* TOOLHEAD_STYLE_OPTIONS_TEXT = "Auto\nDefault\nStealthburner\nArmored Turtle";
+static const char* TOOLHEAD_STYLE_OPTIONS_TEXT = "Auto\nDefault\nStealthburner\nA4T";
 
 SettingsManager& SettingsManager::instance() {
     static SettingsManager instance;

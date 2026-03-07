@@ -1,7 +1,7 @@
 // Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
 /// @file nozzle_renderer_a4t.cpp
-/// @brief Armored Turtle (A4T) toolhead renderer implementation
+/// @brief A4T toolhead renderer implementation
 ///
 /// Traced from A4T SVG — polygon-based rendering using LVGL triangle
 /// primitives with ear-clipping triangulation, matching the approach
@@ -15,7 +15,7 @@
 
 // ============================================================================
 // Polygon Data (design space: width=1000, height=1334)
-// Traced from Armored Turtle (A4T) SVG (viewBox 0 0 766 1021)
+// Traced from A4T SVG (viewBox 0 0 766 1021)
 // Visual center measured from bounding box: X=500, Y=667
 // ============================================================================
 

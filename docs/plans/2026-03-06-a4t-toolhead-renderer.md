@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add an Armored Turtle (A4T) toolhead renderer and convert the toolhead style system from boolean to user-selectable enum.
+**Goal:** Add an A4T toolhead renderer and convert the toolhead style system from boolean to user-selectable enum.
 
 **Architecture:** New `ToolheadStyle` enum follows the existing `ZMovementStyle` pattern in SettingsManager. The A4T renderer uses polygon-based drawing (like the faceted/Stealthburner renderer) with procedural hexagons for the honeycomb accent. All canvas widgets switch from `bool use_faceted_toolhead` to `ToolheadStyle`.
 
@@ -47,7 +47,7 @@ Expected: Clean build, no errors.
 **Step 3: Commit**
 
 ```
-feat(rendering): add Armored Turtle (A4T) toolhead renderer
+feat(rendering): add A4T toolhead renderer
 ```
 
 ---
@@ -111,7 +111,7 @@ lv_subject_t toolhead_style_subject_;
 
 After `Z_MOVEMENT_STYLE_OPTIONS_TEXT` (line 27), add:
 ```cpp
-static const char* TOOLHEAD_STYLE_OPTIONS_TEXT = "Auto\nDefault\nStealthburner\nArmored Turtle";
+static const char* TOOLHEAD_STYLE_OPTIONS_TEXT = "Auto\nDefault\nStealthburner\nA4T";
 ```
 
 In `init_subjects()`, after Z movement init (~line 69), add:
@@ -365,8 +365,8 @@ In `ui_xml/settings_panel.xml`, add near other appearance/display settings:
                       label="Toolhead Style" label_tag="Toolhead Style" icon="printer_3d_nozzle"
                       description="How the toolhead icon appears"
                       description_tag="How the toolhead icon appears"
-                      options="Auto&#10;Default&#10;Stealthburner&#10;Armored Turtle"
-                      options_tag="Auto&#10;Default&#10;Stealthburner&#10;Armored Turtle"
+                      options="Auto&#10;Default&#10;Stealthburner&#10;A4T"
+                      options_tag="Auto&#10;Default&#10;Stealthburner&#10;A4T"
                       callback="on_toolhead_style_changed"/>
 ```
 

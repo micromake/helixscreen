@@ -1,7 +1,7 @@
 // Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
 /// @file nozzle_renderer_a4t.h
-/// @brief Armored Turtle (A4T) toolhead renderer
+/// @brief A4T toolhead renderer
 ///
 /// Vector-drawn A4T print head using LVGL polygon primitives.
 /// Distinctive dark body with green hexagonal honeycomb accents.
@@ -10,7 +10,7 @@
 
 #include "lvgl/lvgl.h"
 
-/// @brief Draw Armored Turtle (A4T) print head
+/// @brief Draw A4T print head
 ///
 /// Creates a vector rendering of the A4T toolhead with:
 /// - Dark rectangular housing with beveled bottom corners
