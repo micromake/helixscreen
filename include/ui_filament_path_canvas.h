@@ -310,14 +310,6 @@ void ui_filament_path_canvas_set_buffer_callback(lv_obj_t* obj, filament_path_bu
 void ui_filament_path_canvas_set_hub_only(lv_obj_t* obj, bool hub_only);
 
 /**
- * @brief Set toolhead renderer style (integer version for C compatibility)
- *
- * @param obj The filament_path_canvas widget
- * @param style 0=DEFAULT, 1=DEFAULT, 2=STEALTHBURNER, 3=A4T
- */
-void ui_filament_path_canvas_set_toolhead_style_int(lv_obj_t* obj, int style);
-
-/**
  * @brief Set nozzle heat active state
  *
  * When heat is active, draws a pulsing orange/red glow around the nozzle tip
@@ -380,17 +372,5 @@ void ui_filament_path_canvas_set_bypass_color(lv_obj_t* obj, uint32_t color);
 void ui_filament_path_canvas_set_bypass_has_spool(lv_obj_t* obj, bool has_spool);
 
 #ifdef __cplusplus
-}
-
-#include "settings_manager.h"
-
-/**
- * @brief Set toolhead renderer style (C++ typed version)
- *
- * @param obj The filament_path_canvas widget
- * @param style ToolheadStyle enum value
- */
-inline void ui_filament_path_canvas_set_toolhead_style(lv_obj_t* obj, helix::ToolheadStyle style) {
-    ui_filament_path_canvas_set_toolhead_style_int(obj, static_cast<int>(style));
 }
 #endif

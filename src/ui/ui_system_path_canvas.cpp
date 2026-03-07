@@ -108,8 +108,6 @@ struct SystemPathData {
     int32_t extruder_scale = 10;
     const lv_font_t* label_font = nullptr;
 
-    // Toolhead style
-    helix::ToolheadStyle toolhead_style = helix::ToolheadStyle::DEFAULT;
 };
 
 // Registry of widget data
@@ -892,7 +890,7 @@ static void system_path_draw_cb(lv_event_t* e) {
             bool is_active_tool = (t == data->active_tool) && data->filament_loaded;
 
             lv_color_t noz_color = is_active_tool ? active_color_lv : nozzle_color;
-            switch (data->toolhead_style) {
+            switch (helix::SettingsManager::instance().get_effective_toolhead_style()) {
                 case helix::ToolheadStyle::STEALTHBURNER:
                     draw_nozzle_faceted(layer, tool_x, tools_y, noz_color, small_scale);
                     break;
@@ -1073,7 +1071,7 @@ static void system_path_draw_cb(lv_event_t* e) {
                 noz_color = active_color_lv;
             }
 
-            switch (data->toolhead_style) {
+            switch (helix::SettingsManager::instance().get_effective_toolhead_style()) {
                 case helix::ToolheadStyle::STEALTHBURNER:
                     draw_nozzle_faceted(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
                     break;
@@ -1471,18 +1469,6 @@ void ui_system_path_canvas_set_bypass_callback(lv_obj_t* obj, system_path_bypass
     if (data) {
         data->bypass_callback = cb;
         data->bypass_user_data = user_data;
-    }
-}
-
-void ui_system_path_canvas_set_toolhead_style_int(lv_obj_t* obj, int style) {
-    auto* data = get_data(obj);
-    if (!data)
-        return;
-
-    auto new_style = static_cast<helix::ToolheadStyle>(std::clamp(style, 0, 3));
-    if (data->toolhead_style != new_style) {
-        data->toolhead_style = new_style;
-        lv_obj_invalidate(obj);
     }
 }
 

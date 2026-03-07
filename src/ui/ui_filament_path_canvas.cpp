@@ -168,7 +168,6 @@ struct FilamentPathData {
 
     // Rendering mode
     bool hub_only = false;             // true = stop rendering at hub (skip downstream)
-    helix::ToolheadStyle toolhead_style = helix::ToolheadStyle::DEFAULT;
 
     // Buffer fault state (0=healthy, 1=warning/approaching, 2=fault)
     int buffer_fault_state = 0;
@@ -1511,8 +1510,7 @@ static void draw_parallel_topology(lv_event_t* e, FilamentPathData* data) {
                                 data->flow_offset, reverse);
         }
 
-        // Use the proper nozzle renderers (same as hub topology)
-        switch (data->toolhead_style) {
+        switch (helix::SettingsManager::instance().get_effective_toolhead_style()) {
             case helix::ToolheadStyle::STEALTHBURNER:
                 draw_nozzle_faceted(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
                 break;
@@ -2248,7 +2246,7 @@ static void filament_path_draw_cb(lv_event_t* e) {
 
         // Extruder/print head icon (responsive size)
         // Draw nozzle first so heat glow can render on top
-        switch (data->toolhead_style) {
+        switch (helix::SettingsManager::instance().get_effective_toolhead_style()) {
             case helix::ToolheadStyle::STEALTHBURNER:
                 draw_nozzle_faceted(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
                 break;
@@ -2263,7 +2261,7 @@ static void filament_path_draw_cb(lv_event_t* e) {
         // Draw heat glow around nozzle tip when heating (after nozzle so glow is visible)
         if (data->heat_active) {
             int32_t tip_y;
-            switch (data->toolhead_style) {
+            switch (helix::SettingsManager::instance().get_effective_toolhead_style()) {
                 case helix::ToolheadStyle::STEALTHBURNER:
                 case helix::ToolheadStyle::A4T:
                     // Stealthburner/A4T: nozzle tip is further below center due to larger body
@@ -2509,19 +2507,6 @@ static void filament_path_xml_apply(lv_xml_parser_state_t* state, const char** a
             needs_redraw = true;
         } else if (strcmp(name, "show_bypass") == 0) {
             data->show_bypass = (strcmp(value, "true") == 0 || strcmp(value, "1") == 0);
-            needs_redraw = true;
-        } else if (strcmp(name, "faceted_toolhead") == 0) {
-            // Backward compat: true/1 → Stealthburner, also accept explicit style names
-            if (strcmp(value, "stealthburner") == 0) {
-                data->toolhead_style = helix::ToolheadStyle::STEALTHBURNER;
-            } else if (strcmp(value, "a4t") == 0) {
-                data->toolhead_style = helix::ToolheadStyle::A4T;
-            } else if (strcmp(value, "default") == 0 || strcmp(value, "false") == 0 ||
-                       strcmp(value, "0") == 0) {
-                data->toolhead_style = helix::ToolheadStyle::DEFAULT;
-            } else if (strcmp(value, "true") == 0 || strcmp(value, "1") == 0) {
-                data->toolhead_style = helix::ToolheadStyle::STEALTHBURNER;
-            }
             needs_redraw = true;
         } else if (strcmp(name, "hub_only") == 0) {
             data->hub_only = (strcmp(value, "true") == 0 || strcmp(value, "1") == 0);
@@ -2892,19 +2877,6 @@ void ui_filament_path_canvas_set_hub_only(lv_obj_t* obj, bool hub_only) {
     if (data->hub_only != hub_only) {
         data->hub_only = hub_only;
         spdlog::debug("[FilamentPath] Hub-only mode: {}", hub_only ? "on" : "off");
-        lv_obj_invalidate(obj);
-    }
-}
-
-void ui_filament_path_canvas_set_toolhead_style_int(lv_obj_t* obj, int style) {
-    auto* data = get_data(obj);
-    if (!data)
-        return;
-
-    auto new_style = static_cast<helix::ToolheadStyle>(std::clamp(style, 0, 3));
-    if (data->toolhead_style != new_style) {
-        data->toolhead_style = new_style;
-        spdlog::debug("[FilamentPath] Toolhead style: {}", style);
         lv_obj_invalidate(obj);
     }
 }

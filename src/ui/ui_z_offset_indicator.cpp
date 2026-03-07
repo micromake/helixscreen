@@ -33,7 +33,6 @@ struct ZOffsetIndicatorData {
     int32_t arrow_progress = 0; // 0-255, draw-in progress (base to tip)
     int32_t arrow_opacity = 0;  // 0-255, overall opacity (for fade-out phase)
     int arrow_direction = 0;    // +1 (farther/up) or -1 (closer/down)
-    helix::ToolheadStyle toolhead_style = helix::ToolheadStyle::DEFAULT;
 
     // Cached theme colors (resolved once at creation, not per-frame)
     lv_color_t color_text_muted = {};
@@ -235,7 +234,7 @@ static void indicator_draw_cb(lv_event_t* e) {
     int32_t nozzle_scale = LV_CLAMP(5, h / 10, 12);
     lv_color_t nozzle_color = data->color_text;
 
-    switch (data->toolhead_style) {
+    switch (helix::SettingsManager::instance().get_effective_toolhead_style()) {
         case helix::ToolheadStyle::STEALTHBURNER:
             draw_nozzle_faceted(layer, nozzle_cx, nozzle_y, nozzle_color, nozzle_scale);
             break;
@@ -476,7 +475,6 @@ static void* z_offset_indicator_xml_create(lv_xml_parser_state_t* state, const c
 
     // Allocate and attach widget data
     auto* data = new ZOffsetIndicatorData{};
-    data->toolhead_style = helix::SettingsManager::instance().get_effective_toolhead_style();
     data->color_text_muted = theme_manager_get_color("text_muted");
     data->color_text = theme_manager_get_color("text");
     data->color_primary = theme_manager_get_color("primary");

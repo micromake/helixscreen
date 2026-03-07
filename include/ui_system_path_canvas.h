@@ -220,14 +220,6 @@ void ui_system_path_canvas_set_current_tool(lv_obj_t* obj, int tool_index);
 void ui_system_path_canvas_set_tool_virtual_numbers(lv_obj_t* obj, const int* numbers, int count);
 
 /**
- * @brief Set toolhead rendering style (integer version for C compatibility)
- *
- * @param obj The system_path_canvas widget
- * @param style 0=DEFAULT, 1=DEFAULT, 2=STEALTHBURNER, 3=A4T
- */
-void ui_system_path_canvas_set_toolhead_style_int(lv_obj_t* obj, int style);
-
-/**
  * @brief Force redraw of the path visualization
  *
  * @param obj The system_path_canvas widget
@@ -235,17 +227,5 @@ void ui_system_path_canvas_set_toolhead_style_int(lv_obj_t* obj, int style);
 void ui_system_path_canvas_refresh(lv_obj_t* obj);
 
 #ifdef __cplusplus
-}
-
-#include "settings_manager.h"
-
-/**
- * @brief Set toolhead rendering style (C++ typed version)
- *
- * @param obj The system_path_canvas widget
- * @param style ToolheadStyle enum value
- */
-inline void ui_system_path_canvas_set_toolhead_style(lv_obj_t* obj, helix::ToolheadStyle style) {
-    ui_system_path_canvas_set_toolhead_style_int(obj, static_cast<int>(style));
 }
 #endif
