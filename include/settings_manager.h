@@ -182,6 +182,21 @@ class SettingsManager {
         return &led_enabled_subject_;
     }
 
+    // =========================================================================
+    // PRINTER SWITCHER VISIBILITY (owned by SettingsManager — appearance)
+    // =========================================================================
+
+    /** @brief Get whether the navbar printer switcher icon is shown */
+    bool get_show_printer_switcher() const;
+
+    /** @brief Set whether the navbar printer switcher icon is shown */
+    void set_show_printer_switcher(bool show);
+
+    /** @brief Printer switcher visibility subject (integer: 0=hidden, 1=shown) */
+    lv_subject_t* subject_show_printer_switcher() {
+        return &show_printer_switcher_subject_;
+    }
+
   private:
     SettingsManager();
     ~SettingsManager() = default;
@@ -194,6 +209,7 @@ class SettingsManager {
     lv_subject_t z_movement_style_subject_;
     lv_subject_t extrude_speed_subject_;
     lv_subject_t toolhead_style_subject_;
+    lv_subject_t show_printer_switcher_subject_;
 
     // External references
     MoonrakerClient* moonraker_client_ = nullptr;

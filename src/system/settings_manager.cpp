@@ -82,6 +82,11 @@ void SettingsManager::init_subjects() {
     UI_MANAGED_SUBJECT_INT(toolhead_style_subject_, toolhead_style, "settings_toolhead_style",
                            subjects_);
 
+    // Printer switcher navbar icon visibility (default: true = shown)
+    bool show_printer_switcher = config->get<bool>("/printers/show_printer_switcher", true);
+    UI_MANAGED_SUBJECT_INT(show_printer_switcher_subject_, show_printer_switcher ? 1 : 0,
+                           "show_printer_switcher", subjects_);
+
     subjects_initialized_ = true;
 
     // Self-register cleanup — ensures deinit runs before lv_deinit()
@@ -215,6 +220,22 @@ void SettingsManager::set_extrude_speed(int mm_per_sec) {
     // 2. Persist to config
     Config* config = Config::get_instance();
     config->set<int>(config->df() + "filament/extrude_speed", mm_per_sec);
+    config->save();
+}
+
+// ============================================================================
+// Printer Switcher Visibility
+// ============================================================================
+
+bool SettingsManager::get_show_printer_switcher() const {
+    return lv_subject_get_int(const_cast<lv_subject_t*>(&show_printer_switcher_subject_)) != 0;
+}
+
+void SettingsManager::set_show_printer_switcher(bool show) {
+    spdlog::info("[SettingsManager] set_show_printer_switcher({})", show);
+    lv_subject_set_int(&show_printer_switcher_subject_, show ? 1 : 0);
+    Config* config = Config::get_instance();
+    config->set<bool>("/printers/show_printer_switcher", show);
     config->save();
 }
 
