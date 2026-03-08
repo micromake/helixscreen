@@ -172,8 +172,9 @@ std::set<std::string> resolve_active_files(const std::map<std::string, std::stri
 // Async Moonraker integration
 // ============================================================================
 
-void resolve_active_config_files(MoonrakerAPI& api, ActiveFilesCallback on_complete,
-                                 ErrorCallback on_error) {
+void resolve_active_config_files_with_content(MoonrakerAPI& api,
+                                              ActiveFilesWithContentCallback on_complete,
+                                              ErrorCallback on_error) {
     // api must outlive all async callbacks (guaranteed: MoonrakerAPI is owned by PrinterState
     // singleton)
     api.files().list_files(
@@ -191,7 +192,7 @@ void resolve_active_config_files(MoonrakerAPI& api, ActiveFilesCallback on_compl
 
             if (cfg_paths.empty()) {
                 if (on_complete)
-                    on_complete({});
+                    on_complete({}, {});
                 return;
             }
 
@@ -200,7 +201,7 @@ void resolve_active_config_files(MoonrakerAPI& api, ActiveFilesCallback on_compl
                 std::map<std::string, std::string> files_map;
                 std::atomic<int> pending{0};
                 std::mutex mutex;
-                ActiveFilesCallback on_complete;
+                ActiveFilesWithContentCallback on_complete;
             };
 
             auto state = std::make_shared<DownloadState>();
@@ -219,7 +220,7 @@ void resolve_active_config_files(MoonrakerAPI& api, ActiveFilesCallback on_compl
                         if (remaining == 0) {
                             auto active = resolve_active_files(state->files_map, "printer.cfg");
                             if (state->on_complete)
-                                state->on_complete(active);
+                                state->on_complete(active, state->files_map);
                         }
                     },
                     [state, path](const MoonrakerError& err) {
@@ -229,7 +230,7 @@ void resolve_active_config_files(MoonrakerAPI& api, ActiveFilesCallback on_compl
                         if (remaining == 0) {
                             auto active = resolve_active_files(state->files_map, "printer.cfg");
                             if (state->on_complete)
-                                state->on_complete(active);
+                                state->on_complete(active, state->files_map);
                         }
                     });
             }
@@ -238,6 +239,18 @@ void resolve_active_config_files(MoonrakerAPI& api, ActiveFilesCallback on_compl
             if (on_error)
                 on_error("Failed to list config files: " + err.message);
         });
+}
+
+void resolve_active_config_files(MoonrakerAPI& api, ActiveFilesCallback on_complete,
+                                 ErrorCallback on_error) {
+    resolve_active_config_files_with_content(
+        api,
+        [on_complete](const std::set<std::string>& active_files,
+                      const std::map<std::string, std::string>& /* file_contents */) {
+            if (on_complete)
+                on_complete(active_files);
+        },
+        on_error);
 }
 
 } // namespace helix::system

@@ -59,11 +59,22 @@ resolve_active_files(const std::map<std::string, std::string>& files, const std:
 using ActiveFilesCallback = std::function<void(const std::set<std::string>&)>;
 using ErrorCallback = std::function<void(const std::string&)>;
 
+/// Callback providing active files AND their downloaded contents
+using ActiveFilesWithContentCallback =
+    std::function<void(const std::set<std::string>&, const std::map<std::string, std::string>&)>;
+
 /// Async wrapper: lists config directory via Moonraker, downloads printer.cfg and
 /// all included files, then resolves the active file set.
 /// Unlike KlipperConfigEditor::download_with_includes, this handles glob includes
 /// by cross-referencing the full file listing.
 void resolve_active_config_files(MoonrakerAPI& api, ActiveFilesCallback on_complete,
                                  ErrorCallback on_error);
+
+/// Async wrapper that also returns file contents for the active files.
+/// Identical to resolve_active_config_files() but the callback also receives
+/// the map of filename -> content for all downloaded config files.
+void resolve_active_config_files_with_content(MoonrakerAPI& api,
+                                              ActiveFilesWithContentCallback on_complete,
+                                              ErrorCallback on_error);
 
 } // namespace helix::system

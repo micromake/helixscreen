@@ -24,6 +24,8 @@
 #include "operation_patterns.h"
 
 #include <functional>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -177,6 +179,20 @@ class PrintStartAnalyzer {
      * @param on_error Error callback (connection failed, parse error, etc.)
      */
     void analyze(MoonrakerAPI* api, AnalysisCallback on_complete, ErrorCallback on_error);
+
+    /**
+     * @brief Analyze PRINT_START macro from pre-downloaded config content
+     *
+     * Searches the provided file contents directly for PRINT_START macro variants.
+     * No HTTP requests are made -- this is a synchronous operation.
+     *
+     * @param active_files Set of active config file paths (from include resolution)
+     * @param file_contents Map of filename -> content (already downloaded)
+     * @param on_complete Callback with analysis result (called synchronously)
+     */
+    void analyze(const std::set<std::string>& active_files,
+                 const std::map<std::string, std::string>& file_contents,
+                 AnalysisCallback on_complete);
 
     // === Static Parsing Methods (for unit testing) ===
 

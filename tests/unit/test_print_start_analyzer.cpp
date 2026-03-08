@@ -6,6 +6,9 @@
 #include "print_start_analyzer.h"
 
 #include <algorithm> // for std::find
+#include <map>
+#include <set>
+#include <string>
 
 #include "../catch_amalgamated.hpp"
 
@@ -713,4 +716,57 @@ TEST_CASE("PrintStartAnalyzer: get_config_file_path helper", "[print_start][path
 
         REQUIRE(get_config_file_path(nested_file) == "conf.d/macros/print_start.cfg");
     }
+}
+
+// ============================================================================
+// Tests: Cached Content Search (no HTTP)
+// ============================================================================
+
+TEST_CASE("PrintStartAnalyzer searches pre-downloaded content", "[print_start]") {
+    helix::PrintStartAnalyzer analyzer;
+
+    std::set<std::string> active_files = {"printer.cfg", "macros.cfg"};
+    std::map<std::string, std::string> file_contents = {
+        {"printer.cfg", "[include macros.cfg]\n"},
+        {"macros.cfg",
+         "[gcode_macro PRINT_START]\n"
+         "gcode:\n"
+         "  G28\n"
+         "  BED_MESH_CALIBRATE\n"}};
+
+    helix::PrintStartAnalysis result;
+    bool callback_fired = false;
+
+    analyzer.analyze(active_files, file_contents,
+                     [&](const helix::PrintStartAnalysis& analysis) {
+                         result = analysis;
+                         callback_fired = true;
+                     });
+
+    REQUIRE(callback_fired);
+    REQUIRE(result.found);
+    REQUIRE(result.macro_name == "PRINT_START");
+    REQUIRE(result.source_file == "macros.cfg");
+    REQUIRE(result.has_operation(helix::PrintStartOpCategory::HOMING));
+    REQUIRE(result.has_operation(helix::PrintStartOpCategory::BED_MESH));
+}
+
+TEST_CASE("PrintStartAnalyzer cached search reports not found correctly", "[print_start]") {
+    helix::PrintStartAnalyzer analyzer;
+
+    std::set<std::string> active_files = {"printer.cfg"};
+    std::map<std::string, std::string> file_contents = {
+        {"printer.cfg", "[stepper_x]\nstep_pin: PA0\n"}};
+
+    bool callback_fired = false;
+    helix::PrintStartAnalysis result;
+
+    analyzer.analyze(active_files, file_contents,
+                     [&](const helix::PrintStartAnalysis& analysis) {
+                         result = analysis;
+                         callback_fired = true;
+                     });
+
+    REQUIRE(callback_fired);
+    REQUIRE_FALSE(result.found);
 }

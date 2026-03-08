@@ -11,7 +11,6 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
-#include <memory>
 #include <regex>
 #include <set>
 #include <sstream>
@@ -97,17 +96,6 @@ std::string PrintStartAnalysis::summary() const {
 namespace {
 
 /**
- * @brief Helper struct to hold async search state across callbacks
- */
-struct ConfigFileSearchState {
-    MoonrakerAPI* api;
-    std::vector<std::string> cfg_files;
-    size_t current_index = 0;
-    PrintStartAnalyzer::AnalysisCallback on_complete;
-    PrintStartAnalyzer::ErrorCallback on_error;
-};
-
-/**
  * @brief Extract gcode content from a macro section in config file text
  */
 std::string extract_gcode_from_section(const std::string& content, const std::string& section_start,
@@ -141,74 +129,60 @@ std::string extract_gcode_from_section(const std::string& content, const std::st
     return content.substr(gcode_content_start, section_end - gcode_content_start);
 }
 
-/**
- * @brief Recursively search config files for macro definition
- */
-void search_next_file(std::shared_ptr<ConfigFileSearchState> state);
+} // anonymous namespace
 
-void search_next_file(std::shared_ptr<ConfigFileSearchState> state) {
-    if (state->current_index >= state->cfg_files.size()) {
-        // Searched all files, macro not found
-        spdlog::info("[PrintStartAnalyzer] No PRINT_START macro found in any config file");
-        PrintStartAnalysis result;
-        result.found = false;
-        if (state->on_complete) {
-            state->on_complete(result);
+void PrintStartAnalyzer::analyze(const std::set<std::string>& active_files,
+                                 const std::map<std::string, std::string>& file_contents,
+                                 AnalysisCallback on_complete) {
+    spdlog::debug("[PrintStartAnalyzer] Searching {} cached config files for macro...",
+                  active_files.size());
+
+    for (const auto& filename : active_files) {
+        auto content_it = file_contents.find(filename);
+        if (content_it == file_contents.end()) {
+            spdlog::debug("[PrintStartAnalyzer] No cached content for {}, skipping", filename);
+            continue;
         }
-        return;
-    }
 
-    const std::string& filename = state->cfg_files[state->current_index];
-    spdlog::debug("[PrintStartAnalyzer] Searching {} for macro...", filename);
+        const std::string& content = content_it->second;
 
-    state->api->transfers().download_file(
-        "config", filename,
-        [state, filename](const std::string& content) {
-            // Search for each macro name variant
-            for (size_t i = 0; i < PrintStartAnalyzer::MACRO_NAMES_COUNT; ++i) {
-                std::string section =
-                    "[gcode_macro " + std::string(PrintStartAnalyzer::MACRO_NAMES[i]) + "]";
+        // Search for each macro name variant
+        for (size_t i = 0; i < MACRO_NAMES_COUNT; ++i) {
+            std::string section = "[gcode_macro " + std::string(MACRO_NAMES[i]) + "]";
 
-                if (contains_ci(content, section)) {
-                    // Found the macro in this file!
-                    std::string content_lower = to_lower(content);
-                    std::string section_lower = to_lower(section);
+            if (contains_ci(content, section)) {
+                std::string content_lower = to_lower(content);
+                std::string section_lower = to_lower(section);
 
-                    size_t section_pos = content_lower.find(section_lower);
-                    std::string gcode = extract_gcode_from_section(content, section, section_pos);
+                size_t section_pos = content_lower.find(section_lower);
+                std::string gcode = extract_gcode_from_section(content, section, section_pos);
 
-                    if (!gcode.empty()) {
-                        spdlog::info("[PrintStartAnalyzer] Found macro '{}' in {} ({} chars)",
-                                     PrintStartAnalyzer::MACRO_NAMES[i], filename, gcode.size());
+                if (!gcode.empty()) {
+                    spdlog::info("[PrintStartAnalyzer] Found macro '{}' in {} ({} chars)",
+                                 MACRO_NAMES[i], filename, gcode.size());
 
-                        PrintStartAnalysis result = PrintStartAnalyzer::parse_macro(
-                            PrintStartAnalyzer::MACRO_NAMES[i], gcode);
-                        result.found = true;
-                        result.macro_name = PrintStartAnalyzer::MACRO_NAMES[i];
-                        result.source_file = filename;
+                    PrintStartAnalysis result = parse_macro(MACRO_NAMES[i], gcode);
+                    result.found = true;
+                    result.macro_name = MACRO_NAMES[i];
+                    result.source_file = filename;
 
-                        if (state->on_complete) {
-                            state->on_complete(result);
-                        }
-                        return;
+                    if (on_complete) {
+                        on_complete(result);
                     }
+                    return;
                 }
             }
+        }
+    }
 
-            // Not in this file, try next
-            state->current_index++;
-            search_next_file(state);
-        },
-        [state](const MoonrakerError& /* err */) {
-            // Skip this file on download error, try next
-            spdlog::debug("[PrintStartAnalyzer] Failed to download {}, skipping",
-                          state->cfg_files[state->current_index]);
-            state->current_index++;
-            search_next_file(state);
-        });
+    // Searched all files, macro not found
+    spdlog::info("[PrintStartAnalyzer] No PRINT_START macro found in any cached config file");
+    PrintStartAnalysis result;
+    result.found = false;
+    if (on_complete) {
+        on_complete(result);
+    }
 }
-
-} // anonymous namespace
 
 void PrintStartAnalyzer::analyze(MoonrakerAPI* api, AnalysisCallback on_complete,
                                  ErrorCallback on_error) {
@@ -224,41 +198,14 @@ void PrintStartAnalyzer::analyze(MoonrakerAPI* api, AnalysisCallback on_complete
 
     spdlog::debug("[PrintStartAnalyzer] Resolving active config files to find macro location...");
 
-    // Resolve only the active config files (those in the include chain from printer.cfg)
-    // This avoids searching backup files like printer-backup.cfg or macros-old.cfg
-    helix::system::resolve_active_config_files(
+    // Resolve active config files WITH content to avoid re-downloading each file
+    helix::system::resolve_active_config_files_with_content(
         *api,
-        [api, on_complete, on_error](const std::set<std::string>& active_files) {
-            // Filter to .cfg files only (should already be .cfg, but be safe)
-            std::vector<std::string> cfg_files;
-            for (const auto& f : active_files) {
-                if (f.size() > 4 && f.substr(f.size() - 4) == ".cfg") {
-                    cfg_files.push_back(f);
-                }
-            }
-
-            if (cfg_files.empty()) {
-                spdlog::debug("[PrintStartAnalyzer] No active .cfg files found");
-                PrintStartAnalysis result;
-                result.found = false;
-                if (on_complete) {
-                    on_complete(result);
-                }
-                return;
-            }
-
-            spdlog::debug("[PrintStartAnalyzer] Found {} active config files to search",
-                          cfg_files.size());
-
-            // Create shared state for async search
-            auto state = std::make_shared<ConfigFileSearchState>();
-            state->api = api;
-            state->cfg_files = std::move(cfg_files);
-            state->on_complete = on_complete;
-            state->on_error = on_error;
-
-            // Start searching files
-            search_next_file(state);
+        [on_complete](const std::set<std::string>& active_files,
+                      const std::map<std::string, std::string>& file_contents) {
+            // Use the synchronous cached analyze path
+            PrintStartAnalyzer analyzer;
+            analyzer.analyze(active_files, file_contents, on_complete);
         },
         [on_error](const std::string& error_msg) {
             if (on_error) {
