@@ -22,6 +22,9 @@
     <prop name="hide_action_button" type="string" default="true"/>
     <prop name="hide_action_button_icon" type="string" default="true"/>
     <prop name="hide_action_button_text" type="string" default="false"/>
+    <prop name="badge_name" type="string" default=""/>
+    <prop name="badge_text" type="string" default=""/>
+    <prop name="hide_badge" type="string" default="true"/>
   </api>
   <view extends="lv_obj"
         width="100%" height="content" style_bg_opa="0" style_border_width="0" style_pad_left="#space_md"
@@ -39,6 +42,8 @@
         <!-- Section title (uppercase style with letter-spacing for hierarchy) -->
         <text_muted text="$title" translation_tag="$title_tag" style_text_letter_space="1"/>
       </lv_obj>
+      <!-- Optional count badge, right-justified (e.g., "3") -->
+      <status_pill name="$badge_name" text="$badge_text" variant="muted" hidden="$hide_badge"/>
       <ui_button name="section_action_button"
                  width="$action_button_width" height="$action_button_height" icon="$action_button_icon"
                  text="$action_button_text" hidden="$hide_action_button">

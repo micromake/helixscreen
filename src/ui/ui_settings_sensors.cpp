@@ -22,6 +22,7 @@
 #include "static_panel_registry.h"
 #include "temperature_sensor_manager.h"
 #include "theme_manager.h"
+#include "ui_status_pill.h"
 #include "width_sensor_manager.h"
 
 #include <spdlog/spdlog.h>
@@ -157,9 +158,11 @@ void SensorSettingsOverlay::update_switch_sensor_count() {
     if (!overlay_root_)
         return;
 
-    lv_obj_t* count_label = lv_obj_find_by_name(overlay_root_, "switch_sensor_count");
-    if (count_label) {
-        lv_label_set_text_fmt(count_label, "(%zu)", get_standalone_switch_sensors().size());
+    lv_obj_t* badge = lv_obj_find_by_name(overlay_root_, "switch_sensor_count");
+    if (badge) {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%zu", get_standalone_switch_sensors().size());
+        ui_status_pill_set_text(badge, buf);
     }
 }
 
@@ -309,10 +312,12 @@ void SensorSettingsOverlay::update_probe_sensor_count() {
     if (!overlay_root_)
         return;
 
-    lv_obj_t* count_label = lv_obj_find_by_name(overlay_root_, "probe_sensor_count_label");
-    if (count_label) {
+    lv_obj_t* badge = lv_obj_find_by_name(overlay_root_, "probe_sensor_count_label");
+    if (badge) {
         auto& mgr = helix::sensors::ProbeSensorManager::instance();
-        lv_label_set_text_fmt(count_label, "(%zu)", mgr.sensor_count());
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%zu", mgr.sensor_count());
+        ui_status_pill_set_text(badge, buf);
     }
 }
 
@@ -387,10 +392,12 @@ void SensorSettingsOverlay::update_width_sensor_count() {
     if (!overlay_root_)
         return;
 
-    lv_obj_t* count_label = lv_obj_find_by_name(overlay_root_, "width_sensor_count_label");
-    if (count_label) {
+    lv_obj_t* badge = lv_obj_find_by_name(overlay_root_, "width_sensor_count_label");
+    if (badge) {
         auto& mgr = helix::sensors::WidthSensorManager::instance();
-        lv_label_set_text_fmt(count_label, "(%zu)", mgr.sensor_count());
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%zu", mgr.sensor_count());
+        ui_status_pill_set_text(badge, buf);
     }
 }
 
@@ -449,10 +456,12 @@ void SensorSettingsOverlay::update_humidity_sensor_count() {
     if (!overlay_root_)
         return;
 
-    lv_obj_t* count_label = lv_obj_find_by_name(overlay_root_, "humidity_sensor_count_label");
-    if (count_label) {
+    lv_obj_t* badge = lv_obj_find_by_name(overlay_root_, "humidity_sensor_count_label");
+    if (badge) {
         auto& mgr = helix::sensors::HumiditySensorManager::instance();
-        lv_label_set_text_fmt(count_label, "(%zu)", mgr.sensor_count());
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%zu", mgr.sensor_count());
+        ui_status_pill_set_text(badge, buf);
     }
 }
 
@@ -512,10 +521,12 @@ void SensorSettingsOverlay::update_accel_sensor_count() {
     if (!overlay_root_)
         return;
 
-    lv_obj_t* count_label = lv_obj_find_by_name(overlay_root_, "accel_sensor_count_label");
-    if (count_label) {
+    lv_obj_t* badge = lv_obj_find_by_name(overlay_root_, "accel_sensor_count_label");
+    if (badge) {
         auto& mgr = helix::sensors::AccelSensorManager::instance();
-        lv_label_set_text_fmt(count_label, "(%zu)", mgr.sensor_count());
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%zu", mgr.sensor_count());
+        ui_status_pill_set_text(badge, buf);
     }
 }
 
@@ -590,10 +601,12 @@ void SensorSettingsOverlay::update_color_sensor_count() {
     if (!overlay_root_)
         return;
 
-    lv_obj_t* count_label = lv_obj_find_by_name(overlay_root_, "color_sensor_count_label");
-    if (count_label) {
+    lv_obj_t* badge = lv_obj_find_by_name(overlay_root_, "color_sensor_count_label");
+    if (badge) {
         auto& mgr = helix::sensors::ColorSensorManager::instance();
-        lv_label_set_text_fmt(count_label, "(%zu)", mgr.sensor_count());
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%zu", mgr.sensor_count());
+        ui_status_pill_set_text(badge, buf);
     }
 }
 
@@ -650,10 +663,12 @@ void SensorSettingsOverlay::update_temperature_sensor_count() {
     if (!overlay_root_)
         return;
 
-    lv_obj_t* count_label = lv_obj_find_by_name(overlay_root_, "temp_sensor_count_label");
-    if (count_label) {
+    lv_obj_t* badge = lv_obj_find_by_name(overlay_root_, "temp_sensor_count_label");
+    if (badge) {
         auto& mgr = helix::sensors::TemperatureSensorManager::instance();
-        lv_label_set_text_fmt(count_label, "(%zu)", mgr.sensor_count());
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%zu", mgr.sensor_count());
+        ui_status_pill_set_text(badge, buf);
     }
 }
 
