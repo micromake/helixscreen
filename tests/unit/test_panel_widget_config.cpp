@@ -24,11 +24,10 @@ class PanelWidgetConfigFixture {
         config.data = json::object();
     }
 
-    /// Set up per-panel config under panel_widgets.<panel_id>
+    /// Set up per-panel config under /printers/default/panel_widgets/<panel_id>
     void setup_with_widgets(const json& widgets_json, const std::string& panel_id = "home") {
         config.data = json::object();
-        config.data["panel_widgets"] = json::object();
-        config.data["panel_widgets"][panel_id] = widgets_json;
+        config.data["printers"]["default"]["panel_widgets"][panel_id] = widgets_json;
     }
 
     /// Set up legacy flat home_widgets key (for migration testing)
@@ -39,6 +38,11 @@ class PanelWidgetConfigFixture {
 
     json& get_data() {
         return config.data;
+    }
+
+    /// Get the per-printer data where PanelWidgetConfig reads/writes
+    json& get_printer_data() {
+        return config.data["printers"]["default"];
     }
 };
 } // namespace helix
@@ -162,7 +166,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     wc.save();
 
     // Check the JSON was written to config under per-panel path
-    auto& saved = get_data()["panel_widgets"]["home"];
+    auto& saved = get_printer_data()["panel_widgets"]["home"];
     REQUIRE(saved.is_array());
     REQUIRE(saved.size() == widget_def_count());
 
@@ -481,7 +485,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
 TEST_CASE_METHOD(PanelWidgetConfigFixture,
                  "PanelWidgetConfig: panel_widgets key is not an array falls back to defaults",
                  "[panel_widget][widget_config]") {
-    get_data()["panel_widgets"]["home"] = "corrupted";
+    get_printer_data()["panel_widgets"]["home"] = "corrupted";
 
     PanelWidgetConfig wc("home", config);
     wc.load();
@@ -742,11 +746,11 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     REQUIRE(wc.entries()[1].id == "network");
     REQUIRE(wc.entries()[1].enabled == false);
 
-    // Save and verify it writes to panel_widgets.home
+    // Save and verify it writes to /printers/default/panel_widgets/home
     wc.save();
-    REQUIRE(get_data().contains("panel_widgets"));
-    REQUIRE(get_data()["panel_widgets"].contains("home"));
-    REQUIRE(get_data()["panel_widgets"]["home"].is_array());
+    REQUIRE(get_printer_data().contains("panel_widgets"));
+    REQUIRE(get_printer_data()["panel_widgets"].contains("home"));
+    REQUIRE(get_printer_data()["panel_widgets"]["home"].is_array());
 }
 
 TEST_CASE_METHOD(PanelWidgetConfigFixture,
@@ -819,12 +823,12 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     PanelWidgetConfig wc("home", config);
     wc.load();
 
-    // Migration moves data to new location and removes old key, but legacy configs
-    // without grid coords are detected as pre-grid and reset to default grid layout.
-    // Verify migration happened and data was persisted.
-    REQUIRE(get_data().contains("panel_widgets"));
-    REQUIRE(get_data()["panel_widgets"].contains("home"));
-    REQUIRE(get_data()["panel_widgets"]["home"].is_array());
+    // Migration moves data to /printers/default/panel_widgets/home and removes old key.
+    // Legacy configs without grid coords are detected as pre-grid and reset to defaults.
+    auto& printer_data = get_data()["printers"]["default"];
+    REQUIRE(printer_data.contains("panel_widgets"));
+    REQUIRE(printer_data["panel_widgets"].contains("home"));
+    REQUIRE(printer_data["panel_widgets"]["home"].is_array());
     REQUIRE_FALSE(get_data().contains("home_widgets"));
 
     // After pre-grid reset, entries match default grid (all registry widgets present)
@@ -867,8 +871,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
 
     get_data() = json::object();
     get_data()["home_widgets"] = legacy;
-    get_data()["panel_widgets"] = json::object();
-    get_data()["panel_widgets"]["home"] = new_style;
+    get_data()["printers"]["default"]["panel_widgets"]["home"] = new_style;
 
     PanelWidgetConfig wc("home", config);
     wc.load();
@@ -1028,7 +1031,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     wc.load();
     wc.save();
 
-    auto& saved = get_data()["panel_widgets"]["home"];
+    auto& saved = get_printer_data()["panel_widgets"]["home"];
     // Find the power entry in saved JSON
     json* power_saved = nullptr;
     for (auto& item : saved) {
