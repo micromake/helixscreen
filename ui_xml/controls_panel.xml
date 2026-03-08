@@ -205,7 +205,7 @@
           <ui_card name="card_cooling"
                    height="100%" flex_grow="1" flex_flow="column" style_flex_main_place="start"
                    style_flex_cross_place="center" style_radius="#border_radius" style_pad_all="#space_sm"
-                   scrollable="false" clickable="true">
+                   scrollable="false" clickable="true" style_clip_content="false">
             <event_cb trigger="clicked" callback="on_controls_cooling"/>
             <lv_obj width="100%"
                     height="content" flex_flow="row" style_flex_cross_place="center" style_pad_all="0"

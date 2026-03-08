@@ -10,7 +10,8 @@
   <view name="dial_container" extends="lv_obj"
         width="#fan_arc_size" height="#fan_arc_size"
         style_pad_all="0" style_pad_top="#space_sm" scrollable="false"
-        style_flex_main_place="center" style_flex_cross_place="center">
+        style_flex_main_place="center" style_flex_cross_place="center"
+        style_clip_content="false">
     <!-- 270-degree arc dial (size set dynamically by fan_arc_resize_to_fit) -->
     <lv_arc name="dial_arc"
             align="center"
