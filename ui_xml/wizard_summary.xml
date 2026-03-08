@@ -70,7 +70,7 @@
         <!-- Moonraker -->
         <lv_obj width="100%"
                 height="content" style_pad_all="0" style_pad_top="#space_xs" flex_flow="column" style_pad_gap="0">
-          <text_small text="Moonraker" translation_tag="Moonraker"/>
+          <text_small text="Moonraker"/>
           <text_body name="summary_moonraker_label" bind_text="summary_moonraker_connection"/>
         </lv_obj>
       </lv_obj>

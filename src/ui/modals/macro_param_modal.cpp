@@ -211,7 +211,7 @@ void MacroParamModal::populate_param_fields() {
 
     if (raw_mode_) {
         const char* attrs[] = {"label",       lv_tr("Parameters"),
-                               "placeholder", lv_tr("e.g. NAME=my_var VALUE=123"),
+                               "placeholder", "e.g. NAME=my_var VALUE=123",
                                nullptr,       nullptr};
         lv_obj_t* field =
             static_cast<lv_obj_t*>(lv_xml_create(param_list, "form_field", attrs));

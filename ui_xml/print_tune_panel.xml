@@ -91,7 +91,7 @@
         <lv_obj width="100%"
                 height="content" style_pad_all="0" scrollable="false" flex_flow="row"
                 style_flex_main_place="space_between" style_flex_cross_place="center">
-          <text_body text="Z-Offset" translation_tag="Z-Offset"/>
+          <text_body text="Z-Offset"/>
           <text_heading name="z_offset_display" bind_text="tune_z_offset_display"/>
         </lv_obj>
 

@@ -111,7 +111,7 @@
     <!-- ============================================================ -->
     <lv_obj name="result_button_row"
             width="100%" height="#button_height" style_pad_all="0" style_pad_gap="0" flex_flow="row" hidden="true">
-      <ui_button name="btn_ok" height="100%" text="OK" translation_tag="OK" flex_grow="1" style_radius="0" focusable="false">
+      <ui_button name="btn_ok" height="100%" text="OK" flex_grow="1" style_radius="0" focusable="false">
         <event_cb trigger="clicked" callback="on_plugin_install_ok"/>
       </ui_button>
     </lv_obj>

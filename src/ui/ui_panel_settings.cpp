@@ -740,7 +740,7 @@ void SettingsPanel::handle_discord_clicked() {
     spdlog::info("[SettingsPanel] Discord clicked");
     auto* modal = new helix::ui::InfoQrModal({
         .icon = "message",
-        .title = lv_tr("Discord Community"),
+        .title = "Discord Community",
         .message = lv_tr("Join the HelixScreen community on Discord for discussion, "
                          "tips, troubleshooting help, and feature requests."),
         .url = "https://discord.gg/RZCT2StKhr",

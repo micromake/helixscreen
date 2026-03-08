@@ -71,13 +71,13 @@
                      style_border_color="#border" style_border_opa="255">
             <event_cb trigger="clicked" callback="on_heater_preset_clicked"/>
           </ui_button>
-          <ui_button name="preset_pla" width="48%" text="PLA" translation_tag="PLA">
+          <ui_button name="preset_pla" width="48%" text="PLA">
             <event_cb trigger="clicked" callback="on_heater_preset_clicked"/>
           </ui_button>
-          <ui_button name="preset_petg" width="48%" text="PETG" translation_tag="PETG">
+          <ui_button name="preset_petg" width="48%" text="PETG">
             <event_cb trigger="clicked" callback="on_heater_preset_clicked"/>
           </ui_button>
-          <ui_button name="preset_abs" width="48%" text="ABS" translation_tag="ABS">
+          <ui_button name="preset_abs" width="48%" text="ABS">
             <event_cb trigger="clicked" callback="on_heater_preset_clicked"/>
           </ui_button>
         </lv_obj>

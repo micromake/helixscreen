@@ -36,7 +36,7 @@
       </lv_obj>
       <!-- Vendor Name -->
       <text_small name="spool_vendor"
-                  width="100%" text="Polymaker" translation_tag="Polymaker" style_text_color="#text_muted" long_mode="dots" style_pad_all="0"
+                  width="100%" text="Polymaker" style_text_color="#text_muted" long_mode="dots" style_pad_all="0"
                   clickable="false"/>
     </lv_obj>
     <!-- RIGHT: Weight Metrics (right-aligned, fixed width) -->

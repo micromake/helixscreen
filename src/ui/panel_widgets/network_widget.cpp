@@ -194,10 +194,10 @@ void NetworkWidget::set_network(NetworkType type) {
     if (network_label_subject_) {
         switch (type) {
         case NetworkType::Wifi:
-            lv_subject_copy_string(network_label_subject_, lv_tr("WiFi"));
+            lv_subject_copy_string(network_label_subject_, "WiFi");
             break;
         case NetworkType::Ethernet:
-            lv_subject_copy_string(network_label_subject_, lv_tr("Ethernet"));
+            lv_subject_copy_string(network_label_subject_, "Ethernet");
             break;
         case NetworkType::Disconnected:
             lv_subject_copy_string(network_label_subject_, lv_tr("Disconnected"));

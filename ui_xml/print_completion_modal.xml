@@ -56,7 +56,7 @@
     <!-- Single OK button row -->
     <lv_obj width="100%" height="#button_height" style_pad_all="0" style_pad_gap="0" flex_flow="row">
       <!-- OK button -->
-      <ui_button name="btn_ok" height="100%" flex_grow="1" style_radius="0" text="OK" translation_tag="OK">
+      <ui_button name="btn_ok" height="100%" flex_grow="1" style_radius="0" text="OK">
         <event_cb trigger="clicked" callback="on_print_complete_ok"/>
       </ui_button>
     </lv_obj>

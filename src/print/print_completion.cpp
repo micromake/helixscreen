@@ -149,7 +149,7 @@ static void show_rich_completion_modal(PrintJobState state, const char* filename
     if (estimate_stat) {
         if (estimated_secs > 0) {
             std::string est_str =
-                std::string(lv_tr("est")) + " " + format::duration_padded(estimated_secs);
+                std::string("est") + " " + format::duration_padded(estimated_secs);
             lv_obj_t* estimate_label = lv_obj_find_by_name(dialog, "estimate_label");
             if (estimate_label) {
                 lv_label_set_text(estimate_label, est_str.c_str());

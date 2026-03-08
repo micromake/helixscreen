@@ -39,7 +39,7 @@
                   height="content" scrollable="false" style_pad_all="0"
                   style_pad_right="#space_xs" flex_flow="row" style_flex_main_place="space_between"
                   style_flex_cross_place="start">
-            <text_heading text="WiFi" translation_tag="WiFi"/>
+            <text_heading text="WiFi"/>
             <!-- WiFi toggle: wired to wifi_enabled subject via C++ event handler -->
             <ui_switch name="wifi_toggle" size="small">
               <bind_state_if_eq subject="wifi_hardware_available" state="disabled" ref_value="0"/>
@@ -60,7 +60,7 @@
         <ui_card width="100%"
                  flex_grow="1" style_pad_all="#space_md" style_pad_gap="#space_sm" flex_flow="column" style_flex_main_place="start"
                  style_flex_cross_place="start">
-          <text_heading text="Ethernet" translation_tag="Ethernet"/>
+          <text_heading text="Ethernet"/>
           <!-- Ethernet Status label -->
           <text_small name="ethernet_status" width="100%" bind_text="ethernet_status" style_text_align="left"/>
           <!-- Ethernet MAC address -->

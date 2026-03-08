@@ -43,7 +43,7 @@
         </ui_button>
 
         <!-- usb files (conditionally hidden) -->
-        <ui_button name="source_usb_btn" width="content" height="#button_height_sm" text="USB" translation_tag="USB">
+        <ui_button name="source_usb_btn" width="content" height="#button_height_sm" text="USB">
           <event_cb trigger="clicked" callback="on_print_select_source_usb"/>
         </ui_button>
       </lv_obj>

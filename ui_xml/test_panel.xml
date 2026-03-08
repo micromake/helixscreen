@@ -20,7 +20,7 @@
     <!-- ============================================================ -->
     <!-- SPINNER TEST - Material Design Indeterminate Animation       -->
     <!-- ============================================================ -->
-    <text_heading text="Material Design Spinner" translation_tag="Material Design Spinner"/>
+    <text_heading text="Material Design Spinner"/>
     <ui_card width="100%"
              height="120" style_radius="#border_radius" style_pad_all="#space_lg" flex_flow="row"
              style_flex_main_place="space_evenly" style_flex_cross_place="center">
@@ -141,9 +141,9 @@
     <ui_card width="100%"
              height="56" style_radius="#border_radius" style_pad_all="#space_lg" style_pad_gap="#space_md"
              flex_flow="row" style_flex_main_place="start" style_flex_cross_place="center">
-      <text_body text="WiFi" translation_tag="WiFi" style_margin_right="10"/>
+      <text_body text="WiFi" style_margin_right="10"/>
       <ui_switch name="test_switch_3" width="44" height="24" style_margin_right="20"/>
-      <text_body text="Bluetooth" translation_tag="Bluetooth" style_margin_right="10"/>
+      <text_body text="Bluetooth" style_margin_right="10"/>
       <ui_switch name="test_switch_4" width="44" height="24" checked="true"/>
     </ui_card>
     <divider_horizontal/>

@@ -35,7 +35,7 @@
                 style_flex_main_place="space_evenly" style_pad_gap="#space_xs"
                 style_bg_color="#elevated_bg" style_bg_opa="255" style_radius="#border_radius">
           <lv_obj style_pad_all="0" flex_flow="row" style_pad_gap="#space_xs" style_flex_cross_place="center">
-            <text_small text="X:" translation_tag="X:"/>
+            <text_small text="X:"/>
             <text_small name="pos_x" bind_text="motion_pos_x"/>
             <lv_obj width="8" height="8" style_radius="9999">
               <bind_style name="indicator_homed" subject="motion_x_homed" ref_value="1"/>
@@ -43,7 +43,7 @@
             </lv_obj>
           </lv_obj>
           <lv_obj style_pad_all="0" flex_flow="row" style_pad_gap="#space_xs" style_flex_cross_place="center">
-            <text_small text="Y:" translation_tag="Y:"/>
+            <text_small text="Y:"/>
             <text_small name="pos_y" bind_text="motion_pos_y"/>
             <lv_obj width="8" height="8" style_radius="9999">
               <bind_style name="indicator_homed" subject="motion_y_homed" ref_value="1"/>
@@ -105,7 +105,7 @@
                 style_pad_gap="#space_xs">
           <ui_button name="btn_qgl"
                      width="0" height="#button_height" flex_grow="1" text="QGL"
-                     translation_tag="QGL" variant="secondary" hidden="true">
+                     variant="secondary" hidden="true">
             <bind_flag_if_eq subject="printer_has_qgl" flag="hidden" ref_value="0"/>
             <bind_state_if_eq subject="print_active" state="disabled" ref_value="1"/>
             <bind_state_if_eq subject="controls_operation_in_progress" state="disabled" ref_value="1"/>
@@ -113,7 +113,7 @@
           </ui_button>
           <ui_button name="btn_z_tilt"
                      width="0" height="#button_height" flex_grow="1" text="Z-Tilt"
-                     translation_tag="Z-Tilt" variant="secondary" hidden="true">
+                     variant="secondary" hidden="true">
             <bind_flag_if_eq subject="printer_has_z_tilt" flag="hidden" ref_value="0"/>
             <bind_state_if_eq subject="print_active" state="disabled" ref_value="1"/>
             <bind_state_if_eq subject="controls_operation_in_progress" state="disabled" ref_value="1"/>

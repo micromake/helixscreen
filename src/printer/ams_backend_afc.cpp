@@ -1468,7 +1468,7 @@ void AmsBackendAfc::detect_afc_version() {
                                     auto* m = static_cast<std::string*>(data);
                                     helix::ui::modal_show_alert(lv_tr("AFC Version Warning"),
                                                                 m->c_str(), ModalSeverity::Warning,
-                                                                lv_tr("OK"));
+                                                                "OK");
                                     delete m;
                                 },
                                 msg);

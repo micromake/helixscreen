@@ -42,9 +42,7 @@ translations:
   30 minutes: 30 分钟
   30 seconds: 30 秒
   3D Pipes: '3D 管道'
-  3D Preview: 3D 预览
   3D View: 3D 视图
-  3D printer visualization: '3D 打印机可视化'
   4. Paper should move but with resistance: 4. 纸张应能移动但有阻力
   4. Repeat until bed is level: 4. 重复直到热床水平
   5 minutes: 5 分钟
@@ -53,8 +51,9 @@ translations:
   60 seconds: 60 秒
   = Loosen: = 松开
   = Tighten: = 拧紧
-  ABOUT: 关于
+  A4T: A4T
   ABS: ABS
+  ACCELEROMETERS: 加速度计
   ADXL: ADXL
   AFC: 'AFC'
   AFC Version Warning: AFC版本警告
@@ -67,7 +66,6 @@ translations:
   ALL DEVICES: 所有设备
   AMS: AMS
   AMS Management: AMS 管理
-  AMS Status: 'AMS 状态'
   API not available: API 不可用
   APPEARANCE: 外观
   AUTO STATE: 自动状态
@@ -78,7 +76,6 @@ translations:
   About: 关于
   Accel to Decel: 加速到减速
   Acceleration to deceleration limit (mm/s²): 加速到减速限制 (mm/s²)
-  Accelerometers: 加速度计
   Accept: 接受
   'Accepted Z Position: 0.000': '已接受 Z 位置: 0.000'
   Action Required: 需要操作
@@ -89,7 +86,7 @@ translations:
   Add Hidden Network: 添加隐藏网络
   Add Vendor: 添加供应商
   Add Widget: 添加小组件
-  Address: ''
+  Address: '地址'
   Adjust screen brightness level: 调整屏幕亮度
   Adjust screws, then re-probe.: 调整螺丝，然后重新探测。
   Adjustments stay active until restart. Save after print completes.: 调整在重启前保持有效。打印完成后保存。
@@ -117,7 +114,6 @@ translations:
   Applying...: 正在应用...
   Are you sure you want to cancel this print? All progress will be lost.: 确定要取消此打印吗？所有进度将丢失。
   Are you sure? This will power off or restart the printer host.: 确定吗？这将关闭或重启打印机主机。
-  A4T: A4T
   Assign Klipper macros to control LEDs via on/off, toggle, or presets: 分配 Klipper 宏通过开/关、切换或预设控制 LED
   Assign a role to enable sensor monitoring: 分配角色以启用传感器监控
   Assisting: 辅助中
@@ -128,7 +124,6 @@ translations:
   Auto-probe or manually check screw heights: 自动探测或手动检查螺丝高度
   Auto-render video: 自动渲染视频
   Automatic: 自动
-  Automatic Heater Control (PID) Calibration: 自动加热控制 (PID) 校准
   Automatic Heater Control Calibration: 自动加热控制校准
   Automatic LED Control: 自动 LED 控制
   Automatically poll Spoolman for weight updates: 自动从 Spoolman 获取重量更新
@@ -167,7 +162,6 @@ translations:
   Browse: 浏览
   'Browse guides, configuration references, and troubleshooting ': 浏览指南、配置参考和故障排除
   Buffer Status: '缓冲区状态'
-  Buffer information not available for this backend: '此后端无缓冲区信息'
   Bundle Uploaded: 捆绑包已上传
   Button taps and navigation sounds: 按钮点击和导航声音
   Bypass: 旁路
@@ -177,6 +171,7 @@ translations:
   CALIBRATION: 校准
   CAPABILITIES: 功能
   CHANGED FROM LAST SESSION: 与上次会话相比有更改
+  COLOR SENSORS: 颜色传感器
   COLORS REQUIRED: 所需颜色
   CRITICAL: 严重
   CUSTOM IMAGES: 自定义图片
@@ -194,7 +189,6 @@ translations:
   Calibration failed - touch targets more precisely.: 校准失败 – 请更精确地触摸目标。
   Calibration saved but cannot apply on SDL display: 校准已保存，但无法在 SDL 显示上应用
   Calibration timed out. Please try again.: 校准超时。请重试。
-  Camera: '摄像头'
   Cancel: 取消
   Cancel Escalation: 取消升级
   Cancel Print: 取消打印
@@ -206,6 +200,7 @@ translations:
   'Chamber:': 腔体：
   Change LED color based on printer state: 根据打印机状态更改 LED 颜色
   Change Printer Host: 更改打印机主机
+  Change Saved Spool: '更改已保存的料盘'
   Changes apply immediately. Adjust during print for tuning.: 更改立即生效。可在打印时调整进行调优。
   Changes are temporary and reset on printer reboot: 更改是临时的，打印机重启后会重置
   Check Again: 重新检查
@@ -229,7 +224,7 @@ translations:
   Clear: 清除
   Clear All: 全部清除
   Clear All Events: 清除所有事件
-  Clear Console?: ''
+  Clear Console?: '清空控制台？'
   Clear Spool: 移除料盘
   Clipboard unavailable - use SSH: 剪贴板不可用 - 请使用 SSH
   Clog Detection: '堵料检测'
@@ -241,8 +236,7 @@ translations:
   Collecting data...: 正在收集数据...
   Color: 颜色
   Color Mismatch: 颜色不匹配
-  Color Sensors: 颜色传感器
-  Compact: ''
+  Compact: '紧凑'
   Complete: 完成
   Complete!: 完成！
   Completed: 已完成
@@ -255,10 +249,9 @@ translations:
   Configure: 配置
   Configure G10/G11 firmware retraction: 配置 G10/G11 固件回抽
   Configure PRINT_START: 配置 PRINT_START
-  Configure QR label printing: ''
+  Configure QR label printing: '配置二维码标签打印'
   Configure Spoolman integration and weight sync settings.: 配置 Spoolman 集成和重量同步设置。
   Configure devices in Moonraker: 在 Moonraker 中配置设备
-  Configure filament detection sensors: 配置耗材检测传感器
   Configure printer sensors: 配置打印机传感器
   Configure quick buttons and standard macros: 配置快捷按钮和标准宏
   Configure timelapse recording: 配置延时录像
@@ -304,9 +297,7 @@ translations:
   Current Version: 当前版本
   Current Z Position: 当前 Z 位置
   'Current name:': 当前名称：
-  Current time and date: '当前时间和日期'
   'Current: %s · Slot %d': '当前: %s · 插槽 %d'
-  'Current: %s Â· Slot %d': '当前: %s Â· 插槽 %d'
   'Current: Bypass': '当前: 旁通'
   'Current: Slot %d': '当前: 插槽 %d'
   'Current: Tool %d': '当前: 工具 %d'
@@ -314,7 +305,7 @@ translations:
   Currently printing: 正在打印
   Custom: 自定义
   Custom...: 自定义...
-  Customize Macro: ''
+  Customize Macro: '自定义宏'
   Customize preset temperatures: 自定义预设温度
   Cutting filament...: 正在切断耗材...
   DIAGNOSTICS: 诊断
@@ -344,10 +335,8 @@ translations:
   Dev: 开发版
   Dev channel requires dev_url in config: 开发频道需要在配置中设置 dev_url
   Device name is required: 设备名称为必填项
-  Digital Clock: '数字时钟'
   Disable: 禁用
   Disable Motors?: 关闭电机？
-  Disabled: '已禁用'
   Discard: 丢弃
   Discard Changes?: 丢弃更改？
   Disconnected: 已断开
@@ -356,7 +345,6 @@ translations:
   Dismiss: 忽略
   Display Settings: 显示设置
   Display Sleep: 显示休眠
-  Distance to Fault: '故障距离'
   Do not power off your printer.: 请勿关闭打印机电源。
   Do not touch the printer during calibration: 校准期间请勿触碰打印机
   Documentation: 文档
@@ -396,11 +384,10 @@ translations:
   Enable UI motion effects: 启用界面动效
   Enable WiFi to scan: 启用 WiFi 以扫描
   Enable WiFi to scan for networks: 启用 WiFi 以扫描网络
-  Enable anonymous statistics: ''
+  Enable anonymous statistics: '启用匿名统计'
   Enable audio feedback: 启用声音反馈
   Enable detailed print preparation tracking (Recommended): 启用详细打印准备跟踪（推荐）
   Enabled: 已启用
-  Enclosure humidity sensor readings: '腔体湿度传感器读数'
   Encoder: '编码器'
   Ended: 已结束
   Enhancement Complete!: 增强完成！
@@ -409,7 +396,7 @@ translations:
   'Enter a name for your custom theme:': 输入自定义主题名称：
   Enter a name to save this profile: 输入名称以保存此配置
   Enter password: 输入密码
-  Enter printer IP address first: ''
+  Enter printer IP address first: '请先输入打印机 IP 地址'
   Error: 错误
   Error state: 错误状态
   Escalate to emergency stop if cancel doesn't respond: 如果取消无响应则升级为紧急停止
@@ -433,7 +420,6 @@ translations:
   Extruder MPC Calibration: 挤出机 MPC 校准
   Extruder PID Tuning: 挤出机 PID 调优
   Extruder heats automatically based on material: 挤出机根据材料自动加热
-  Extrusion rate: 挤出速率
   FAILED: 失败
   FILAMENT: 耗材
   Factory Reset: 恢复出厂设置
@@ -445,13 +431,13 @@ translations:
   Failed to download moonraker.conf.\nCheck printer connection.: 下载 moonraker.conf 失败。\n请检查打印机连接。
   Failed to enable tuning tower: 启用调优塔失败
   Failed to get limits: 获取限制失败
-  Failed to load history: ''
+  Failed to load history: '加载历史记录失败'
   Failed to load overlay: 加载覆盖层失败
   Failed to load spools: 加载料盘失败
   Failed to open history: 打开历史记录失败
   Failed to open history list: 打开历史列表失败
   Failed to open wizard: 打开向导失败
-  Failed to render label: ''
+  Failed to render label: '渲染标签失败'
   Failed to reset theme: 重置主题失败
   Failed to restart Moonraker.: 重启 Moonraker 失败。
   Failed to save changes to Spoolman: '保存更改到 Spoolman 失败'
@@ -462,29 +448,23 @@ translations:
   Failed to update configuration.\nCheck printer connection.: 更新配置失败。\n请检查打印机连接。
   Failed to update phase tracking: 更新相位跟踪失败
   Fan Calibration: 风扇校准
-  Fan Speeds: '风扇转速'
   Fan Transfer: 风扇传热
   Fans: 风扇
   Farther: 更远
-  Fault Detection: '故障检测'
   Feed filament directly to extruder: 将耗材直接送入挤出机
   Feeding filament forward: 正在向前送料
   Filament: 耗材
   Filament Detected: 检测到耗材
   Filament Sensor: 耗材传感器
-  Filament Sensors: 耗材传感器
   Filament Used: 已用耗材
   Filament already exists: 耗材已存在
   Filament by Type: 按类型分类的耗材
-  Filament clog/flow detection meter: '耗材堵塞/流量检测计'
   Filament diameter sensors for flow compensation: 耗材直径传感器用于流量补偿
   Filament is loose: 耗材松弛
   Filament is pulling tight: 耗材拉紧
   Filament runout and motion detection sensors: 耗材用尽和运动检测传感器
-  Filament runout detection status: '耗材断料检测状态'
   Filament tension is balanced: 耗材张力平衡
   Filament tracking and inventory: 耗材跟踪和库存
-  Filament width sensor readings: '耗材直径传感器读数'
   File: 文件
   File Info: 文件信息
   Filename: 文件名
@@ -504,7 +484,6 @@ translations:
   G-code Console: G-code 控制台
   G-code Preview: G-code 预览
   G-code commands will appear here: G-code 命令将显示在此处
-  GCode Console: 'G-code 控制台'
   Gear sync: 齿轮同步
   Get help and share feedback: 获取帮助和反馈
   'Ghost:': 残影：
@@ -513,6 +492,7 @@ translations:
   Guides and reference: 指南与参考
   H: 头
   HELP & SUPPORT: 帮助与支持
+  HUMIDITY SENSORS: '湿度传感器'
   Hang on, we'll be right back!: 请稍候，马上回来！
   Happy Hare MMU: Happy Hare MMU
   Hardware: 硬件
@@ -545,11 +525,10 @@ translations:
   HelixScreen Crashed: HelixScreen 崩溃
   HelixScreen is detecting your display orientation: HelixScreen正在检测显示屏方向
   HelixScreen will integrate with your filament changer for multi-spool/color print operations.: HelixScreen 将与您的耗材更换器集成，用于多料盘/多色打印操作。
-  Help Improve HelixScreen: ''
+  Help Improve HelixScreen: '帮助改进 HelixScreen'
   Help improve HelixScreen?: 帮助改进 HelixScreen？
   Higher = faster: 越高 = 越快
   Home: 归位
-  Home Widgets: 主页小组件
   Home failed: 归位失败
   Homing AFC system...: AFC系统归位中...
   Homing...: 正在归零...
@@ -562,11 +541,10 @@ translations:
   How often to check Spoolman for weight updates: 检查 Spoolman 重量更新的频率
   How the toolhead icon appears: 工具头图标的显示方式
   Humidity: 湿度
-  Humidity Sensors: 湿度传感器
   Hyperlapse: 延时摄影
   IMPORT FROM USB: 从 USB 导入
   'IP:': IP：
-  Icon: ''
+  Icon: '图标'
   Idle: 空闲
   Ignore: 忽略
   In Progress: 进行中
@@ -593,10 +571,9 @@ translations:
   Installation takes about 30 seconds.: 安装大约需要 30 秒。
   Installing...: 正在安装...
   Intensity: 强度
-  Interactive 3D G-code during prints: 打印期间的交互式 3D G-code
   Interactive probe calibration: 交互式探针校准
   Interactive probe offset adjustment: 交互式探针偏移调整
-  Invalid port number: ''
+  Invalid port number: '无效的端口号'
   Issue description: 问题描述
   Job Queue: 任务队列
   'Join the HelixScreen community on Discord for discussion, ': 加入 HelixScreen 的 Discord 社区进行讨论、
@@ -610,10 +587,7 @@ translations:
   'Klipper has entered shutdown state. This may be due to an emergency stop, ': Klipper 已进入关机状态。这可能是由于紧急停止、
   Klipper will restart to apply changes: Klipper 将重启以应用更改
   Klipper will restart to apply changes.: Klipper 将重启以应用更改。
-  Klipper will restart to apply new PID values.: Klipper 将重启以应用新的 PID 值。
   Klipper will restart to apply new settings.: Klipper 将重启以应用新设置。
-  LED Controls: 'LED 控制'
-  LED Light: 'LED 灯'
   LED SELECTION: LED 选择
   LED Settings: LED 设置
   LED Strip: LED 灯带
@@ -623,11 +597,10 @@ translations:
   LEDs controlled by the light button: 由灯光按钮控制的 LED
   LOADED: 已加载
   LOT-2024-001: LOT-2024-001
-  Label Preset: ''
-  Label Printer: ''
-  Label Size: ''
-  Label printed: ''
-  Label printing coming soon: 标签打印即将推出
+  Label Preset: '标签预设'
+  Label Printer: '标签打印机'
+  Label Size: '标签尺寸'
+  Label printed: '标签已打印'
   Language: 语言
   Last print cancelled: 上次打印已取消
   Last print failed: 上次打印失败
@@ -637,14 +610,12 @@ translations:
   Layer mode captures one frame per layer change. Best for most prints.: 层模式在每次换层时捕获一帧。适用于大多数打印。
   'Layer:': 层：
   Layers: 层
-  Layout style for labels: ''
+  Layout style for labels: '标签布局样式'
   Learn More: 了解更多
   'Length:': 长度：
   Leveling Gantry...: 正在调平龙门...
   Lifetime Print Stats: '累计打印统计'
   Light: 浅色
-  Link to Spoolman: 关联到Spoolman
-  Live webcam feed: '实时摄像头画面'
   Load: 加载
   Load Filament: 加载耗材
   Loaded: 已加载
@@ -658,7 +629,6 @@ translations:
   Loading vendors...: 正在加载供应商…
   Loading...: 正在加载...
   Locked during print: 打印期间锁定
-  Long press and drag to reorder: 长按拖动以重新排序
   'Lot # (optional)': 批号（可选）
   Lot/Batch Nr: 批次号
   M to toggle: 按 M 切换
@@ -671,9 +641,8 @@ translations:
   MOTION: 运动
   MPC: MPC
   Machine Limits: 机器限制
-  Macro: ''
+  Macro: '宏'
   Macro Browser: 宏浏览器
-  Macro Button: '宏按钮'
   Macro Buttons: 宏按钮
   Macro analysis not initialized: 宏分析未初始化
   Macro for bed mesh calibration: 热床网格校准宏
@@ -709,7 +678,6 @@ translations:
   Max Z Velocity: 最大 Z 轴速度
   Max speed through corners (mm/s): 转角最大速度 (mm/s)
   Maximum acceleration (mm/s²): 最大加速度 (mm/s²)
-  Maximum of 10 widgets can be enabled at once: 最多可同时启用10个小组件
   Maximum toolhead speed (mm/s): 打印头最大速度 (mm/s)
   Measured: 已测量
   Measuring thermal response...: 正在测量热响应...
@@ -717,28 +685,23 @@ translations:
   Mesh Complete: 网格完成
   Method: 方法
   Min: 最小
-  Minimal: ''
+  Minimal: '极简'
   Mode: 模式
   Modified: 已修改
-  Monitor a custom temperature sensor: '监控自定义温度传感器'
-  Monitor and set nozzle temperature: '监控并设置喷嘴温度'
   Month: 月
   Moonraker: Moonraker
-  Moonraker power device controls: 'Moonraker 电源设备控制'
   Moonraker restarting...\nWaiting for reconnection...: Moonraker 重启中...\n等待重新连接...
   More points = more accurate, but takes longer.: 点数越多越精确，但耗时更长。
   Motion: 运动
   'Motion: XYZ': 运动：XYZ
   Motors Off: 关闭电机
   Move paper back and forth while adjusting. Stop when paper catches slightly but still slides.: 调整时前后移动纸张。当纸张有轻微阻力但仍能滑动时停止。
-  Movement speed: 移动速度
   ? Moves the print head to measure vibration frequencies on each axis. Takes 2-3 minutes. The printer will make noise — this is normal.
   : 移动打印头以测量每个轴上的振动频率。需要 2-3 分钟。打印机会发出噪音——这是正常的。
   Multi Filament System Overview: 多耗材系统概览
   Multi-Filament: 多耗材
   'Multi-Filament:': 多耗材：
   Multi-Material: 多材料
-  Multi-material spool status and control: '多材料料盘状态与控制'
   My Custom Theme: 我的自定义主题
   My Panel: 我的面板
   NEWLY DISCOVERED: 新发现
@@ -747,7 +710,6 @@ translations:
   Name (optional): 名称（可选）
   Named actions in the LED control panel (long-press).: LED 控制面板中的命名操作（长按）。
   Net Weight (g): 净重（克）
-  Network: '网络'
   Network Address: 网络地址
   Network Name: 网络名称
   Network Name (SSID): 网络名称 (SSID)
@@ -766,7 +728,6 @@ translations:
   No LED macros detected on your printer.: 未在打印机上检测到 LED 宏。
   'No LED macros detected on your printer. ': '未在打印机上检测到 LED 宏。 '
   No Macros Found: 未找到宏
-  No PNG or JPEG images found on USB drive: 在 USB 驱动器上未找到 PNG 或 JPEG 图片
   No PRINT_START macro found: 未找到 PRINT_START 宏
   No Power Devices: 无电源设备
   No Spools: 无料盘
@@ -780,7 +741,7 @@ translations:
   No images found on USB drive: USB驱动器上未找到图片
   No jobs in queue: 队列中无任务
   No macros available: 无可用宏
-  No macros found: ''
+  No macros found: '未找到宏'
   No matching prints: 没有匹配的打印
   No mesh data: 没有网格数据
   No mesh loaded: 未加载网格
@@ -797,9 +758,7 @@ translations:
   No profiles available: 无可用配置
   No sensors detected: 未检测到传感器
   No spool assigned: 未分配料盘
-  No spools found in Spoolman: Spoolman中未找到料盘
   No spools found — tap to retry: 未找到料盘 - 点击重试
-  No sync feedback data available: '无可用同步反馈数据'
   No timelapse videos found: 未找到延时视频
   No vendors found: 未找到供应商
   No webcam detected.\nA webcam is required for timelapse.: 未检测到摄像头。\n延时摄影需要摄像头。
@@ -824,7 +783,6 @@ translations:
   Nozzle Temp: 喷嘴温度
   Nozzle Temperature: 喷嘴温度
   Nozzle °C: 喷嘴 °C
-  Nozzle, bed, and chamber temps stacked: '喷嘴、热床和腔体温度叠显'
   'Nozzle:': 喷嘴：
   OD: OD
   OK: 确定
@@ -834,8 +792,6 @@ translations:
   On and Off macros must be different: 开和关的宏必须不同
   On/Off (state-aware): 开/关（状态跟踪）
   Open: 打开
-  Open G-code command console: '打开 G-code 命令控制台'
-  Open LED color and brightness controls: '打开 LED 颜色和亮度控制'
   Operations: 操作
   Optimize Your Printing: 优化您的打印
   Optimizes temperature control for stable, consistent heating.: 优化温度控制，实现稳定一致的加热。
@@ -851,12 +807,13 @@ translations:
   POWER: 电源
   PRE-PRINT STEPS: 打印前步骤
   PRINTER: 打印机
+  PRINTERS: '打印机'
+  PROBE SENSORS: '探针传感器'
   Paper Test Calibration: 纸张测试校准
-  Parameters: ''
+  Parameters: '参数'
   Part: 零件
   Part Cooling Fan: 零件冷却风扇
   Part Fan: 零件风扇
-  Part, hotend, and auxiliary fan speeds: '零件、热端和辅助风扇转速'
   Password: 密码
   Password cannot be empty: 密码不能为空
   Pause: 暂停
@@ -864,14 +821,12 @@ translations:
   Paused (attention needed): 已暂停（需要处理）
   Peak Freq: 峰值频率
   'Peak:': 峰值：
-  Pending alerts and system messages: '待处理警报和系统消息'
   Phase Tracking: 相位跟踪
   Phase tracking disabled: 相位跟踪已禁用
   Phase tracking enabled: 相位跟踪已启用
   Phase tracking update failed: 相位跟踪更新失败
   Pick: 选取
   Pick Color: 选择颜色
-  Place PNG or JPEG files in config/custom_images/ to add custom images: 将 PNG 或 JPEG 文件放在 config/custom_images/ 中以添加自定义图片
   'Place image files (PNG, JPEG, BMP, GIF) in config/custom_images/. Max size: 2048×2048 pixels.': '将图片文件 (PNG, JPEG, BMP, GIF) 放入 config/custom_images/。最大尺寸: 2048×2048 像素。'
   Place plugins in the plugins directory to extend HelixScreen: 将插件放在 plugins 目录中以扩展 HelixScreen
   Placed: 已放置
@@ -916,14 +871,11 @@ translations:
   Print Label: 打印标签
   Print Objects: 打印对象
   Print Speed: 打印速度
-  Print Stats: '打印统计'
   Print Status: 打印状态
   Print Time: 打印时间
   Print Tuning: 打印调优
-  Print a test label: ''
-  Print failed: ''
-  Print history statistics: '打印历史统计'
-  Print progress and file selection: '打印进度和文件选择'
+  Print a test label: '打印测试标签'
+  Print failed: '打印失败'
   Printer: 打印机
   Printer Error: 打印机错误
   Printer Firmware Disconnected: 打印机固件已断开
@@ -936,8 +888,8 @@ translations:
   Printer ready: 打印机就绪
   Printers: 打印机
   Printing: 正在打印
-  Printing label...: ''
-  Printing test label...: ''
+  Printing label...: '正在打印标签...'
+  Printing test label...: '正在打印测试标签...'
   Prints: '打印次数'
   Prints Trend: 打印趋势
   'Private:': 私有：
@@ -945,7 +897,6 @@ translations:
   Probe Accuracy Test: 探针精度测试
   Probe Management: 探针管理
   Probe Sensor: 探针传感器
-  Probe Sensors: 探针传感器
   Probe bed surface for compensation: 探测热床表面以进行补偿
   Probe controls, accuracy test, and settings: 探针控制、精度测试和设置
   Probing Bed Mesh: 正在探测热床网格
@@ -965,13 +916,11 @@ translations:
   QUICK BUTTONS: 快捷按钮
   Quad Gantry Level: 四角龙门调平
   'Queue: Ready': '队列：就绪'
-  Queued print jobs: '排队中的打印任务'
   Quick: 快速
   Quick Actions: 快捷操作
   Quick Button 1: 快捷按钮 1
   Quick Button 2: 快捷按钮 2
   Quick actions, calibration, speed: 快捷操作、校准、速度
-  Quick toggle, long press for full control: '快速切换，长按进入完整控制'
   'RSS:': RSS：
   Re-probe: 重新探测
   Ready: 就绪
@@ -985,7 +934,6 @@ translations:
   Recover: 恢复
   Recovering AFC system...: AFC系统恢复中...
   Recovery failed: 恢复失败
-  Red: 红色
   Reduce ringing and ghosting artifacts: 减少振纹和残影
   Reduce vibration artifacts like ringing and ghosting: 减少振纹和残影等振动伪影
   Refining stability...: 正在精细调整稳定性...
@@ -1013,7 +961,6 @@ translations:
   Restart Firmware?: 重启固件？
   Restart HelixScreen: 重启 HelixScreen
   Restart Klipper: 重启 Klipper
-  Restart Klipper firmware: '重启 Klipper 固件'
   Restart Now: 立即重启
   Restart Required: 需要重启
   'Restart failed: not connected': '重启失败: 未连接'
@@ -1022,7 +969,6 @@ translations:
   Restarting Klipper...: 正在重启 Klipper...
   Restarting Moonraker...: 正在重启 Moonraker...
   Restarting with the new version...: 正在以新版本重启...
-  Restarting...: 重启中...
   Resume: 恢复
   Resume Print: 恢复打印
   Retract: 回抽
@@ -1035,12 +981,10 @@ translations:
   Review your changes: 查看您的更改
   Rewinding: 回卷中
   'Role:': 角色：
-  Rotating tips and helpful information: '轮播提示和实用信息'
   'Rotation: %d\xc2\xb0 - %ds remaining (or wait to retry)': '旋转: %d\xc2\xb0 - 剩余%ds (或等待重试)'
   Run: 运行
   Run Dangerous Macro?: '运行危险宏？'
   Run Macro: 运行宏
-  Run a configured macro with one tap: '单击运行已配置的宏'
   Runout Sensor: 断料传感器
   SHIPPED IMAGES: 内置图片
   SOFTWARE: 软件
@@ -1048,6 +992,7 @@ translations:
   STARTUP: 启动
   STOP: 停止
   STYLE PROPERTIES: 样式属性
+  SWITCH SENSORS: '开关传感器'
   SYSTEM: 系统
   Sample %d/%d: 样本 %d/%d
   Sample Dialog: 示例对话框
@@ -1086,16 +1031,14 @@ translations:
   Select 'None' if you don't have a filament sensor, or if you don't want to pause on runout.: 如果您没有耗材传感器，或不想在断料时暂停，请选择「无」。
   Select 'None' if you have a dedicated probe, or don't use bed mesh leveling.: 如果您有专用探针，或不使用热床网格调平，请选择「无」。
   Select G-Code File: 选择 G-Code 文件
-  Select Macro: 选择宏
   Select Sensor: 选择传感器
-  Select Sensors: ''
+  Select Sensors: '选择传感器'
   Select Spool: 选择料盘
-  Select a material or adjust temperature: 选择材料或调整温度
   Select macro for first button: 为第一个按钮选择宏
   Select macro for second button: 为第二个按钮选择宏
   Select sensor: 选择传感器
   Select which devices the home screen power button controls: 选择主页电源按钮控制的设备
-  Select your label media: ''
+  Select your label media: '选择标签介质'
   Selecting slot...: 正在选择料仓...
   Self-Test: 自检
   Semantic Size Parameter Tests: 语义大小参数测试
@@ -1108,22 +1051,21 @@ translations:
   Separate on/off macros. HelixScreen tracks the state.: 独立的开/关宏。HelixScreen 跟踪状态。
   'Set ': '设置 '
   Set Active: 设为活动
-  Set up your label printer in Settings: ''
+  Set up your label printer in Settings: '在设置中配置标签打印机'
   Settings: 设置
   Settings reset to defaults. Restarting...: 设置已重置为默认值。正在重启...
   Setup Timelapse: 设置延时摄影
   Shadow Intensity: 阴影强度
   Share Usage Data: 共享使用数据
-  Share anonymous usage statistics to help us make HelixScreen better. No personal data is ever collected.: ''
+  Share anonymous usage statistics to help us make HelixScreen better. No personal data is ever collected.: '分享匿名使用统计数据，帮助我们改进 HelixScreen。绝不会收集任何个人数据。'
   'Share this code in Discord or support:': 请将此代码分享至 Discord 或支持渠道：
   'Shininess:': 光泽度：
+  Show Printer Switcher: '显示打印机切换器'
   Show detailed print preparation status: 显示详细的打印准备状态
-  Show flying toasters instead of dimming: 显示飞行烤面包机而非屏幕变暗
   Show instead of dimming: '显示而非变暗'
+  Show printer icon in navigation bar: '在导航栏中显示打印机图标'
   Shutdown: 关机
   Shutdown / Reboot: 关机 / 重启
-  Shutdown or reboot the printer host: '关机或重启打印机主机'
-  Shutdown/Reboot: '关机/重启'
   Shutting down...: 正在关机...
   Side: 侧面
   Single toggle macro. State is not tracked.: 单个切换宏。不跟踪状态。
@@ -1156,7 +1098,7 @@ translations:
   Spoolman unavailable — filament weights may be stale: Spoolman不可用 — 耗材重量可能已过期
   Square Corner Velocity: 直角转弯速度
   Stable: 稳定版
-  Standard: ''
+  Standard: '标准'
   Standby: 待机
   Starfield: '星空'
   Start: 开始
@@ -1185,18 +1127,16 @@ translations:
   Success!: 成功！
   Surfaces inherit app background tokens for light and dark modes.: 表面继承应用背景色用于浅色和深色模式。
   Switch Printer: 切换打印机
-  Switch Sensors: 开关传感器
   Switch Tests: 开关测试
   Switch between light and dark themes: 切换浅色和深色主题
   Switching heater control to MPC. Klipper will restart.: 正在将加热控制切换为 MPC。Klipper 将重启。
   Switching to MPC requires a config change and Klipper restart.: 切换到 MPC 需要修改配置并重启 Klipper。
-  Sync Drive: '同步驱动'
-  Sync Feedback: '同步反馈'
   Sync with Spoolman: 与 Spoolman 同步
   Sysfs: Sysfs
   System: 系统
   System detected: 检测到系统
   TD-1 filament color detection: TD-1 耗材颜色检测
+  TEMPERATURE SENSORS: '温度传感器'
   THEME COLORS: 主题颜色
   TPU: TPU
   Takes 3-5 min. Do not interrupt.: 需要 3-5 分钟。请勿中断。
@@ -1211,15 +1151,14 @@ translations:
   Telemetry Data: 遥测数据
   Telemetry queue cleared: 遥测队列已清除
   Temperature: 温度
-  Temperature Sensors: 温度传感器
   Temperatures: 温度
   Temporary adjustment for this print, unless saved on Controls panel: 此打印的临时调整，除非在控制面板上保存
   Tertiary: 第三
   Test Connection: 测试连接
   Test Network: 测试网络
-  Test Print: ''
+  Test Print: '测试打印'
   Test Sound: 测试声音
-  Test label printed: ''
+  Test label printed: '测试标签已打印'
   Test probe repeatability: 测试探针重复性
   'Testing rotation: %d\xc2\xb0 (%d/%d) - %ds remaining': '测试旋转: %d\xc2\xb0 (%d/%d) - 剩余%ds'
   Thanks! Anonymous usage data helps improve HelixScreen.: 感谢！匿名使用数据有助于改进 HelixScreen。
@@ -1236,7 +1175,6 @@ translations:
   Theme changes apply after restart.: 主题更改在重启后生效。
   Theme reset to defaults: 主题已重置为默认值
   Theme, brightness, and sleep settings: 主题、亮度和休眠设置
-  Thermistor: '热敏电阻'
   This calibration uses the paper friction method to set your Z-offset.: 此校准使用纸张摩擦法设置 Z 偏移。
   This cannot be undone.: 此操作无法撤销。
   This is exactly the data that will be sent: 这正是将要发送的数据
@@ -1250,7 +1188,7 @@ translations:
   ? This will collect system info, logs, settings, and printer data to help diagnose issues. No passwords or sensitive data will be included.
   : 将收集系统信息、日志、设置和打印机数据以帮助诊断问题。不会包含密码或敏感数据。
   This will immediately halt all printer operations. The printer will require a restart to resume.: 这将立即停止所有打印机操作。打印机需要重启才能恢复。
-  This will remove all entries from the display.: ''
+  This will remove all entries from the display.: '这将从显示中移除所有条目。'
   This will reset all settings to defaults. This action cannot be undone.: 这将把所有设置重置为默认值。此操作无法撤销。
   This will restart Klipper firmware. Any active operations will be interrupted.: 将重启Klipper固件。所有正在进行的操作将被中断。
   This will restart Klipper.: 这将重启 Klipper。
@@ -1268,11 +1206,9 @@ translations:
   Timelapse plugin is installed!: 延时摄影插件已安装！
   Timelapse rendered successfully: 延时视频渲染成功
   'Tip:': 提示：
-  Tips: '提示'
   Toggle: 切换
   Toggle (fire-and-forget): 切换（无状态跟踪）
   Toggle Feature: 切换功能
-  Toggle and reorder status widgets: 切换和排序状态小组件
   Tool: 工具
   Tool Changer: 换刀器
   Toolhead Style: 工具头样式
@@ -1287,7 +1223,6 @@ translations:
   'Troubleshooting:': 故障排除：
   Try adjusting your search or filters: 尝试调整搜索或筛选条件
   Tune: 调优
-  Tune at the temperature you print most often.: 在您最常打印的温度下进行调优。
   Tuning control parameters...: 正在调整控制参数...
   Tuning tower enabled - start a print to test: 调优塔已启用 - 开始打印以测试
   Turn Off: 关闭
@@ -1344,6 +1279,7 @@ translations:
   View print statistics and job history: 查看打印统计和作业历史
   Volume: 音量
   Volume, themes, and UI sounds: 音量、主题和界面声音
+  WIDTH SENSORS: '宽度传感器'
   WLED: WLED
   Waiting for bed to reach temperature for accurate calibration.: 等待热床达到温度以进行精确校准。
   Warm Bed: 预热热床
@@ -1358,7 +1294,6 @@ translations:
   Weight sync settings: 重量同步设置
   What We Collect: 我们收集的内容
   White: 白色
-  Wi-Fi and ethernet connection status: 'Wi-Fi 和以太网连接状态'
   WiFi: WiFi
   WiFi Network: WiFi 网络
   WiFi and Ethernet: WiFi 和以太网
@@ -1366,8 +1301,6 @@ translations:
   WiFi control unavailable: WiFi 控制不可用
   WiFi hardware unavailable: WiFi 硬件不可用
   Width: 宽度
-  Width Sensor: '宽度传感器'
-  Width Sensors: 宽度传感器
   X: X
   X Axis: X 轴
   X axis applied, but Y axis failed: X 轴已应用，但 Y 轴失败
@@ -1402,13 +1335,10 @@ translations:
   disable: 禁用
   disabled: 已禁用
   e.g. Jet Black: 例如 炭黑
-  e.g. NAME=my_var VALUE=123: ''
   e.g. Polymaker: 例如 Polymaker
-  eSpooler: 'eSpooler'
   elapsed: 已用时
   enable: 启用
   enabled: 已启用
-  est: est
   layers: 层
   mm before clog: '毫米后堵料'
   not detected: 未检测到
