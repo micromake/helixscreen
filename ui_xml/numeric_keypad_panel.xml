@@ -58,8 +58,8 @@
         <ui_button name="btn_1" width="30%" height="#keypad_btn_height" text="1" variant="secondary"/>
         <ui_button name="btn_2" width="30%" height="#keypad_btn_height" text="2" variant="secondary"/>
         <ui_button name="btn_3" width="30%" height="#keypad_btn_height" text="3" variant="secondary"/>
-        <!-- Row 4: spacer, 0, backspace -->
-        <lv_obj width="30%" height="#keypad_btn_height"/>
+        <!-- Row 4: dot, 0, backspace -->
+        <ui_button name="btn_dot" width="30%" height="#keypad_btn_height" text="." variant="secondary"/>
         <ui_button name="btn_0" width="30%" height="#keypad_btn_height" text="0" variant="secondary"/>
         <ui_button name="btn_backspace" width="30%" height="#keypad_btn_height" icon="backspace" text=""/>
       </lv_obj>

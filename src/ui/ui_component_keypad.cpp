@@ -12,6 +12,7 @@
 
 #include "ui_component_keypad.h"
 
+#include "keypad_input.h"
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
 #include "ui_nav_manager.h"
@@ -39,14 +40,12 @@ static lv_obj_t* keypad_widget = nullptr;
 
 // Current config and input state
 static ui_keypad_config_t current_config;
-static char input_buffer[16] = "";
+static helix::ui::KeypadInput input;
 
 // ============================================================================
 // Forward declarations
 // ============================================================================
 static void update_display();
-static void append_digit(int digit);
-static void handle_backspace();
 static void handle_confirm();
 static void wire_button_events();
 
@@ -122,7 +121,7 @@ void ui_keypad_show(const ui_keypad_config_t* config) {
     current_config = *config;
 
     // Start with empty display (user enters fresh value)
-    input_buffer[0] = '\0';
+    input.clear();
 
     // Update display via subject (reactive binding updates XML automatically)
     update_display();
@@ -163,45 +162,11 @@ lv_subject_t* ui_keypad_get_display_subject() {
 // Input Logic
 // ============================================================================
 static void update_display() {
-    lv_subject_copy_string(&keypad_display_subject, input_buffer);
-}
-
-static void append_digit(int digit) {
-    size_t len = strlen(input_buffer);
-
-    // Count digits (ignore decimal/minus)
-    int digit_count = 0;
-    for (size_t i = 0; i < len; i++) {
-        if (input_buffer[i] >= '0' && input_buffer[i] <= '9') {
-            digit_count++;
-        }
-    }
-
-    // Max 3 digits
-    if (digit_count >= 3) {
-        return;
-    }
-
-    // Append digit
-    if (len < sizeof(input_buffer) - 1) {
-        input_buffer[len] = '0' + digit;
-        input_buffer[len + 1] = '\0';
-        update_display();
-    }
-}
-
-static void handle_backspace() {
-    size_t len = strlen(input_buffer);
-    if (len > 0) {
-        input_buffer[len - 1] = '\0';
-    }
-    // Stay empty if all digits deleted (don't reset to "0")
-    update_display();
+    lv_subject_copy_string(&keypad_display_subject, input.buf);
 }
 
 static void handle_confirm() {
-    // Parse value (empty = 0)
-    float value = (input_buffer[0] == '\0') ? 0.0f : static_cast<float>(atof(input_buffer));
+    float value = input.value();
 
     // Validate range - show error if out of bounds
     if (value < current_config.min_value || value > current_config.max_value) {
@@ -239,11 +204,24 @@ static void wire_button_events() {
                 [](lv_event_t* e) {
                     helix::ui::event_safe_call("keypad_digit", [e]() {
                         int digit = (int)(intptr_t)lv_event_get_user_data(e);
-                        append_digit(digit);
+                        if (input.append_digit(digit)) update_display();
                     });
                 },
                 LV_EVENT_CLICKED, (void*)(intptr_t)i);
         }
+    }
+
+    // Dot button
+    lv_obj_t* btn_dot = lv_obj_find_by_name(keypad_widget, "btn_dot");
+    if (btn_dot) {
+        lv_obj_add_event_cb(
+            btn_dot,
+            [](lv_event_t*) {
+                helix::ui::event_safe_call("keypad_dot", []() {
+                    if (input.append_dot()) update_display();
+                });
+            },
+            LV_EVENT_CLICKED, nullptr);
     }
 
     // Backspace button
@@ -252,7 +230,9 @@ static void wire_button_events() {
         lv_obj_add_event_cb(
             btn_back,
             [](lv_event_t*) {
-                helix::ui::event_safe_call("keypad_backspace", []() { handle_backspace(); });
+                helix::ui::event_safe_call("keypad_backspace", []() {
+                    if (input.backspace()) update_display();
+                });
             },
             LV_EVENT_CLICKED, nullptr);
     }
