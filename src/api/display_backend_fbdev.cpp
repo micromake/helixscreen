@@ -308,6 +308,22 @@ lv_display_t* DisplayBackendFbdev::create_display(int width, int height) {
                      lv_color_format_get_size(detected_format) * 8);
     }
 
+    // Check for R/B channel swap override. The LVGL fbdev driver auto-detects
+    // BGR framebuffers from fb_var_screeninfo, but some drivers report incorrect
+    // offsets. HELIX_COLOR_SWAP_RB=1 forces the swap on, =0 forces it off.
+    const char* swap_rb_env = std::getenv("HELIX_COLOR_SWAP_RB");
+    if (swap_rb_env != nullptr) {
+        bool force_swap = (strcmp(swap_rb_env, "1") == 0);
+        lv_linux_fbdev_set_swap_rb(display_, force_swap);
+        spdlog::info("[Fbdev Backend] R/B channel swap {} (HELIX_COLOR_SWAP_RB={})",
+                     force_swap ? "forced ON" : "forced OFF", swap_rb_env);
+    } else {
+        bool auto_swap = lv_linux_fbdev_get_swap_rb(display_);
+        if (auto_swap) {
+            spdlog::info("[Fbdev Backend] R/B channel swap auto-detected (BGR framebuffer)");
+        }
+    }
+
     // Suppress kernel console output to framebuffer.
     // Prevents dmesg/undervoltage warnings from bleeding through LVGL's partial repaints.
     suppress_console();

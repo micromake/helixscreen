@@ -6,7 +6,7 @@ This document provides a comprehensive reference for all environment variables u
 
 | Category | Count | Prefix |
 |----------|-------|--------|
-| [Display & Backend](#display--backend-configuration) | 10 | `HELIX_` |
+| [Display & Backend](#display--backend-configuration) | 11 | `HELIX_` |
 | [Touch Calibration](#touch-calibration) | 7 | `HELIX_TOUCH_*` |
 | [G-Code Viewer](#g-code-viewer) | 3 | `HELIX_` |
 | [Bed Mesh](#bed-mesh) | 1 | `HELIX_` |
@@ -228,6 +228,28 @@ HELIX_DPI=240
 ```
 
 The launcher translates this to `--dpi=<value>` on the CLI. Can also be passed directly: `./build/bin/helix-screen --dpi 240`.
+
+### `HELIX_COLOR_SWAP_RB`
+
+Override the automatic R/B channel swap detection for BGR framebuffers. The LVGL fbdev driver auto-detects BGR layout from `fb_var_screeninfo.red.offset` / `blue.offset`, but some kernel drivers report incorrect offsets.
+
+| Property | Value |
+|----------|-------|
+| **Values** | `1` (force swap ON), `0` (force swap OFF) |
+| **Default** | Auto-detect from framebuffer vinfo |
+| **File** | `src/api/display_backend_fbdev.cpp` |
+
+```bash
+# Force R/B swap for Allwinner R818 with BGR framebuffer
+HELIX_COLOR_SWAP_RB=1 ./build/bin/helix-screen
+
+# Disable auto-detected swap (if detection is wrong)
+HELIX_COLOR_SWAP_RB=0 ./build/bin/helix-screen
+```
+
+**Symptoms of needing this:** Red images appear blue and blue images appear red. The green channel is unaffected. Common on some Allwinner SoCs with RGB parallel (40-pin) display interfaces.
+
+**Fbdev only:** This setting only applies to the framebuffer backend. DRM and SDL backends handle color format natively.
 
 ### `HELIX_SDL_DISPLAY`
 
