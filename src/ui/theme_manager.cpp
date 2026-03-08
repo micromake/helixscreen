@@ -1674,13 +1674,17 @@ void theme_apply_palette_to_widget(lv_obj_t* obj, const helix::ModePalette& pale
     // INTERACTIVE WIDGETS - specific styling per widget type
     // ==========================================================================
 
-    // Checkboxes - box border, inverted bg, accent checkmark
+    // Checkboxes - box border, primary bg when checked, contrast checkmark
     if (lv_obj_check_type(obj, &lv_checkbox_class)) {
         lv_obj_set_style_text_color(obj, text_primary, LV_PART_MAIN);
         lv_obj_set_style_border_color(obj, border, LV_PART_INDICATOR);
-        lv_obj_set_style_bg_color(obj, text_primary, LV_PART_INDICATOR);
-        lv_color_t accent_color = theme_compute_more_saturated(primary, secondary);
-        lv_obj_set_style_text_color(obj, accent_color, LV_PART_INDICATOR | LV_STATE_CHECKED);
+        lv_obj_set_style_bg_color(obj, elevated_bg, LV_PART_INDICATOR);
+        // Checked state: primary background with contrasting checkmark
+        lv_obj_set_style_bg_color(obj, primary, LV_PART_INDICATOR | LV_STATE_CHECKED);
+        lv_obj_set_style_border_color(obj, primary, LV_PART_INDICATOR | LV_STATE_CHECKED);
+        uint8_t lum = lv_color_luminance(primary);
+        lv_color_t check_color = (lum > 140) ? lv_color_black() : lv_color_white();
+        lv_obj_set_style_text_color(obj, check_color, LV_PART_INDICATOR | LV_STATE_CHECKED);
         return;
     }
 
