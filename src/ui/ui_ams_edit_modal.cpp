@@ -9,6 +9,7 @@
 #include "ui_update_queue.h"
 
 #include "ams_state.h"
+#include "app_globals.h"
 #include "color_utils.h"
 #include "filament_database.h"
 #include "format_utils.h"
@@ -112,7 +113,7 @@ bool AmsEditModal::show_for_slot(lv_obj_t* parent, int slot_index, const SlotInf
     slot_index_ = slot_index;
     original_info_ = initial_info;
     working_info_ = initial_info;
-    api_ = api;
+    api_ = api ? api : get_moonraker_api();
     remaining_pre_edit_pct_ = 0;
     cached_spools_.clear();
     vendors_loaded_ = false;
@@ -366,6 +367,10 @@ void AmsEditModal::deinit_subjects() {
 }
 
 void AmsEditModal::fetch_vendors_from_spoolman() {
+    // Resolve API: prefer stored api_, fall back to global
+    if (!api_) {
+        api_ = get_moonraker_api();
+    }
     if (!api_ || vendors_loaded_) {
         return;
     }
@@ -487,6 +492,10 @@ void AmsEditModal::switch_to_form() {
 }
 
 void AmsEditModal::populate_picker() {
+    // Resolve API: prefer stored api_, fall back to global (matches SpoolmanPanel pattern)
+    if (!api_) {
+        api_ = get_moonraker_api();
+    }
     if (!dialog_ || !api_) {
         spdlog::warn("[AmsEditModal] populate_picker() aborted: dialog_={}, api_={}",
                      static_cast<void*>(dialog_), static_cast<void*>(api_));
@@ -1125,6 +1134,11 @@ void AmsEditModal::handle_reset() {
 
 void AmsEditModal::handle_save() {
     spdlog::info("[AmsEditModal] Saving edits for slot {}", slot_index_);
+
+    // Resolve API: prefer stored api_, fall back to global
+    if (!api_) {
+        api_ = get_moonraker_api();
+    }
 
     // If slot is linked to Spoolman and there are changes, use SpoolmanSlotSaver
     if (working_info_.spoolman_id > 0 && api_) {
