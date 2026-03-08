@@ -220,7 +220,7 @@ void LedSettingsOverlay::populate_macro_devices() {
     // SAFETY: Defer the clean+rebuild. This function is called from many event
     // callbacks (dropdown change, remove/add/edit/save buttons) where the event-
     // firing widget is a child of the container being cleaned (issue #80).
-    helix::ui::queue_update([this]() { populate_macro_devices_impl(); });
+    helix::ui::queue_update("LedSettingsOverlay::populate_macro_devices", [this]() { populate_macro_devices_impl(); });
 }
 
 void LedSettingsOverlay::populate_macro_devices_impl() {

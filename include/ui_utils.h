@@ -166,7 +166,7 @@ inline void safe_delete_deferred(lv_obj_t*& obj) {
         return;
     lv_obj_t* to_delete = obj;
     obj = nullptr;
-    queue_update([to_delete]() {
+    queue_update("safe_delete_deferred", [to_delete]() {
         if (!lv_is_initialized())
             return;
         if (!lv_display_get_next(nullptr))

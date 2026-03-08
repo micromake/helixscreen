@@ -124,6 +124,10 @@ CrashReporter::CrashReport CrashReporter::collect_report() {
     if (crash_data.contains("load_base"))
         report.load_base = crash_data["load_base"];
 
+    // UpdateQueue callback tag
+    if (crash_data.contains("queue_callback"))
+        report.queue_callback = crash_data["queue_callback"];
+
     // Collect additional system context
     report.platform = UpdateChecker::get_platform_key();
 #ifdef HELIX_BINARY_VARIANT
@@ -252,6 +256,11 @@ nlohmann::json CrashReporter::report_to_json(const CrashReport& report) {
         j["load_base"] = report.load_base;
     }
 
+    // UpdateQueue callback tag (crash context)
+    if (!report.queue_callback.empty()) {
+        j["queue_callback"] = report.queue_callback;
+    }
+
     // Memory map (executable mappings only — filter to keep payload small)
     if (!report.memory_map.empty()) {
         json maps = json::array();
@@ -309,6 +318,10 @@ std::string CrashReporter::report_to_text(const CrashReport& report) {
 
     if (!report.load_base.empty()) {
         ss << "Load Base: " << report.load_base << "\n";
+    }
+
+    if (!report.queue_callback.empty()) {
+        ss << "Queue Callback: " << report.queue_callback << "\n";
     }
 
     ss << "--- System Info ---\n";

@@ -429,7 +429,7 @@ void ToastManager::deferred_delete_toast(lv_obj_t*& toast_ptr) {
     toast_ptr = nullptr;
     // Hide immediately so the old toast isn't visible while deletion is deferred
     lv_obj_add_flag(to_delete, LV_OBJ_FLAG_HIDDEN);
-    helix::ui::queue_update([to_delete]() {
+    helix::ui::queue_update("ToastManager::deferred_delete_toast", [to_delete]() {
         if (!lv_is_initialized()) return;
         if (!lv_obj_is_valid(to_delete)) return;
         helix::ui::defocus_tree(to_delete);

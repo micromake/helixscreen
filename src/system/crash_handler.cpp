@@ -69,6 +69,9 @@ static uintptr_t s_load_base = 0;
 /// Whether load_base detection has run (distinguishes "detected 0" from "not yet detected")
 static bool s_load_base_detected = false;
 
+/// Pointer to the UpdateQueue's current callback tag (registered at init)
+static volatile const char* const* s_callback_tag_ptr = nullptr;
+
 /// Saved previous signal actions for restoration
 static struct sigaction s_old_sigsegv = {};
 static struct sigaction s_old_sigabrt = {};
@@ -402,6 +405,19 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
         safe_write(fd, "\n");
     }
 
+    // Write UpdateQueue callback tag if a queued callback was executing.
+    // The volatile qualifier ensures the signal handler reads the current value,
+    // not a cached one. We cast away volatile for safe_write — the pointer
+    // target (a string literal) is in read-only memory and won't change.
+    if (s_callback_tag_ptr) {
+        const char* tag = const_cast<const char*>(*s_callback_tag_ptr);
+        if (tag) {
+            safe_write(fd, "queue_callback:");
+            safe_write(fd, tag);
+            safe_write(fd, "\n");
+        }
+    }
+
     // Inject ucontext PC and LR as the first backtrace entries.
     // On ARM32 (static binary), backtrace() cannot unwind past the signal
     // frame — it only returns crash_handler + signal_restorer (useless).
@@ -534,6 +550,10 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
 // =============================================================================
 // Public API
 // =============================================================================
+
+void crash_handler::register_callback_tag_ptr(volatile const char* const* tag_ptr) {
+    s_callback_tag_ptr = tag_ptr;
+}
 
 void crash_handler::install(const std::string& crash_file_path) {
     if (s_installed) {
@@ -701,6 +721,8 @@ nlohmann::json crash_handler::read_crash_file(const std::string& crash_file_path
                 result["reg_bp"] = value;
             } else if (key == "load_base") {
                 result["load_base"] = value;
+            } else if (key == "queue_callback") {
+                result["queue_callback"] = value;
             } else if (key == "exception") {
                 result["exception"] = value;
             } else if (key == "bt") {

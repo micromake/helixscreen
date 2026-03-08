@@ -40,6 +40,8 @@
 
 #include "lvgl/lvgl.h"
 
+#include "system/crash_handler.h"
+
 #include <spdlog/spdlog.h>
 
 #include <atomic>
@@ -54,6 +56,18 @@ namespace helix::ui {
  * @brief Callback type for queued updates
  */
 using UpdateCallback = std::function<void()>;
+
+/**
+ * @brief Callback entry with optional debug tag
+ *
+ * The tag identifies which subsystem queued the callback, making crash
+ * reports actionable when a crash occurs inside process_pending().
+ * Tags must be string literals (pointer stored, not copied).
+ */
+struct TaggedCallback {
+    const char* tag = nullptr;
+    UpdateCallback callback;
+};
 
 /**
  * @brief Thread-safe UI update queue
@@ -97,6 +111,10 @@ class UpdateQueue {
             return;
         }
 
+        // Register the current callback tag pointer with the crash handler
+        // so crashes inside process_pending() identify which callback was running
+        crash_handler::register_callback_tag_ptr(&current_tag_);
+
         initialized_ = true;
         spdlog::debug("[UpdateQueue] Initialized - timer created for queue drain");
     }
@@ -110,14 +128,26 @@ class UpdateQueue {
      * @param callback Function to execute
      */
     void queue(UpdateCallback callback) {
+        queue(nullptr, std::move(callback));
+    }
+
+    /**
+     * @brief Queue an update with a debug tag
+     *
+     * The tag identifies the caller for crash diagnostics. If a crash occurs
+     * inside process_pending(), the crash handler writes the tag to crash.txt
+     * so we know which callback was executing.
+     *
+     * @param tag String literal identifying the caller (e.g., "ToastManager::dismiss")
+     * @param callback Function to execute
+     */
+    void queue(const char* tag, UpdateCallback callback) {
         if (frozen_.load(std::memory_order_relaxed)) return;
         std::lock_guard<std::mutex> lock(mutex_);
         if (shut_down_) {
-            // Silently discard — queue is shut down, panels may be destroyed.
-            // Call init() to re-enable (e.g. when test fixtures re-initialize).
             return;
         }
-        pending_.push(std::move(callback));
+        pending_.push({tag, std::move(callback)});
     }
 
     /**
@@ -136,7 +166,7 @@ class UpdateQueue {
             std::lock_guard<std::mutex> lock(mutex_);
             initialized_ = false;
             shut_down_ = true;
-            std::queue<UpdateCallback>().swap(pending_); // Discard any stragglers
+            std::queue<TaggedCallback>().swap(pending_); // Discard any stragglers
         }
         timer_ = nullptr;
     }
@@ -244,7 +274,7 @@ class UpdateQueue {
 
     void process_pending() {
         // Move pending updates to local queue to minimize lock time
-        std::queue<UpdateCallback> to_process;
+        std::queue<TaggedCallback> to_process;
         {
             std::lock_guard<std::mutex> lock(mutex_);
             std::swap(to_process, pending_);
@@ -253,24 +283,42 @@ class UpdateQueue {
         // Execute all pending updates - safe because render hasn't started yet
         while (!to_process.empty()) {
             try {
-                auto& callback = to_process.front();
-                callback();
+                auto& entry = to_process.front();
+                current_tag_ = entry.tag;
+                entry.callback();
             } catch (const std::exception& e) {
                 spdlog::error("[UpdateQueue] Exception in queued callback: {}", e.what());
             } catch (...) {
                 spdlog::error("[UpdateQueue] Unknown exception in queued callback");
             }
+            current_tag_ = nullptr;
             to_process.pop();
         }
     }
 
     std::mutex mutex_;
-    std::queue<UpdateCallback> pending_;
+    std::queue<TaggedCallback> pending_;
     lv_timer_t* timer_ = nullptr;
     bool initialized_ = false;
     bool shut_down_ = false;
     std::atomic<bool> frozen_{false};
     std::atomic<int> freeze_depth_{0};
+
+    /// Tag of the currently executing callback (read by crash handler).
+    /// Only written from the main LVGL thread; read by the crash signal handler.
+    /// Volatile ensures the signal handler sees the current value, not a cached one.
+    static inline volatile const char* current_tag_ = nullptr;
+
+  public:
+    /**
+     * @brief Get the tag of the currently executing callback
+     *
+     * Returns nullptr if no callback is running. Strips volatile at the API
+     * boundary since callers are normal (non-signal-handler) code.
+     */
+    static const char* current_callback_tag() {
+        return const_cast<const char*>(current_tag_);
+    }
 };
 
 /**
@@ -284,6 +332,18 @@ class UpdateQueue {
  */
 inline void queue_update(UpdateCallback callback) {
     UpdateQueue::instance().queue(std::move(callback));
+}
+
+/**
+ * @brief Queue a tagged UI update for safe execution
+ *
+ * Same as queue_update() but with a debug tag for crash diagnostics.
+ *
+ * @param tag String literal identifying the caller (e.g., "PrinterState::set_temp")
+ * @param callback Function to execute on the main thread
+ */
+inline void queue_update(const char* tag, UpdateCallback callback) {
+    UpdateQueue::instance().queue(tag, std::move(callback));
 }
 
 /**

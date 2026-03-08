@@ -1140,7 +1140,7 @@ void LedControlOverlay::refresh_wled_status() {
     controller.wled().poll_status([this]() {
         // poll_status callback fires on the libhv background thread —
         // all LVGL operations must be deferred to the UI thread.
-        helix::ui::queue_update([this]() {
+        helix::ui::queue_update("LEDControlOverlay::poll_wled_status", [this]() {
             if (cleanup_called())
                 return;
             if (wled_presets_container_) {

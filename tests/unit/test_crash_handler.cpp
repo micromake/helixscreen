@@ -518,6 +518,28 @@ TEST_CASE_METHOD(CrashTestFixture, "Crash: parse crash file with partial fault f
     REQUIRE_FALSE(result.contains("reg_pc"));
 }
 
+TEST_CASE_METHOD(CrashTestFixture, "Crash: parse crash file extracts queue_callback tag",
+                 "[telemetry][crash]") {
+    write_crash_file("signal:11\nname:SIGSEGV\nversion:0.9.18\ntimestamp:1707350400\nuptime:3174\n"
+                     "fault_addr:0x00000000\nfault_code:1\nfault_code_name:SEGV_MAPERR\n"
+                     "reg_pc:0x00920bac\nreg_sp:0xbe8ff420\nreg_lr:0x0091a3c0\n"
+                     "queue_callback:ToastManager::dismiss\n"
+                     "bt:0x920bac\nbt:0xf7101290\n");
+    auto result = crash_handler::read_crash_file(crash_path());
+    REQUIRE_FALSE(result.is_null());
+    REQUIRE(result.contains("queue_callback"));
+    REQUIRE(result["queue_callback"] == "ToastManager::dismiss");
+}
+
+TEST_CASE_METHOD(CrashTestFixture, "Crash: parse crash file without queue_callback is fine",
+                 "[telemetry][crash]") {
+    write_crash_file("signal:11\nname:SIGSEGV\nversion:0.9.18\ntimestamp:1707350400\nuptime:3174\n"
+                     "bt:0x920bac\n");
+    auto result = crash_handler::read_crash_file(crash_path());
+    REQUIRE_FALSE(result.is_null());
+    REQUIRE_FALSE(result.contains("queue_callback"));
+}
+
 TEST_CASE_METHOD(CrashTestFixture,
                  "Crash: write_mock_crash_file includes fault and register fields",
                  "[telemetry][crash]") {

@@ -180,3 +180,32 @@ TEST_CASE_METHOD(LVGLTestFixture,
     guard.reset();
     lv_subject_deinit(&subject);
 }
+
+TEST_CASE_METHOD(LVGLTestFixture, "tagged queue_update sets current_callback_tag during execution",
+                 "[update_queue]") {
+    auto& q = UpdateQueue::instance();
+    const char* tag_during_callback = nullptr;
+
+    q.queue("TestTag::my_callback", [&tag_during_callback]() {
+        tag_during_callback = UpdateQueue::current_callback_tag();
+    });
+    UpdateQueueTestAccess::drain(q);
+
+    REQUIRE(tag_during_callback != nullptr);
+    REQUIRE(std::string(tag_during_callback) == "TestTag::my_callback");
+    // Tag should be cleared after callback completes
+    REQUIRE(UpdateQueue::current_callback_tag() == nullptr);
+}
+
+TEST_CASE_METHOD(LVGLTestFixture, "untagged queue_update has null callback tag",
+                 "[update_queue]") {
+    auto& q = UpdateQueue::instance();
+    const char* tag_during_callback = reinterpret_cast<const char*>(0x1); // sentinel
+
+    q.queue([&tag_during_callback]() {
+        tag_during_callback = UpdateQueue::current_callback_tag();
+    });
+    UpdateQueueTestAccess::drain(q);
+
+    REQUIRE(tag_during_callback == nullptr);
+}

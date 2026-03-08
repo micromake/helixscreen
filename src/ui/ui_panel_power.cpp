@@ -129,7 +129,7 @@ void PowerPanel::fetch_devices() {
             // 2. lv_async_call: defers widget deletion to the next lv_timer_handler
             //    cycle where event_head is guaranteed NULL (issue #190).
             auto devices_ptr = std::make_shared<std::vector<PowerDevice>>(devices);
-            helix::ui::queue_update([weak_alive, self_ptr, devices_ptr]() {
+            helix::ui::queue_update("PowerPanel::list_power_devices", [weak_alive, self_ptr, devices_ptr]() {
                 auto alive = weak_alive.lock();
                 if (!alive || !*alive)
                     return;

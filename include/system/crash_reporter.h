@@ -71,6 +71,9 @@ class CrashReporter {
         // ASLR load base (for symbol resolution)
         std::string load_base;
 
+        // UpdateQueue callback tag (identifies which queued callback was executing)
+        std::string queue_callback;
+
         // Memory map (/proc/self/maps lines, for mapping addresses to libraries)
         std::vector<std::string> memory_map;
 
