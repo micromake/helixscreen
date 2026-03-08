@@ -609,6 +609,84 @@ TEST_CASE("SystemToolLayout: PARALLEL unit with shared mapped_tools (toolchanger
     CHECK(layout.physical_to_virtual_label[2] == 2);
 }
 
+// ============================================================================
+// PARALLEL: cross-unit lane remapping (#363)
+// ============================================================================
+
+TEST_CASE("SystemToolLayout: PARALLEL cross-unit remap does not inflate tool count",
+          "[ams][tool_layout]") {
+    // Issue #363: 2 PARALLEL units with 6 lanes each. Normally Unit 0 = T0-T5,
+    // Unit 1 = T6-T11. After SET_MAP, Unit 0 has a lane remapped to T11.
+    // Old code: max_tool(11) - min_tool(0) + 1 = 12 tools for Unit 0 (WRONG)
+    // Fixed: count distinct mapped tools = 6 (CORRECT)
+    AmsSystemInfo info;
+    info.type = AmsType::AFC;
+
+    // Unit 0: 6 lanes, lane0 remapped to T1, lane1 remapped to T0,
+    // lane5 remapped to T11 (from Unit 1's range)
+    {
+        AmsUnit unit;
+        unit.unit_index = 0;
+        unit.slot_count = 6;
+        unit.first_slot_global_index = 0;
+        unit.topology = PathTopology::PARALLEL;
+        int tool_map[] = {1, 0, 2, 3, 4, 11};
+        for (int s = 0; s < 6; ++s) {
+            SlotInfo slot;
+            slot.slot_index = s;
+            slot.global_index = s;
+            slot.mapped_tool = tool_map[s];
+            unit.slots.push_back(slot);
+        }
+        info.units.push_back(unit);
+    }
+
+    // Unit 1: 6 lanes, T5-T10 (T11 was claimed by Unit 0's remap, T5 replaces it)
+    {
+        AmsUnit unit;
+        unit.unit_index = 1;
+        unit.slot_count = 6;
+        unit.first_slot_global_index = 6;
+        unit.topology = PathTopology::PARALLEL;
+        int tool_map[] = {5, 6, 7, 8, 9, 10};
+        for (int s = 0; s < 6; ++s) {
+            SlotInfo slot;
+            slot.slot_index = s;
+            slot.global_index = 6 + s;
+            slot.mapped_tool = tool_map[s];
+            unit.slots.push_back(slot);
+        }
+        info.units.push_back(unit);
+    }
+
+    info.total_slots = 12;
+
+    auto layout = compute_system_tool_layout(info, nullptr);
+
+    // Each unit should have exactly 6 physical tools (not 12!)
+    REQUIRE(layout.units.size() == 2);
+    CHECK(layout.units[0].tool_count == 6);
+    CHECK(layout.units[1].tool_count == 6);
+    CHECK(layout.total_physical_tools == 12);
+
+    // Virtual-to-physical mapping should use sorted rank within each unit
+    // Unit 0 sorted tools: {0, 1, 2, 3, 4, 11} → physical 0-5
+    CHECK(layout.virtual_to_physical.at(0) == 0);  // rank 0 of {0,1,2,3,4,11}
+    CHECK(layout.virtual_to_physical.at(1) == 1);  // rank 1
+    CHECK(layout.virtual_to_physical.at(2) == 2);
+    CHECK(layout.virtual_to_physical.at(3) == 3);
+    CHECK(layout.virtual_to_physical.at(4) == 4);
+    CHECK(layout.virtual_to_physical.at(11) == 5); // T11 gets rank 5, not 11
+
+    // Unit 1 sorted tools: {5, 6, 7, 8, 9, 10} → physical 6-11
+    CHECK(layout.virtual_to_physical.at(5) == 6);
+    CHECK(layout.virtual_to_physical.at(6) == 7);
+    CHECK(layout.virtual_to_physical.at(7) == 8);
+    CHECK(layout.virtual_to_physical.at(8) == 9);
+    CHECK(layout.virtual_to_physical.at(9) == 10);
+    CHECK(layout.virtual_to_physical.at(10) == 11);
+}
+
 TEST_CASE("SystemToolLayout: 2 HUB units with different hub_tool_labels stay separate",
           "[ams][tool_layout]") {
     // Multi-extruder setup: unit 0 feeds T0, unit 1 feeds T1
