@@ -4,6 +4,7 @@
 
 #include "theme_manager.h"
 #include "ui_buffer_meter.h"
+#include "ui_update_queue.h"
 
 #include <spdlog/fmt/fmt.h>
 
@@ -233,11 +234,15 @@ void BufferStatusModal::on_show() {
     }
 }
 
+void BufferStatusModal::on_hide() {
+    auto* self = this;
+    helix::ui::async_call(
+        [](void* data) { delete static_cast<BufferStatusModal*>(data); }, self);
+}
+
 void BufferStatusModal::show_for(const AmsSystemInfo& info, int effective_unit) {
-    // Use a static unique_ptr so the modal is cleaned up on next invocation
-    static std::unique_ptr<BufferStatusModal> instance;
-    instance = std::make_unique<BufferStatusModal>();
-    instance->info_ = info;
-    instance->effective_unit_ = effective_unit;
-    instance->show(lv_screen_active());
+    auto* modal = new BufferStatusModal();
+    modal->info_ = info;
+    modal->effective_unit_ = effective_unit;
+    modal->show(lv_screen_active());
 }

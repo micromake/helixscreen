@@ -30,6 +30,7 @@ class BufferStatusModal : public Modal {
 
   protected:
     void on_show() override;
+    void on_hide() override;
 
   private:
     friend class TestableBufferStatusModal;
