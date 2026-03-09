@@ -201,7 +201,7 @@ void LabelPrinterSettingsOverlay::init_label_size_dropdown() {
     lv_obj_t* dropdown = lv_obj_find_by_name(size_row, "dropdown");
     if (dropdown) {
         auto& settings = LabelPrinterSettingsManager::instance();
-        auto sizes = BrotherQLPrinter::supported_sizes();
+        auto sizes = BrotherQLPrinter::supported_sizes_static();
 
         std::string options;
         for (size_t i = 0; i < sizes.size(); i++) {
@@ -436,7 +436,7 @@ void LabelPrinterSettingsOverlay::handle_port_changed() {
 }
 
 void LabelPrinterSettingsOverlay::handle_label_size_changed(int index) {
-    auto sizes = BrotherQLPrinter::supported_sizes();
+    auto sizes = BrotherQLPrinter::supported_sizes_static();
     if (index >= 0 && index < static_cast<int>(sizes.size())) {
         spdlog::info("[{}] Label size changed: {} (index {})", get_name(), sizes[index].name,
                      index);
@@ -482,7 +482,7 @@ void LabelPrinterSettingsOverlay::handle_test_print() {
     mock_spool.nozzle_temp_recommended = 210;
     mock_spool.bed_temp_recommended = 60;
 
-    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto sizes = helix::BrotherQLPrinter::supported_sizes_static();
     int size_idx = std::clamp(settings.get_label_size_index(), 0,
                               static_cast<int>(sizes.size()) - 1);
     auto preset = static_cast<helix::LabelPreset>(settings.get_label_preset());

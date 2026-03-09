@@ -550,7 +550,7 @@ void SpoolEditModal::handle_print_label() {
     int size_idx = settings.get_label_size_index();
     int preset_idx = settings.get_label_preset();
 
-    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto sizes = helix::BrotherQLPrinter::supported_sizes_static();
     if (size_idx < 0 || size_idx >= static_cast<int>(sizes.size()))
         size_idx = 0;
     const auto& label_size = sizes[size_idx];
