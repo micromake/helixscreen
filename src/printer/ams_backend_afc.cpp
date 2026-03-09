@@ -2689,6 +2689,20 @@ std::vector<helix::printer::DeviceAction> AmsBackendAfc::get_device_actions() co
         }
     }
 
+    // Overlay toolhead distances from first extruder (single-extruder default)
+    if (!extruders_.empty()) {
+        const auto& ext = extruders_[0];
+        for (auto& a : actions) {
+            if (a.id == "tool_stn") {
+                a.current_value = std::any(ext.tool_stn);
+            } else if (a.id == "tool_stn_unload") {
+                a.current_value = std::any(ext.tool_stn_unload);
+            } else if (a.id == "tool_sensor_after_extruder") {
+                a.current_value = std::any(ext.tool_sensor_after_extruder);
+            }
+        }
+    }
+
     // Multi-extruder: replace single bowden with per-extruder sliders
     if (num_extruders_ > 1 && !extruders_.empty()) {
         actions.erase(std::remove_if(actions.begin(), actions.end(),
@@ -2714,6 +2728,58 @@ std::vector<helix::printer::DeviceAction> AmsBackendAfc::get_device_actions() co
                              true,
                              ""});
         }
+    }
+
+    // Multi-extruder: replace single toolhead actions with per-extruder
+    if (num_extruders_ > 1 && !extruders_.empty()) {
+        actions.erase(std::remove_if(actions.begin(), actions.end(),
+                                     [](const DeviceAction& a) {
+                                         return a.id == "tool_stn" || a.id == "tool_stn_unload" ||
+                                                a.id == "tool_sensor_after_extruder";
+                                     }),
+                      actions.end());
+
+        for (int i = 0; i < static_cast<int>(extruders_.size()); ++i) {
+            const auto& ext = extruders_[i];
+            std::string suffix = "_T" + std::to_string(i);
+            std::string tool_label = " (T" + std::to_string(i) + ")";
+
+            actions.push_back(
+                DeviceAction{"tool_stn" + suffix, "Sensor to Nozzle" + tool_label,
+                             "ruler", "toolhead",
+                             "Distance from toolhead sensor to nozzle for T" + std::to_string(i),
+                             ActionType::SLIDER, std::any(ext.tool_stn), {},
+                             0.0f, 200.0f, "mm", -1, true, ""});
+            actions.push_back(
+                DeviceAction{"tool_stn_unload" + suffix, "Unload Distance" + tool_label,
+                             "ruler", "toolhead",
+                             "Retraction distance for T" + std::to_string(i),
+                             ActionType::SLIDER, std::any(ext.tool_stn_unload), {},
+                             0.0f, 200.0f, "mm", -1, true, ""});
+            actions.push_back(
+                DeviceAction{"tool_sensor_after_extruder" + suffix, "Post-Sensor Clear" + tool_label,
+                             "ruler", "toolhead",
+                             "Extra clear distance for T" + std::to_string(i),
+                             ActionType::SLIDER, std::any(ext.tool_sensor_after_extruder), {},
+                             0.0f, 100.0f, "mm", -1, true, ""});
+        }
+    }
+
+    // Per-lane dist_hub actions in the hub section
+    for (int i = 0; i < slots_.slot_count(); ++i) {
+        const auto* entry = slots_.get(i);
+        if (!entry) continue;
+        std::string lane_name = slots_.name_of(i);
+        std::string id = "dist_hub_" + lane_name;
+        std::string label = "Hub Distance (" + lane_name + ")";
+        float current = entry->sensors.dist_hub;
+
+        actions.push_back(
+            DeviceAction{id, label, "ruler", "hub",
+                         "Distance from lane extruder to hub",
+                         ActionType::SLIDER, std::any(current), {},
+                         0.0f, std::max(500.0f, current * 1.5f), "mm",
+                         i, true, ""});
     }
 
     // ---- Overlay dynamic values from config onto default actions ----
@@ -2981,6 +3047,79 @@ AmsError AmsBackendAfc::execute_device_action(const std::string& action_id, cons
         return execute_gcode(afc_led_state_ ? "TURN_OFF_AFC_LED" : "TURN_ON_AFC_LED");
     } else if (action_id == "quiet_mode") {
         return execute_gcode("AFC_QUIET_MODE");
+    }
+
+    // Per-lane dist_hub actions
+    if (action_id.rfind("dist_hub_", 0) == 0) {
+        std::string lane_name = action_id.substr(9);
+        if (!value.has_value()) {
+            return AmsError(AmsResult::WRONG_STATE, "Value required", "Missing value", "");
+        }
+        try {
+            float val = std::any_cast<float>(value);
+            AmsError err = execute_gcode(
+                fmt::format("SET_HUB_DIST LANE={} LENGTH={:g}", lane_name, val));
+            if (!err) return err;
+            AmsError save_err = execute_gcode("SAVE_HUB_DIST LANE=" + lane_name);
+            if (!save_err) {
+                spdlog::warn("[AMS AFC] SAVE_HUB_DIST failed (runtime value was set)");
+            }
+            return AmsErrorHelper::success();
+        } catch (const std::bad_any_cast&) {
+            return AmsError(AmsResult::WRONG_STATE, "Invalid value type", "Expected float", "");
+        }
+    }
+
+    // ---- Toolhead distance actions (single + multi-extruder) ----
+    auto parse_toolhead_action = [](const std::string& id) -> std::pair<std::string, int> {
+        static const std::vector<std::string> fields = {
+            "tool_sensor_after_extruder", "tool_stn_unload", "tool_stn"};
+        for (const auto& field : fields) {
+            if (id == field) {
+                return {field, 0};
+            }
+            if (id.rfind(field + "_T", 0) == 0) {
+                try {
+                    int idx = std::stoi(id.substr(field.size() + 2));
+                    return {field, idx};
+                } catch (...) {}
+            }
+        }
+        return {"", -1};
+    };
+
+    auto [th_field, th_tool] = parse_toolhead_action(action_id);
+    if (!th_field.empty()) {
+        if (!value.has_value()) {
+            return AmsError(AmsResult::WRONG_STATE, "Value required", "Missing value", "");
+        }
+        try {
+            float val = std::any_cast<float>(value);
+            std::lock_guard<std::mutex> lock(mutex_);
+
+            std::string ext_name = "extruder";
+            if (th_tool > 0) {
+                ext_name = "extruder" + std::to_string(th_tool);
+            }
+
+            std::string param;
+            if (th_field == "tool_stn") param = "TOOL_STN";
+            else if (th_field == "tool_stn_unload") param = "TOOL_STN_UNLOAD";
+            else if (th_field == "tool_sensor_after_extruder") param = "TOOL_AFTER_EXTRUDER";
+
+            std::string cmd = fmt::format("UPDATE_TOOLHEAD_SENSORS EXTRUDER={} {}={:g}",
+                                          ext_name, param, val);
+            AmsError err = execute_gcode(cmd);
+            if (!err) return err;
+
+            AmsError save_err = execute_gcode("SAVE_EXTRUDER_VALUES EXTRUDER=" + ext_name);
+            if (!save_err) {
+                spdlog::warn("[AMS AFC] SAVE_EXTRUDER_VALUES failed (runtime value was set)");
+            }
+            return AmsErrorHelper::success();
+        } catch (const std::bad_any_cast&) {
+            return AmsError(AmsResult::WRONG_STATE, "Invalid value type", "Expected float", "");
+        }
     }
 
     // ---- Config-backed hub actions (afc_config_) ----
