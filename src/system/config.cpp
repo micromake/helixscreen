@@ -555,10 +555,19 @@ void Config::init(const std::string& config_path) {
         config_modified = true;
     }
 
-    // If active_printer_id is empty or doesn't exist in printers map, pick first one
-    if (active_printer_id_.empty() || !data["printers"].contains(active_printer_id_)) {
-        if (!data["printers"].empty()) {
-            active_printer_id_ = data["printers"].begin().key();
+    // If active_printer_id is empty or doesn't point to a valid printer object, pick first one.
+    // The printers map may contain non-printer keys (e.g. show_printer_switcher as a bool),
+    // so we must verify the value is an object, not just that the key exists.
+    if (active_printer_id_.empty() || !data["printers"].contains(active_printer_id_) ||
+        !data["printers"][active_printer_id_].is_object()) {
+        active_printer_id_.clear();
+        for (auto& [key, val] : data["printers"].items()) {
+            if (val.is_object()) {
+                active_printer_id_ = key;
+                break;
+            }
+        }
+        if (!active_printer_id_.empty()) {
             data["active_printer_id"] = active_printer_id_;
             config_modified = true;
             spdlog::info("[Config] Auto-selected active printer: {}", active_printer_id_);
@@ -758,7 +767,8 @@ std::string Config::get_active_printer_id() const {
 }
 
 bool Config::set_active_printer(const std::string& printer_id) {
-    if (!data.contains("printers") || !data["printers"].contains(printer_id)) {
+    if (!data.contains("printers") || !data["printers"].contains(printer_id) ||
+        !data["printers"][printer_id].is_object()) {
         spdlog::error("[Config] Cannot switch to unknown printer '{}'", printer_id);
         return false;
     }
@@ -771,7 +781,8 @@ bool Config::set_active_printer(const std::string& printer_id) {
 std::vector<std::string> Config::get_printer_ids() const {
     std::vector<std::string> ids;
     if (data.contains("printers") && data["printers"].is_object()) {
-        for (auto& [key, _] : data["printers"].items()) {
+        for (auto& [key, val] : data["printers"].items()) {
+            if (!val.is_object()) continue;
             ids.push_back(key);
         }
     }
