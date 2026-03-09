@@ -1515,7 +1515,8 @@ static void draw_parallel_topology(lv_event_t* e, FilamentPathData* data) {
                 draw_nozzle_faceted(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
                 break;
             case helix::ToolheadStyle::A4T:
-                draw_nozzle_a4t(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
+                draw_nozzle_a4t(layer, slot_x, toolhead_y, noz_color, tool_scale * 6 / 5,
+                                toolhead_opa);
                 break;
             default:
                 draw_nozzle_bambu(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
@@ -2251,7 +2252,8 @@ static void filament_path_draw_cb(lv_event_t* e) {
                 draw_nozzle_faceted(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
                 break;
             case helix::ToolheadStyle::A4T:
-                draw_nozzle_a4t(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
+                draw_nozzle_a4t(layer, center_x, nozzle_y, noz_color,
+                                data->extruder_scale * 6 / 5);
                 break;
             default:
                 draw_nozzle_bambu(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
@@ -2263,10 +2265,12 @@ static void filament_path_draw_cb(lv_event_t* e) {
             int32_t tip_y;
             switch (helix::SettingsManager::instance().get_effective_toolhead_style()) {
                 case helix::ToolheadStyle::STEALTHBURNER:
-                case helix::ToolheadStyle::A4T:
-                    // Stealthburner/A4T: nozzle tip is further below center due to larger body
-                    // Tip is at cy + (460 * scale) - 6 where scale = extruder_scale / 100
+                    // Stealthburner: nozzle tip is further below center due to larger body
                     tip_y = nozzle_y + (data->extruder_scale * 46) / 10 - 6;
+                    break;
+                case helix::ToolheadStyle::A4T:
+                    // A4T: 20% larger scale, tip proportionally further down
+                    tip_y = nozzle_y + (data->extruder_scale * 6 / 5 * 46) / 10 - 6;
                     break;
                 default:
                     // Bambu: tip is at cy + body_height/2 + tip_height
