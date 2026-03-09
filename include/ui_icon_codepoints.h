@@ -192,6 +192,7 @@ static const IconMapping ICON_MAP[] = {
     {"power_cycle",        "\xF3\xB0\xA4\x81"},  // F0901 power-cycle
     {"power_plug",         "\xF3\xB0\x9A\xA5"},  // F06A5 power-plug
     {"print",              "\xF3\xB0\x90\xAA"},  // F042A printer
+    {"printer",            "\xF3\xB0\x90\xAA"},  // F042A printer (alias)
     {"printer_3d",         "\xF3\xB0\x90\xAB"},  // F042B printer-3d
     {"progress_clock",     "\xF3\xB0\xA6\x96"},  // F0996 progress-clock (phase tracking)
     {"prohibited",         "\xF3\xB0\x82\xAD"},  // F00AD block-helper

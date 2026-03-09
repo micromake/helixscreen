@@ -523,6 +523,7 @@
     <str name="icon_link" value="󰌹"/>
     <str name="icon_list" value="󰉹"/>
     <str name="icon_lock" value="󰌾"/>
+    <str name="icon_magnify" value="󰍉"/>
     <str name="icon_message" value="󰍩"/>
     <str name="icon_minus" value="󰍴"/>
     <str name="icon_move" value="󰁌"/>
@@ -538,6 +539,7 @@
     <str name="icon_power_cycle" value="󰤁"/>
     <str name="icon_power_plug" value="󰚥"/>
     <str name="icon_print" value="󰐪"/>
+    <str name="icon_printer" value="󰐪"/>
     <str name="icon_printer_3d" value="󰐫"/>
     <str name="icon_progress_clock" value="󰦖"/>
     <str name="icon_prohibited" value="󰂭"/>
