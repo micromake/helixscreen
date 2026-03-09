@@ -26,13 +26,13 @@ const char* label_preset_name(LabelPreset preset) {
     switch (preset) {
     case LabelPreset::STANDARD: return "Standard";
     case LabelPreset::COMPACT:  return "Compact";
-    case LabelPreset::MINIMAL:  return "Minimal";
+    case LabelPreset::MINIMAL:  return "QR Only";
     }
     return "Standard";
 }
 
 const char* label_preset_options() {
-    return "Standard\nCompact\nMinimal";
+    return "Standard\nCompact\nQR Only";
 }
 
 struct BrotherQLPrinter::Impl {};

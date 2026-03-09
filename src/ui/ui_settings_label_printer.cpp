@@ -231,7 +231,7 @@ void LabelPrinterSettingsOverlay::init_preset_dropdown() {
         auto& settings = LabelPrinterSettingsManager::instance();
         // Build translated preset options
         auto options =
-            fmt::format("{}\n{}\n{}", lv_tr("Standard"), lv_tr("Compact"), lv_tr("Minimal"));
+            fmt::format("{}\n{}\n{}", lv_tr("Standard"), lv_tr("Compact"), lv_tr("QR Only"));
         lv_dropdown_set_options(dropdown, options.c_str());
         lv_dropdown_set_selected(dropdown, static_cast<uint32_t>(settings.get_label_preset()));
         spdlog::trace("[{}] Preset dropdown initialized", get_name());
@@ -530,6 +530,7 @@ void LabelPrinterSettingsOverlay::handle_test_print() {
     mock_spool.color_hex = "#FF0000";
     mock_spool.remaining_weight_g = 800;
     mock_spool.initial_weight_g = 1000;
+    mock_spool.remaining_length_m = 265;
     mock_spool.lot_nr = "LOT-2026A";
     mock_spool.comment = "Sample spool";
     mock_spool.nozzle_temp_recommended = 210;
