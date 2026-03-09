@@ -8,8 +8,11 @@
 #include "ui_toast_manager.h"
 #include "ui_update_queue.h"
 
+#include "brother_ql_printer.h"
 #include "label_printer_settings.h"
 #include "label_renderer.h"
+#include "phomemo_printer.h"
+#include "usb_printer_detector.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "theme_manager.h"
@@ -545,18 +548,18 @@ void SpoolEditModal::handle_print_label() {
         return;
     }
 
-    std::string host = settings.get_printer_address();
-    int port = settings.get_printer_port();
-    int size_idx = settings.get_label_size_index();
-    int preset_idx = settings.get_label_preset();
+    bool is_usb = (settings.get_printer_type() == "usb");
 
-    auto sizes = helix::BrotherQLPrinter::supported_sizes_static();
-    if (size_idx < 0 || size_idx >= static_cast<int>(sizes.size()))
-        size_idx = 0;
+    // Get sizes from correct backend
+    auto sizes = is_usb ? helix::PhomemoPrinter::supported_sizes_static()
+                        : helix::BrotherQLPrinter::supported_sizes_static();
+
+    int size_idx = std::clamp(settings.get_label_size_index(), 0,
+                              static_cast<int>(sizes.size()) - 1);
     const auto& label_size = sizes[size_idx];
 
     auto preset = static_cast<helix::LabelPreset>(
-        std::clamp(preset_idx, 0, static_cast<int>(helix::LabelPreset::MINIMAL)));
+        std::clamp(settings.get_label_preset(), 0, static_cast<int>(helix::LabelPreset::MINIMAL)));
 
     auto bitmap = helix::LabelRenderer::render(working_spool_, preset, label_size);
     if (bitmap.empty()) {
@@ -566,17 +569,47 @@ void SpoolEditModal::handle_print_label() {
 
     ToastManager::instance().show(ToastSeverity::INFO, lv_tr("Printing label..."), 2000);
 
-    printer_.print_label(host, port, bitmap, label_size,
-                         [](bool success, const std::string& error) {
-                             if (success) {
-                                 ToastManager::instance().show(ToastSeverity::SUCCESS,
-                                                               lv_tr("Label printed"), 2000);
-                             } else {
-                                 spdlog::error("[SpoolEditModal] Print failed: {}", error);
-                                 ToastManager::instance().show(ToastSeverity::ERROR,
-                                                               lv_tr("Print failed"), 3000);
-                             }
-                         });
+    auto print_cb = [](bool success, const std::string& error) {
+        if (success) {
+            ToastManager::instance().show(ToastSeverity::SUCCESS, lv_tr("Label printed"), 2000);
+        } else {
+            spdlog::error("[SpoolEditModal] Print failed: {}", error);
+            ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Print failed"), 3000);
+        }
+    };
+
+    if (is_usb) {
+        auto detected = helix::UsbPrinterDetector().scan();
+        uint16_t vid = settings.get_usb_vid();
+        uint16_t pid = settings.get_usb_pid();
+
+        bool found = false;
+        for (const auto& d : detected) {
+            if (d.vid == vid && d.pid == pid) {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found && !detected.empty()) {
+            vid = detected[0].vid;
+            pid = detected[0].pid;
+            spdlog::info("[SpoolEditModal] Configured USB printer not found, using {}",
+                         detected[0].product_name);
+        } else if (!found) {
+            ToastManager::instance().show(ToastSeverity::WARNING,
+                                          lv_tr("No USB printer detected"), 3000);
+            return;
+        }
+
+        static helix::PhomemoPrinter usb_printer;
+        usb_printer.set_device(vid, pid, settings.get_usb_serial());
+        usb_printer.print(bitmap, label_size, print_cb);
+    } else {
+        static helix::BrotherQLPrinter net_printer;
+        net_printer.print_label(settings.get_printer_address(), settings.get_printer_port(),
+                                bitmap, label_size, print_cb);
+    }
 }
 
 // ============================================================================
