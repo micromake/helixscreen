@@ -28,9 +28,11 @@ void LabelPrinterSettingsManager::init_subjects() {
 
     Config* config = Config::get_instance();
 
-    // Printer type: 0=network, 1=usb
+    // Printer type: 0=network, 1=usb, 2=bluetooth
     std::string type_str = config->get<std::string>("/label_printer/type", "network");
-    int type_int = (type_str == "usb") ? 1 : 0;
+    int type_int = 0;
+    if (type_str == "usb") type_int = 1;
+    else if (type_str == "bluetooth") type_int = 2;
     UI_MANAGED_SUBJECT_INT(printer_type_subject_, type_int, "label_printer_type", subjects_);
 
     // Configured flag: depends on printer type
@@ -75,9 +77,11 @@ void LabelPrinterSettingsManager::set_printer_type(const std::string& type) {
     config->set<std::string>("/label_printer/type", type);
     config->save();
 
-    // Update type subject
+    // Update type subject (0=network, 1=usb, 2=bluetooth)
     if (subjects_initialized_) {
-        int type_int = (type == "usb") ? 1 : 0;
+        int type_int = 0;
+        if (type == "usb") type_int = 1;
+        else if (type == "bluetooth") type_int = 2;
         lv_subject_set_int(&printer_type_subject_, type_int);
         lv_subject_set_int(&printer_configured_subject_, is_configured() ? 1 : 0);
     }
@@ -187,9 +191,43 @@ void LabelPrinterSettingsManager::set_usb_serial(const std::string& serial) {
     config->save();
 }
 
+std::string LabelPrinterSettingsManager::get_bt_address() const {
+    Config* config = Config::get_instance();
+    return config->get<std::string>("/label_printer/bt_address", "");
+}
+
+void LabelPrinterSettingsManager::set_bt_address(const std::string& address) {
+    spdlog::info("[LabelPrinterSettings] set_bt_address('{}')", address);
+
+    Config* config = Config::get_instance();
+    config->set<std::string>("/label_printer/bt_address", address);
+    config->save();
+
+    if (subjects_initialized_) {
+        lv_subject_set_int(&printer_configured_subject_, is_configured() ? 1 : 0);
+    }
+}
+
+std::string LabelPrinterSettingsManager::get_bt_transport() const {
+    Config* config = Config::get_instance();
+    return config->get<std::string>("/label_printer/bt_transport", "spp");
+}
+
+void LabelPrinterSettingsManager::set_bt_transport(const std::string& transport) {
+    spdlog::info("[LabelPrinterSettings] set_bt_transport('{}')", transport);
+
+    Config* config = Config::get_instance();
+    config->set<std::string>("/label_printer/bt_transport", transport);
+    config->save();
+}
+
 bool LabelPrinterSettingsManager::is_configured() const {
-    if (get_printer_type() == "usb") {
+    const auto type = get_printer_type();
+    if (type == "usb") {
         return get_usb_vid() != 0 && get_usb_pid() != 0;
+    }
+    if (type == "bluetooth") {
+        return !get_bt_address().empty();
     }
     return !get_printer_address().empty();
 }

@@ -15,14 +15,16 @@ namespace helix {
  * @brief Domain-specific manager for label printer settings
  *
  * Owns label printer configuration and persistence:
- * - printer_type ("network" or "usb")
+ * - printer_type ("network", "usb", or "bluetooth")
  * - printer_address (IP/hostname of Brother QL printer)
  * - printer_port (raw socket port, default 9100)
  * - usb_vid, usb_pid, usb_serial (USB device identification)
+ * - bt_address (Bluetooth MAC address)
+ * - bt_transport ("spp" or "ble")
  * - label_size_index (index into supported label sizes)
  * - label_preset (0=Standard, 1=Compact, 2=Minimal)
- * - printer_configured subject (1 if address non-empty or USB VID/PID set)
- * - printer_type subject (0=network, 1=usb)
+ * - printer_configured subject (1 if address non-empty, USB VID/PID set, or BT address set)
+ * - printer_type subject (0=network, 1=usb, 2=bluetooth)
  *
  * Thread safety: Single-threaded, main LVGL thread only.
  */
@@ -92,7 +94,21 @@ class LabelPrinterSettingsManager {
     /** @brief Set USB serial number (persists to config) */
     void set_usb_serial(const std::string& serial);
 
-    /** @brief True if printer is configured (network: address non-empty; USB: VID+PID set) */
+    // Bluetooth settings
+
+    /** @brief Get Bluetooth MAC address */
+    [[nodiscard]] std::string get_bt_address() const;
+
+    /** @brief Set Bluetooth MAC address (updates configured subject, persists) */
+    void set_bt_address(const std::string& address);
+
+    /** @brief Get Bluetooth transport type ("spp" or "ble") */
+    [[nodiscard]] std::string get_bt_transport() const;
+
+    /** @brief Set Bluetooth transport type ("spp" or "ble", persists) */
+    void set_bt_transport(const std::string& transport);
+
+    /** @brief True if printer is configured (network: address non-empty; USB: VID+PID set; BT: address non-empty) */
     bool is_configured() const;
 
     // =========================================================================
