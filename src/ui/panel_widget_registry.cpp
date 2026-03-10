@@ -34,6 +34,7 @@ void register_job_queue_widget();
 void register_clog_detection_widget();
 void register_print_stats_widget();
 void register_gcode_console_widget();
+void register_bed_temperature_widget();
 void register_preheat_widget();
 #if HELIX_HAS_CAMERA
 void register_camera_widget();
@@ -56,6 +57,7 @@ static std::vector<PanelWidgetDef> s_widget_defs = {
     {"led_controls",     "LED Controls",      "led_strip",        "Open LED color and brightness controls",       "LED Controls",     "printer_has_led",    "No LED strips detected",              false, 1, 1, 1, 1, 1, 1},
     {"fan_stack",        "Fan Speeds",        "fan",              "Part, hotend, and auxiliary fan speeds",        "Fan Speeds",       nullptr,              nullptr,                               true,  1, 1, 1, 1, 3, 2},
     {"temperature",      "Nozzle Temperature","thermometer",      "Monitor and set nozzle temperature",           "Nozzle Temperature", nullptr,            nullptr,                               true,  1, 1, 1, 1, 2, 2},
+    {"bed_temperature",  "Bed Temperature",   "radiator",         "Monitor and set bed temperature",              "Bed Temperature",    nullptr,            nullptr,                               false, 1, 1, 1, 1, 2, 2},
     {"preheat",          "Preheat",           "heat_wave",        "Quick preheat with material selection",        "Preheat",            nullptr,            nullptr,                               false, 3, 1, 2, 1, 4, 1},
     {"temp_stack",       "Temperatures",      "thermometer",      "Nozzle, bed, and chamber temps stacked",       "Temperatures",     nullptr,              nullptr,                               false, 1, 1, 1, 1, 3, 2},
     {"filament",         "Filament Sensor",   "filament_alert",   "Filament runout detection status",             "Filament Sensor",  "filament_sensor_count", "No filament sensor detected",      true, 1, 1, 1, 1, 2, 1},
@@ -153,6 +155,7 @@ void init_widget_registrations() {
     register_power_widget();
     register_network_widget();
     register_temperature_widget();
+    register_bed_temperature_widget();
     register_temp_stack_widget();
     register_led_widget();
     register_led_controls_widget();
