@@ -54,9 +54,10 @@ LOCKED   ──(E-Stop tap)─────────────► stays LOCK
 
 ## E-Stop Bypass
 
-- E-Stop button lives in the top bar, rendered on `lv_layer_sys()` (above `lv_layer_top()`)
-- Lock overlay is on `lv_layer_top()`, so E-Stop remains clickable above it
-- If E-Stop is on the same layer, raise it above the lock overlay explicitly
+- E-Stop buttons are embedded within each panel's XML (not on a separate LVGL layer)
+- Lock overlay on `lv_layer_top()` covers them, so the lock screen includes its own E-Stop FAB
+- The lock screen E-Stop uses the same `emergency_stop_clicked` callback, respects the confirmation dialog setting
+- Only visible during printing/paused states (bound to `estop_visible` subject)
 
 ## What's NOT Included (YAGNI)
 
