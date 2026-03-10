@@ -18,6 +18,8 @@
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "static_panel_registry.h"
 #include "theme_manager.h"
+#include "ui_keyboard_manager.h"
+#include "ui_text_input.h"
 
 #include <spdlog/spdlog.h>
 
@@ -328,7 +330,7 @@ void AmsDeviceSectionDetailOverlay::create_action_control(
         lv_obj_t* ta = lv_textarea_create(row);
         lv_textarea_set_one_line(ta, true);
         lv_obj_set_width(ta, 80);
-        lv_obj_set_height(ta, theme_manager_get_spacing("button_height_sm"));
+        lv_obj_set_height(ta, LV_SIZE_CONTENT);
         lv_textarea_set_accepted_chars(ta, "0123456789.-");
         std::string val_text = std::to_string(slider_val);
         lv_textarea_set_text(ta, val_text.c_str());
@@ -338,11 +340,19 @@ void AmsDeviceSectionDetailOverlay::create_action_control(
             lv_textarea_set_placeholder_text(ta, action.unit.c_str());
         }
 
-        // Store action ID in vector, pass index as user_data on BOTH slider and textarea
+        // Store action ID in vector, pass index as user_data on slider only.
+        // Textarea user_data is reserved for TEXT_INPUT_MAGIC + KeyboardHint;
+        // on_value_input_ready finds the index via the sibling slider.
         action_ids_.push_back(action.id);
         size_t action_index = action_ids_.size() - 1;
         lv_obj_set_user_data(slider, reinterpret_cast<void*>(action_index));
-        lv_obj_set_user_data(ta, reinterpret_cast<void*>(action_index));
+
+        // Set numeric keyboard hint and register with KeyboardManager
+        static constexpr uintptr_t TEXT_INPUT_MAGIC = 0xBADC0DE0;
+        lv_obj_set_user_data(
+            ta, reinterpret_cast<void*>(TEXT_INPUT_MAGIC |
+                                        static_cast<uintptr_t>(KeyboardHint::NUMERIC)));
+        KeyboardManager::instance().register_textarea(ta);
 
         // Slider callbacks: update text input live during drag, execute on release
         lv_obj_add_event_cb(slider, on_slider_changed, LV_EVENT_VALUE_CHANGED, nullptr);
@@ -532,6 +542,7 @@ void AmsDeviceSectionDetailOverlay::on_slider_changed(lv_event_t* e) {
             int32_t int_val = lv_slider_get_value(slider);
 
             // Update the text input (last child of the row: label, slider, textarea)
+            // Guard: only update if value actually changed to prevent feedback loops
             lv_obj_t* row = lv_obj_get_parent(slider);
             if (row) {
                 uint32_t child_count = lv_obj_get_child_count(row);
@@ -539,7 +550,10 @@ void AmsDeviceSectionDetailOverlay::on_slider_changed(lv_event_t* e) {
                     lv_obj_t* ta = lv_obj_get_child(row, child_count - 1);
                     if (ta) {
                         std::string val_text = std::to_string(int_val);
-                        lv_textarea_set_text(ta, val_text.c_str());
+                        const char* current = lv_textarea_get_text(ta);
+                        if (!current || val_text != current) {
+                            lv_textarea_set_text(ta, val_text.c_str());
+                        }
                     }
                 }
             }
@@ -610,7 +624,11 @@ void AmsDeviceSectionDetailOverlay::on_value_input_ready(lv_event_t* e) {
         spdlog::warn("[AmsDeviceSectionDetailOverlay] on_value_input_ready: invalid target");
     } else {
         auto& overlay = get_ams_device_section_detail_overlay();
-        auto index = reinterpret_cast<size_t>(lv_obj_get_user_data(ta));
+        // Get action index from sibling slider (child index 1 of row).
+        // Textarea user_data is reserved for TEXT_INPUT_MAGIC + KeyboardHint.
+        lv_obj_t* row = lv_obj_get_parent(ta);
+        lv_obj_t* slider = row ? lv_obj_get_child(row, 1) : nullptr;
+        auto index = slider ? reinterpret_cast<size_t>(lv_obj_get_user_data(slider)) : SIZE_MAX;
         if (index >= overlay.action_ids_.size()) {
             spdlog::warn("[AmsDeviceSectionDetailOverlay] Invalid text input action index: {}",
                          index);

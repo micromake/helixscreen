@@ -14,7 +14,6 @@ std::vector<DeviceSection> afc_default_sections() {
         {"hub", "Hub & Cutter", 4, "Blade change and parking"},
         {"tip_forming", "Tip Forming", 5, "Tip shaping configuration"},
         {"purge", "Purge & Wipe", 6, "Purge tower and brush settings"},
-        {"config", "Configuration", 7, "System configuration and mapping"},
     };
 }
 
@@ -452,24 +451,6 @@ std::vector<DeviceAction> afc_default_actions() {
         .slot_index = -1,
         .enabled = true,
         .disable_reason = "",
-    });
-
-    // Configuration section
-    actions.push_back({
-        .id = "save_restart",
-        .label = "Save & Restart",
-        .icon = "content-save",
-        .section = "config",
-        .description = "Save configuration and restart Klipper",
-        .type = ActionType::BUTTON,
-        .current_value = {},
-        .options = {},
-        .min_value = 0,
-        .max_value = 0,
-        .unit = "",
-        .slot_index = -1,
-        .enabled = false,
-        .disable_reason = "No unsaved changes",
     });
 
     return actions;

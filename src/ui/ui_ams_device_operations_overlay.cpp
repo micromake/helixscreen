@@ -291,13 +291,13 @@ static const char* section_icon_for_id(const std::string& id) {
     if (id == "maintenance")
         return "wrench";
     if (id == "hub")
-        return "filament";
+        return "source_branch";
     if (id == "tip_forming")
         return "thermometer";
     if (id == "purge")
         return "water";
     if (id == "toolhead")
-        return "printer-3d-nozzle";
+        return "filament";
     if (id == "config")
         return "cog";
     return "cog"; // fallback for unknown sections
