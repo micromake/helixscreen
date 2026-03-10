@@ -27,6 +27,7 @@
 #include "ui_switch.h"
 #include "ui_text.h"
 #include "ui_text_input.h"
+#include "ui_lock_screen.h"
 #include "ui_z_offset_indicator.h"
 
 #include "layout_manager.h"
@@ -277,6 +278,10 @@ void register_xml_components() {
     // Beta feature indicators (badge before wrapper - dependency order)
     register_xml("beta_badge.xml");
     register_xml("beta_feature.xml");
+
+    // Lock screen overlay (full-screen PIN entry on lv_layer_top)
+    helix::ui::register_lock_screen_callbacks();
+    register_xml("components/lock_screen.xml");
 
     // emergency_stop_button.xml removed - E-Stop buttons are now embedded in panels
     register_xml("estop_confirmation_dialog.xml");
