@@ -279,8 +279,8 @@ TEST_CASE("AmsBackendMock device actions - default configuration", "[ams][device
     SECTION("get_device_sections returns default HH sections") {
         auto sections = backend.get_device_sections();
 
-        // Mock defaults to Happy Hare mode with 4 sections
-        REQUIRE(sections.size() == 4);
+        // Mock defaults to Happy Hare mode with 5 sections
+        REQUIRE(sections.size() == 5);
 
         // Find setup section
         auto it = std::find_if(sections.begin(), sections.end(),
@@ -333,11 +333,12 @@ TEST_CASE("AmsBackendMock device actions - default configuration", "[ams][device
         CHECK(it->enabled == true);
     }
 
-    SECTION("default HH actions include gear_load_speed (slider)") {
+    SECTION("default HH actions include gear_from_buffer_speed (slider)") {
         auto actions = backend.get_device_actions();
 
-        auto it = std::find_if(actions.begin(), actions.end(),
-                               [](const DeviceAction& a) { return a.id == "gear_load_speed"; });
+        auto it = std::find_if(actions.begin(), actions.end(), [](const DeviceAction& a) {
+            return a.id == "gear_from_buffer_speed";
+        });
         REQUIRE(it != actions.end());
         CHECK(it->type == ActionType::SLIDER);
         CHECK(it->section == "speed");
@@ -387,10 +388,10 @@ TEST_CASE("AmsBackendMock execute_device_action behavior", "[ams][device_actions
         backend.clear_last_executed_action();
 
         float slider_value = 500.0f;
-        backend.execute_device_action("gear_load_speed", slider_value);
+        backend.execute_device_action("gear_from_buffer_speed", slider_value);
 
         auto [last_id, last_value] = backend.get_last_executed_action();
-        CHECK(last_id == "gear_load_speed");
+        CHECK(last_id == "gear_from_buffer_speed");
         REQUIRE(last_value.has_value());
         CHECK(std::any_cast<float>(last_value) == Catch::Approx(500.0f));
     }

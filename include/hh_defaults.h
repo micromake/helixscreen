@@ -22,7 +22,7 @@ namespace helix::printer {
 /**
  * @brief Default device sections for Happy Hare
  *
- * Returns 4 sections: setup, speed, accessories, maintenance.
+ * Returns 5 sections: setup, speed, toolhead, accessories, maintenance.
  * Section IDs match AFC convention for UI consistency.
  */
 std::vector<DeviceSection> hh_default_sections();

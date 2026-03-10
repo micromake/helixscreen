@@ -9,8 +9,9 @@ std::vector<DeviceSection> hh_default_sections() {
     return {
         {"setup", "Setup", 0, "Calibration and system configuration"},
         {"speed", "Speed", 1, "Motor speeds and acceleration"},
-        {"accessories", "Accessories", 2, "eSpooler, clog detection, and sensor settings"},
-        {"maintenance", "Maintenance", 3, "Testing, servo, and motor operations"},
+        {"toolhead", "Toolhead", 2, "Extruder distances and sensor configuration"},
+        {"accessories", "Accessories", 3, "eSpooler, clog detection, and sensor settings"},
+        {"maintenance", "Maintenance", 4, "Testing, servo, and motor operations"},
     };
 }
 
@@ -60,22 +61,45 @@ std::vector<DeviceAction> hh_default_actions() {
     add_button("calibrate_gates", "Calibrate Gates", "setup");
     add_dropdown("led_mode", "LED Mode", "setup", {"off", "gate_status", "filament_color", "on"},
                  "off");
-    add_button("calibrate_servo", "Calibrate Servo", "setup");
 
     // --- Speed section ---
-    add_slider("gear_load_speed", "Gear Load Speed", "speed", 150.0, 10.0f, 300.0f, "mm/s");
+    add_slider("gear_from_buffer_speed", "Gear Buffer Speed", "speed", 150.0, 10.0f, 300.0f,
+               "mm/s");
+    add_slider("gear_from_spool_speed", "Gear Spool Speed", "speed", 60.0, 10.0f, 300.0f, "mm/s");
     add_slider("gear_unload_speed", "Gear Unload Speed", "speed", 80.0, 10.0f, 300.0f, "mm/s");
     add_slider("selector_speed", "Selector Speed", "speed", 200.0, 10.0f, 300.0f, "mm/s");
+    add_slider("extruder_load_speed", "Extruder Load Speed", "speed", 45.0, 10.0f, 100.0f, "mm/s");
+    add_slider("extruder_unload_speed", "Extruder Unload Speed", "speed", 45.0, 10.0f, 100.0f,
+               "mm/s");
+
+    // --- Toolhead section ---
+    add_slider("toolhead_sensor_to_nozzle", "Sensor to Nozzle", "toolhead", 62.0, 1.0f, 200.0f,
+               "mm");
+    add_slider("toolhead_extruder_to_nozzle", "Extruder to Nozzle", "toolhead", 72.0, 5.0f, 200.0f,
+               "mm");
+    add_slider("toolhead_entry_to_extruder", "Entry to Extruder", "toolhead", 0.0, 0.0f, 200.0f,
+               "mm");
+    add_slider("toolhead_ooze_reduction", "Ooze Reduction", "toolhead", 2.0, -5.0f, 20.0f, "mm");
 
     // --- Accessories section (v4) ---
     add_dropdown("espooler_mode", "eSpooler Mode", "accessories", {"off", "rewind", "assist"},
                  "off");
     add_dropdown("clog_detection", "Clog Detection", "accessories", {"Off", "Manual", "Auto"},
                  "Off");
+    {
+        DeviceAction a;
+        a.id = "sync_to_extruder";
+        a.label = "Sync to Extruder";
+        a.section = "accessories";
+        a.type = ActionType::TOGGLE;
+        a.current_value = false;
+        actions.push_back(std::move(a));
+    }
 
     // --- Maintenance section ---
     add_button("test_grip", "Test Grip", "maintenance");
     add_button("test_load", "Test Load", "maintenance");
+    add_button("test_move", "Test Move", "maintenance");
     {
         DeviceAction a;
         a.id = "motors_toggle";

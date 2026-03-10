@@ -58,6 +58,9 @@ void AmsBackendHappyHare::on_started() {
 
     // Query selector type to determine topology (Type A=LINEAR vs Type B=HUB)
     query_selector_type_from_config();
+
+    // Query configfile.settings.mmu for speed/distance defaults
+    query_config_defaults();
 }
 
 // stop(), release_subscriptions(), is_running() provided by AmsSubscriptionBackend
@@ -1146,6 +1149,121 @@ void AmsBackendHappyHare::query_selector_type_from_config() {
             spdlog::warn("[AMS HappyHare] Failed to query configfile for selector type: {}",
                          err.message);
         });
+}
+
+// ============================================================================
+// Config Defaults Query
+// ============================================================================
+
+void AmsBackendHappyHare::query_config_defaults() {
+    if (!client_) {
+        return;
+    }
+
+    // Query configfile.settings.mmu for initial values of speeds and distances.
+    // These serve as defaults until the user overrides them via the UI.
+    nlohmann::json params = {{"objects", nlohmann::json::object({{"configfile", {"settings"}}})}};
+
+    std::weak_ptr<std::atomic<bool>> weak_alive = alive_;
+    client_->send_jsonrpc(
+        "printer.objects.query", params,
+        [this, weak_alive](nlohmann::json response) {
+            auto alive_lock = weak_alive.lock();
+            if (!alive_lock || !alive_lock->load())
+                return;
+            try {
+                const auto& settings = response["result"]["status"]["configfile"]["settings"];
+
+                if (!settings.contains("mmu") || !settings["mmu"].is_object()) {
+                    spdlog::debug("[AMS HappyHare] No mmu section in configfile for defaults");
+                    return;
+                }
+
+                const auto& mmu = settings["mmu"];
+
+                // Helper to parse a float from config (values are strings in configfile)
+                auto parse_float = [&](const char* key, float& out) {
+                    if (mmu.contains(key) && mmu[key].is_string()) {
+                        try {
+                            out = std::stof(mmu[key].get<std::string>());
+                        } catch (...) {
+                            // Keep default
+                        }
+                    }
+                };
+
+                // Helper to parse an int from config
+                auto parse_int = [&](const char* key, int& out) {
+                    if (mmu.contains(key) && mmu[key].is_string()) {
+                        try {
+                            out = std::stoi(mmu[key].get<std::string>());
+                        } catch (...) {
+                            // Keep default
+                        }
+                    }
+                };
+
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+
+                    parse_float("gear_from_buffer_speed", config_defaults_.gear_from_buffer_speed);
+                    parse_float("gear_from_spool_speed", config_defaults_.gear_from_spool_speed);
+                    parse_float("gear_unload_speed", config_defaults_.gear_unload_speed);
+                    parse_float("selector_move_speed", config_defaults_.selector_move_speed);
+                    parse_float("extruder_load_speed", config_defaults_.extruder_load_speed);
+                    parse_float("extruder_unload_speed", config_defaults_.extruder_unload_speed);
+                    parse_float("toolhead_sensor_to_nozzle",
+                                config_defaults_.toolhead_sensor_to_nozzle);
+                    parse_float("toolhead_extruder_to_nozzle",
+                                config_defaults_.toolhead_extruder_to_nozzle);
+                    parse_float("toolhead_entry_to_extruder",
+                                config_defaults_.toolhead_entry_to_extruder);
+                    parse_float("toolhead_ooze_reduction", config_defaults_.toolhead_ooze_reduction);
+                    parse_int("sync_to_extruder", config_defaults_.sync_to_extruder);
+                    parse_int("clog_detection", config_defaults_.clog_detection);
+
+                    config_defaults_.loaded = true;
+
+                    spdlog::info("[AMS HappyHare] Config defaults loaded: "
+                                 "gear_buf={}, gear_spool={}, gear_unload={}, "
+                                 "ext_load={}, ext_unload={}, "
+                                 "sensor_to_nozzle={}, extruder_to_nozzle={}",
+                                 config_defaults_.gear_from_buffer_speed,
+                                 config_defaults_.gear_from_spool_speed,
+                                 config_defaults_.gear_unload_speed,
+                                 config_defaults_.extruder_load_speed,
+                                 config_defaults_.extruder_unload_speed,
+                                 config_defaults_.toolhead_sensor_to_nozzle,
+                                 config_defaults_.toolhead_extruder_to_nozzle);
+                }
+
+                load_persisted_overrides();
+                reapply_overrides();
+            } catch (const nlohmann::json::exception& e) {
+                spdlog::warn("[AMS HappyHare] Failed to parse configfile for defaults: {}",
+                             e.what());
+            }
+        },
+        [](const MoonrakerError& err) {
+            spdlog::warn("[AMS HappyHare] Failed to query configfile for defaults: {}",
+                         err.message);
+        });
+}
+
+void AmsBackendHappyHare::load_persisted_overrides() {
+    // Stub — implemented in Task 8 (persistence via Config)
+}
+
+void AmsBackendHappyHare::save_override(const std::string& /*key*/, float /*value*/) {
+    // Stub — implemented in Task 8 (persistence via Config)
+}
+
+void AmsBackendHappyHare::save_override(const std::string& /*key*/, int /*value*/) {
+    // Stub — implemented in Task 8 (persistence via Config)
+}
+
+void AmsBackendHappyHare::reapply_overrides() {
+    // Stub — implemented in Task 8 (persistence via Config)
 }
 
 // ============================================================================

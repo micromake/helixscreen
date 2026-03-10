@@ -2195,3 +2195,144 @@ TEST_CASE("Happy Hare parses sync_feedback_bias fields", "[ams][happy_hare][v4][
         REQUIRE(info.sync_feedback_bias_raw == Catch::Approx(-2.0f));
     }
 }
+
+// --- Phase 10: Expanded device defaults (Task 2) ---
+
+TEST_CASE("Happy Hare device sections include toolhead", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    auto sections = helper.get_device_sections();
+
+    bool found_toolhead = false;
+    for (const auto& s : sections) {
+        if (s.id == "toolhead") {
+            found_toolhead = true;
+            REQUIRE(s.label == "Toolhead");
+            break;
+        }
+    }
+    REQUIRE(found_toolhead);
+}
+
+TEST_CASE("Happy Hare sections have correct ordering", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    auto sections = helper.get_device_sections();
+
+    REQUIRE(sections.size() == 5);
+    REQUIRE(sections[0].id == "setup");
+    REQUIRE(sections[1].id == "speed");
+    REQUIRE(sections[2].id == "toolhead");
+    REQUIRE(sections[3].id == "accessories");
+    REQUIRE(sections[4].id == "maintenance");
+}
+
+TEST_CASE("Happy Hare actions include split gear speeds", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    auto actions = helper.get_device_actions();
+
+    auto find_action = [&](const std::string& id) -> const helix::printer::DeviceAction* {
+        for (const auto& a : actions) {
+            if (a.id == id) return &a;
+        }
+        return nullptr;
+    };
+
+    // Split gear speeds should exist
+    auto* buf = find_action("gear_from_buffer_speed");
+    REQUIRE(buf != nullptr);
+    REQUIRE(buf->section == "speed");
+    REQUIRE(std::any_cast<double>(buf->current_value) == Catch::Approx(150.0));
+
+    auto* spool = find_action("gear_from_spool_speed");
+    REQUIRE(spool != nullptr);
+    REQUIRE(spool->section == "speed");
+    REQUIRE(std::any_cast<double>(spool->current_value) == Catch::Approx(60.0));
+
+    // Old gear_load_speed should NOT exist
+    REQUIRE(find_action("gear_load_speed") == nullptr);
+}
+
+TEST_CASE("Happy Hare actions include extruder speeds", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    auto actions = helper.get_device_actions();
+
+    auto find_action = [&](const std::string& id) -> const helix::printer::DeviceAction* {
+        for (const auto& a : actions) {
+            if (a.id == id) return &a;
+        }
+        return nullptr;
+    };
+
+    auto* ext_load = find_action("extruder_load_speed");
+    REQUIRE(ext_load != nullptr);
+    REQUIRE(ext_load->section == "speed");
+
+    auto* ext_unload = find_action("extruder_unload_speed");
+    REQUIRE(ext_unload != nullptr);
+    REQUIRE(ext_unload->section == "speed");
+}
+
+TEST_CASE("Happy Hare actions include toolhead sliders", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    auto actions = helper.get_device_actions();
+
+    auto find_action = [&](const std::string& id) -> const helix::printer::DeviceAction* {
+        for (const auto& a : actions) {
+            if (a.id == id) return &a;
+        }
+        return nullptr;
+    };
+
+    REQUIRE(find_action("toolhead_sensor_to_nozzle") != nullptr);
+    REQUIRE(find_action("toolhead_extruder_to_nozzle") != nullptr);
+    REQUIRE(find_action("toolhead_entry_to_extruder") != nullptr);
+    REQUIRE(find_action("toolhead_ooze_reduction") != nullptr);
+
+    // Verify they're in the toolhead section
+    REQUIRE(find_action("toolhead_sensor_to_nozzle")->section == "toolhead");
+    REQUIRE(find_action("toolhead_ooze_reduction")->section == "toolhead");
+}
+
+TEST_CASE("Happy Hare actions include sync_to_extruder toggle",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    auto actions = helper.get_device_actions();
+
+    auto find_action = [&](const std::string& id) -> const helix::printer::DeviceAction* {
+        for (const auto& a : actions) {
+            if (a.id == id) return &a;
+        }
+        return nullptr;
+    };
+
+    auto* sync = find_action("sync_to_extruder");
+    REQUIRE(sync != nullptr);
+    REQUIRE(sync->section == "accessories");
+    REQUIRE(sync->type == helix::printer::ActionType::TOGGLE);
+}
+
+TEST_CASE("Happy Hare actions include test_move button", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    auto actions = helper.get_device_actions();
+
+    auto find_action = [&](const std::string& id) -> const helix::printer::DeviceAction* {
+        for (const auto& a : actions) {
+            if (a.id == id) return &a;
+        }
+        return nullptr;
+    };
+
+    auto* move = find_action("test_move");
+    REQUIRE(move != nullptr);
+    REQUIRE(move->section == "maintenance");
+    REQUIRE(move->type == helix::printer::ActionType::BUTTON);
+}
+
+TEST_CASE("Happy Hare actions do NOT include calibrate_servo",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    auto actions = helper.get_device_actions();
+
+    for (const auto& a : actions) {
+        REQUIRE(a.id != "calibrate_servo");
+    }
+}
