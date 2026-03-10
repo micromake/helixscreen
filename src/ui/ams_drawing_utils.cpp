@@ -9,6 +9,7 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <map>
 
 namespace ams_draw {
 
@@ -346,6 +347,12 @@ SystemToolLayout compute_system_tool_layout(const AmsSystemInfo& info, const Ams
     SystemToolLayout result;
     int total_physical = 0;
 
+    // For extruder-name-grouped PARALLEL units, the physical position order
+    // follows std::map iteration (alphabetical by extruder name), which may
+    // not match sorted virtual tool numbers. Record the correct label per
+    // physical position here and apply after the default label-building loop.
+    std::map<int, int> physical_label_overrides;
+
     for (int i = 0; i < static_cast<int>(info.units.size()); ++i) {
         const auto& unit = info.units[i];
 
@@ -410,27 +417,68 @@ SystemToolLayout compute_system_tool_layout(const AmsSystemInfo& info, const Ams
             // where mapped tool numbers may span beyond this unit's normal range.
             int physical_first = total_physical;
 
-            // Collect and sort distinct mapped tools to assign sequential physical ranks
-            std::vector<int> mapped_tools;
+            // Collect unique physical extruders (or fall back to unique mapped tools)
+            // For HTLF setups, multiple lanes with different T-numbers may share
+            // one physical extruder (e.g., lane3->T1/extruder2, lane4->T3/extruder2)
+            bool have_extruder_names = false;
             for (const auto& slot : unit.slots) {
-                if (slot.mapped_tool >= 0) {
-                    mapped_tools.push_back(slot.mapped_tool);
+                if (!slot.extruder_name.empty()) {
+                    have_extruder_names = true;
+                    break;
                 }
             }
-            std::sort(mapped_tools.begin(), mapped_tools.end());
-            mapped_tools.erase(std::unique(mapped_tools.begin(), mapped_tools.end()),
-                               mapped_tools.end());
 
-            int lane_count = static_cast<int>(mapped_tools.size());
-            utl.first_physical_tool = physical_first;
-            utl.tool_count = lane_count;
+            if (have_extruder_names) {
+                // Group by extruder name: map extruder -> sorted set of mapped_tools
+                std::map<std::string, std::vector<int>> extruder_tools;
+                for (const auto& slot : unit.slots) {
+                    if (slot.mapped_tool >= 0) {
+                        std::string ext = slot.extruder_name.empty()
+                                              ? ("__tool_" + std::to_string(slot.mapped_tool))
+                                              : slot.extruder_name;
+                        extruder_tools[ext].push_back(slot.mapped_tool);
+                    }
+                }
 
-            // Map each virtual tool to sequential physical position by sorted rank
-            for (int i = 0; i < static_cast<int>(mapped_tools.size()); ++i) {
-                result.virtual_to_physical[mapped_tools[i]] = physical_first + i;
+                int lane_count = static_cast<int>(extruder_tools.size());
+                utl.first_physical_tool = physical_first;
+                utl.tool_count = lane_count;
+
+                // Assign each extruder group a physical position and record
+                // the correct label (min tool in group) for each physical slot
+                int idx = 0;
+                for (auto& [ext_name, tools] : extruder_tools) {
+                    int min_in_group = *std::min_element(tools.begin(), tools.end());
+                    for (int t : tools) {
+                        result.virtual_to_physical[t] = physical_first + idx;
+                    }
+                    physical_label_overrides[physical_first + idx] = min_in_group;
+                    ++idx;
+                }
+
+                total_physical += lane_count;
+            } else {
+                // Original logic: group by unique mapped_tool
+                std::vector<int> mapped_tools;
+                for (const auto& slot : unit.slots) {
+                    if (slot.mapped_tool >= 0) {
+                        mapped_tools.push_back(slot.mapped_tool);
+                    }
+                }
+                std::sort(mapped_tools.begin(), mapped_tools.end());
+                mapped_tools.erase(std::unique(mapped_tools.begin(), mapped_tools.end()),
+                                   mapped_tools.end());
+
+                int lane_count = static_cast<int>(mapped_tools.size());
+                utl.first_physical_tool = physical_first;
+                utl.tool_count = lane_count;
+
+                for (int j = 0; j < static_cast<int>(mapped_tools.size()); ++j) {
+                    result.virtual_to_physical[mapped_tools[j]] = physical_first + j;
+                }
+
+                total_physical += lane_count;
             }
-
-            total_physical += lane_count;
         } else if (!unit.slots.empty()) {
             // PARALLEL fallback: no mapped_tool data, use slot count
             utl.first_physical_tool = total_physical;
@@ -461,6 +509,14 @@ SystemToolLayout compute_system_tool_layout(const AmsSystemInfo& info, const Ams
                     result.physical_to_virtual_label[phys] = phys;
                 }
             }
+        }
+    }
+
+    // Apply extruder-name-based label overrides (physical order follows
+    // alphabetical extruder names, not sorted virtual tool numbers)
+    for (auto& [phys, label] : physical_label_overrides) {
+        if (phys < static_cast<int>(result.physical_to_virtual_label.size())) {
+            result.physical_to_virtual_label[phys] = label;
         }
     }
 

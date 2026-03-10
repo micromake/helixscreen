@@ -1926,10 +1926,10 @@ TEST_CASE("AFC unit with hubs AND multiple extruders gets PARALLEL topology",
     REQUIRE(helper.get_unit_topology(0) == PathTopology::PARALLEL);
 
     // Feed stepper map data: lanes 0,1 direct, lanes 2,3 shared via hub
-    helper.feed_afc_stepper("lane0", {{"map", "T0"}, {"status", "Ready"}, {"color", "FF0000"}});
-    helper.feed_afc_stepper("lane1", {{"map", "T1"}, {"status", "Ready"}, {"color", "00FF00"}});
-    helper.feed_afc_stepper("lane2", {{"map", "T2"}, {"status", "Ready"}, {"color", "0000FF"}});
-    helper.feed_afc_stepper("lane3", {{"map", "T2"}, {"status", "Ready"}, {"color", "FFFF00"}});
+    helper.feed_afc_stepper("lane0", {{"map", "T0"}, {"extruder", "extruder"}, {"status", "Ready"}, {"color", "FF0000"}});
+    helper.feed_afc_stepper("lane1", {{"map", "T2"}, {"extruder", "extruder1"}, {"status", "Ready"}, {"color", "00FF00"}});
+    helper.feed_afc_stepper("lane2", {{"map", "T1"}, {"extruder", "extruder2"}, {"status", "Ready"}, {"color", "0000FF"}});
+    helper.feed_afc_stepper("lane3", {{"map", "T3"}, {"extruder", "extruder2"}, {"status", "Ready"}, {"color", "FFFF00"}});
 
     // Verify tool mappings
     auto info = helper.get_system_info();
@@ -1938,9 +1938,15 @@ TEST_CASE("AFC unit with hubs AND multiple extruders gets PARALLEL topology",
     auto* slot2 = info.get_slot_global(2);
     auto* slot3 = info.get_slot_global(3);
     REQUIRE(slot0->mapped_tool == 0);
-    REQUIRE(slot1->mapped_tool == 1);
-    REQUIRE(slot2->mapped_tool == 2);
-    REQUIRE(slot3->mapped_tool == 2); // Shared via hub
+    REQUIRE(slot1->mapped_tool == 2);
+    REQUIRE(slot2->mapped_tool == 1);
+    REQUIRE(slot3->mapped_tool == 3); // Shared extruder2 via hub
+
+    // Verify extruder_name is populated from AFC stepper data
+    CHECK(slot0->extruder_name == "extruder");
+    CHECK(slot1->extruder_name == "extruder1");
+    CHECK(slot2->extruder_name == "extruder2");
+    CHECK(slot3->extruder_name == "extruder2");
 }
 
 TEST_CASE("AFC backend unit object triggers lane reorganization", "[ams][afc][mixed]") {

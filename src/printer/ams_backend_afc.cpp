@@ -1102,6 +1102,11 @@ void AmsBackendAfc::parse_afc_stepper(const std::string& lane_name, const nlohma
         }
     }
 
+    // Parse extruder name for shared-extruder deduplication
+    if (data.contains("extruder") && data["extruder"].is_string()) {
+        slot.extruder_name = data["extruder"].get<std::string>();
+    }
+
     // Parse endless spool backup from "runout_lane" field
     if (data.contains("runout_lane")) {
         if (data["runout_lane"].is_string()) {

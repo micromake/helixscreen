@@ -610,6 +610,73 @@ TEST_CASE("SystemToolLayout: PARALLEL unit with shared mapped_tools (toolchanger
 }
 
 // ============================================================================
+// PARALLEL: shared extruder deduplication (#364)
+// ============================================================================
+
+TEST_CASE("SystemToolLayout: PARALLEL shared extruder dedup via extruder_name",
+          "[ams][tool_layout]") {
+    // HTLF: 4 lanes, 3 extruders, 4 unique T-numbers.
+    // Lanes 0,1 have unique extruders (extruder, extruder1).
+    // Lanes 2,3 share extruder2 but have different T-numbers (T1, T3).
+    // Should produce 3 physical tools, not 4.
+    AmsSystemInfo info;
+    info.type = AmsType::AFC;
+
+    AmsUnit unit;
+    unit.unit_index = 0;
+    unit.slot_count = 4;
+    unit.first_slot_global_index = 0;
+    unit.topology = PathTopology::PARALLEL;
+
+    struct LaneSpec {
+        int tool;
+        const char* extruder;
+    };
+    LaneSpec lanes[] = {
+        {0, "extruder"},   // Lane 0: T0, unique extruder
+        {2, "extruder1"},  // Lane 1: T2, unique extruder
+        {1, "extruder2"},  // Lane 2: T1, shared extruder
+        {3, "extruder2"},  // Lane 3: T3, shared extruder
+    };
+    for (int s = 0; s < 4; ++s) {
+        SlotInfo slot;
+        slot.slot_index = s;
+        slot.global_index = s;
+        slot.mapped_tool = lanes[s].tool;
+        slot.extruder_name = lanes[s].extruder;
+        unit.slots.push_back(slot);
+    }
+
+    info.units.push_back(unit);
+    info.total_slots = 4;
+
+    auto layout = compute_system_tool_layout(info, nullptr);
+
+    // 3 unique extruders -> 3 physical nozzles (not 4)
+    CHECK(layout.total_physical_tools == 3);
+    REQUIRE(layout.units.size() == 1);
+    CHECK(layout.units[0].tool_count == 3);
+
+    // T0 (extruder) -> physical 0
+    // T2 (extruder1) -> physical 1
+    // T1,T3 (extruder2) -> physical 2 (shared)
+    REQUIRE(layout.virtual_to_physical.count(0) == 1);
+    REQUIRE(layout.virtual_to_physical.count(1) == 1);
+    REQUIRE(layout.virtual_to_physical.count(2) == 1);
+    REQUIRE(layout.virtual_to_physical.count(3) == 1);
+    CHECK(layout.virtual_to_physical.at(0) == 0);
+    CHECK(layout.virtual_to_physical.at(2) == 1);
+    // T1 and T3 share the same physical position
+    CHECK(layout.virtual_to_physical.at(1) == layout.virtual_to_physical.at(3));
+
+    // Verify physical-to-virtual labels use min tool per extruder group
+    REQUIRE(layout.physical_to_virtual_label.size() == 3);
+    CHECK(layout.physical_to_virtual_label[0] == 0); // extruder -> T0
+    CHECK(layout.physical_to_virtual_label[1] == 2); // extruder1 -> T2
+    CHECK(layout.physical_to_virtual_label[2] == 1); // extruder2 -> min(T1,T3) = T1
+}
+
+// ============================================================================
 // PARALLEL: cross-unit lane remapping (#363)
 // ============================================================================
 
