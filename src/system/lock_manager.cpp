@@ -3,6 +3,7 @@
 #include "config.h"
 #include "picosha2.h"
 
+#include <algorithm>
 #include <spdlog/spdlog.h>
 
 namespace helix {
@@ -23,6 +24,9 @@ bool LockManager::has_pin() const {
 bool LockManager::set_pin(const std::string& pin) {
     if (static_cast<int>(pin.length()) < kMinPinLength ||
         static_cast<int>(pin.length()) > kMaxPinLength) {
+        return false;
+    }
+    if (!std::all_of(pin.begin(), pin.end(), ::isdigit)) {
         return false;
     }
     pin_hash_ = hash_pin(pin);

@@ -77,7 +77,13 @@ TEST_CASE("LockManager: PIN validation rejects invalid lengths", "[lock]") {
     CHECK_FALSE(mgr.set_pin("1234567")); // too long
     CHECK_FALSE(mgr.has_pin());
 
+    CHECK_FALSE(mgr.set_pin("abcd"));  // non-digit characters
+    CHECK_FALSE(mgr.set_pin("12a4"));  // mixed
+    CHECK_FALSE(mgr.has_pin());
+
     CHECK(mgr.set_pin("1234"));   // 4 digits OK
+    mgr.remove_pin();
+    CHECK(mgr.set_pin("12345"));  // 5 digits OK
     mgr.remove_pin();
     CHECK(mgr.set_pin("123456")); // 6 digits OK
 }
