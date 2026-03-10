@@ -1586,6 +1586,11 @@ void MoonrakerSpoolmanAPIMock::create_spoolman_spool(const nlohmann::json& spool
         spool.color_name = "Mock Color";
     }
 
+    // Persist optional spool-level string fields
+    if (spool_data.contains("location") && spool_data["location"].is_string()) {
+        spool.location = spool_data["location"].get<std::string>();
+    }
+
     mock_spools_.push_back(spool);
 
     if (on_success) {

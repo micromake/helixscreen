@@ -887,29 +887,40 @@ TEST_CASE("SpoolInfo - location field parsed from JSON", "[filament][parsing]") 
     MoonrakerClientMock client;
     MoonrakerAPIMock api(client, state);
 
-    // Create a spool to get a valid ID
+    // Create a spool with location set
     nlohmann::json body;
     body["filament_id"] = 1;
     body["location"] = "Shelf B";
-    int created_id = 0;
+    std::string created_location;
 
     api.spoolman().create_spoolman_spool(
         body,
         [&](const SpoolInfo& spool) {
-            created_id = spool.id;
+            created_location = spool.location;
         },
         [](const MoonrakerError&) { FAIL("create failed"); });
 
-    REQUIRE(created_id > 0);
+    REQUIRE(created_location == "Shelf B");
+}
 
-    // Fetch it back and verify location was round-tripped
-    api.spoolman().get_spoolman_spool(
-        created_id,
-        [](const std::optional<SpoolInfo>& spool) {
-            REQUIRE(spool.has_value());
-            // Note: mock may not persist location — if not, this test documents the gap
+TEST_CASE("SpoolInfo - location defaults to empty when null in JSON", "[filament][parsing]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+
+    // Create a spool without location — safe_string returns "" for missing keys
+    nlohmann::json body;
+    body["filament_id"] = 1;
+    std::string created_location = "should-be-cleared";
+
+    api.spoolman().create_spoolman_spool(
+        body,
+        [&](const SpoolInfo& spool) {
+            created_location = spool.location;
         },
-        [](const MoonrakerError&) { FAIL("get failed"); });
+        [](const MoonrakerError&) { FAIL("create failed"); });
+
+    REQUIRE(created_location.empty());
 }
 
 TEST_CASE("SpoolInfo - location defaults to empty string", "[filament]") {

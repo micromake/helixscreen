@@ -92,7 +92,7 @@ struct SpoolInfo {
     double initial_weight_g = 0;   ///< Initial filament weight when new
     double price = 0;              ///< Spool price (user currency)
     std::string lot_nr;            ///< Lot/batch number
-    std::string location;          // Physical storage location (max 64 chars, from Spoolman)
+    std::string location;          ///< Physical storage location (max 64 chars)
     std::string comment;           ///< User notes/comment
     bool is_active = false;        ///< True if this is the currently tracked spool
 

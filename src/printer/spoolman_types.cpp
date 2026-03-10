@@ -37,7 +37,7 @@ std::vector<SpoolInfo> filter_spools(const std::vector<SpoolInfo>& spools,
     result.reserve(spools.size());
 
     for (const auto& spool : spools) {
-        // Build searchable text: "#ID vendor material color_name"
+        // Build searchable text: "#ID vendor material color_name location"
         std::string searchable = "#" + std::to_string(spool.id) + " " + spool.vendor + " " +
                                  spool.material + " " + spool.color_name + " " + spool.location;
 
