@@ -53,6 +53,26 @@
                               hide_description="true" callback="on_lp_usb_printer_selected"/>
       </lv_obj>
 
+      <!-- Bluetooth config section — visible when type=2 (bluetooth) -->
+      <lv_obj name="section_bluetooth" width="100%" height="content" flex_flow="column"
+              style_bg_opa="0" style_border_width="0" style_pad_all="0" scrollable="false">
+        <bind_flag_if_not_eq subject="printer_type_subject" flag="hidden" ref_value="2"/>
+        <setting_section_header title="BLUETOOTH PRINTERS" title_tag="BLUETOOTH PRINTERS" icon="bluetooth"/>
+        <setting_dropdown_row name="row_bt_printers"
+                              label="Printer" label_tag="Printer"
+                              icon="magnify"
+                              dropdown_width="66%"
+                              hide_description="true" callback="on_lp_bt_printer_selected"/>
+        <lv_obj name="row_bt_scan" width="100%" height="content" flex_flow="row"
+                style_flex_main_place="center" style_pad_all="#space_md" style_bg_opa="0"
+                style_border_width="0" scrollable="false">
+          <ui_button name="btn_bt_scan" text="Scan for Printers" text_tag="Scan for Printers"
+                     icon="magnify_scan" width="200">
+            <event_cb trigger="clicked" callback="on_lp_bt_scan"/>
+          </ui_button>
+        </lv_obj>
+      </lv_obj>
+
       <!-- Label Size (shared) -->
       <setting_dropdown_row name="row_label_size"
                             label="Label Size" label_tag="Label Size" icon="ruler"
