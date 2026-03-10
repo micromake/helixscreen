@@ -218,6 +218,15 @@ This enables SIMD-accelerated (hardware-optimized) JPEG decoding, which is 3-5x 
 - **Settings** → **Spoolman** for weight sync settings
 - Assign spools to AMS slots and track filament usage
 
+### Can I print spool labels?
+
+**Yes.** HelixScreen supports printing physical spool labels to thermal label printers:
+- **Brother QL** — via Network or Bluetooth
+- **Phomemo** — via USB or Bluetooth
+- **Niimbot** — via Bluetooth (B21, D11, D110)
+
+Labels include spool name, material, color swatch, temperatures, and a QR code. See the [Label Printing Guide](guide/label-printing.md) for setup.
+
 ### Does it support Happy Hare or AFC-Klipper?
 
 **Yes.** Full multi-material support is available for:

@@ -46,6 +46,9 @@ Extrusion controls, load/unload procedures, AMS multi-material systems with mult
 
 ![AMS Panel](../images/user/ams.png)
 
+### [Label Printing](guide/label-printing.md)
+Print spool labels to Brother QL, Phomemo, or Niimbot thermal printers via Network, USB, or Bluetooth. Setup, label sizes, and troubleshooting.
+
 ### [Calibration & Tuning](guide/calibration.md)
 Bed mesh visualization, screws tilt adjust, input shaper resonance testing, Z-offset calibration, and PID tuning.
 

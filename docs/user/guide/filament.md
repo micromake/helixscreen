@@ -131,6 +131,8 @@ Tap **+ Add** in the Spoolman panel to create a new spool in 3 steps:
 
 The wizard creates all records (vendor, filament, spool) atomically in Spoolman.
 
+> **Tip:** You can print physical spool labels with a QR code linking to Spoolman. See [Label Printing](label-printing.md) for setup instructions.
+
 ---
 
 ## Dryer Control
@@ -143,4 +145,4 @@ If your AMS has an integrated dryer:
 
 ---
 
-**Next:** [Calibration & Tuning](calibration.md) | **Prev:** [Motion & Positioning](motion.md) | [Back to User Guide](../USER_GUIDE.md)
+**Next:** [Label Printing](label-printing.md) | **Prev:** [Motion & Positioning](motion.md) | [Back to User Guide](../USER_GUIDE.md)
