@@ -2410,6 +2410,59 @@
       ]
     },
     {
+      "id": "venture_delta",
+      "name": "Venture Delta",
+      "manufacturer": "Venture",
+      "image": "venture-delta.png",
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "delta",
+          "confidence": 90,
+          "reason": "Delta kinematics"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "delta_calibrate",
+          "confidence": 95,
+          "reason": "Delta calibration present (delta printer signature)"
+        },
+        {
+          "type": "stepper_count",
+          "field": "steppers",
+          "pattern": "stepper_a",
+          "confidence": 85,
+          "reason": "Delta stepper naming (stepper_a/b/c)"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "venture",
+          "confidence": 90,
+          "reason": "Hostname contains 'venture'"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 290,
+          "max_x": 310,
+          "min_y": 290,
+          "max_y": 310,
+          "confidence": 70,
+          "reason": "Build volume ~300mm diameter (Venture Delta size)"
+        },
+        {
+          "type": "config_match",
+          "field": "max_velocity",
+          "pattern": "1200",
+          "confidence": 50,
+          "reason": "Max velocity 1200mm/s (Venture Delta spec)"
+        }
+      ]
+    },
+    {
       "id": "ratrig_vcore3",
       "name": "RatRig V-Core 3",
       "manufacturer": "RatRig",
