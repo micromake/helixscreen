@@ -589,10 +589,16 @@ else ifeq ($(UNAME_S),Darwin)
     CXXFLAGS += -DHAVE_GETTID=0
     SUBMODULE_CFLAGS += $(MACOS_DEPLOYMENT_TARGET)
     SUBMODULE_CXXFLAGS += $(MACOS_DEPLOYMENT_TARGET)
+    # libusb detection via pkg-config (Homebrew paths aren't in default search path)
+    LIBUSB_CFLAGS := $(shell pkg-config --cflags libusb-1.0 2>/dev/null)
+    LIBUSB_LIBS := $(shell pkg-config --libs libusb-1.0 2>/dev/null)
+    ifneq ($(LIBUSB_LIBS),)
+        CFLAGS += $(LIBUSB_CFLAGS)
+        CXXFLAGS += $(LIBUSB_CFLAGS) -DHELIX_HAS_LIBUSB=1
+    endif
     # -Wl,-w suppresses linker warnings about macOS version mismatches between
     # our 10.15 deployment target and libraries built for newer versions
-    LDFLAGS := -Wl,-w $(LDFLAGS_COMMON) -framework Foundation -framework CoreFoundation -framework Security -framework CoreWLAN -framework CoreLocation -framework Cocoa -framework IOKit -framework CoreVideo -framework AudioToolbox -framework ForceFeedback -framework Carbon -framework CoreAudio -framework Metal -liconv -lusb-1.0
-    CXXFLAGS += -DHELIX_HAS_LIBUSB=1
+    LDFLAGS := -Wl,-w $(LDFLAGS_COMMON) -framework Foundation -framework CoreFoundation -framework Security -framework CoreWLAN -framework CoreLocation -framework Cocoa -framework IOKit -framework CoreVideo -framework AudioToolbox -framework ForceFeedback -framework Carbon -framework CoreAudio -framework Metal -liconv $(LIBUSB_LIBS)
     PLATFORM := macOS
     WPA_DEPS :=
 else
