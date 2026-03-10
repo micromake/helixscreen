@@ -5,6 +5,22 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.97.5] - 2026-03-10
+
+AFC device configuration improvements with toolhead distance editing and multi-extruder support.
+
+### Added
+- AFC Toolhead section with editable extruder distance actions and live extruder overlays
+- Multi-extruder toolhead actions with per-lane dist_hub configuration
+- Editable numeric text inputs replacing slider value labels in AMS device sections
+- Creality Sonic Pad to supported platforms
+
+### Fixed
+- AFC HTLF lanes grouped by physical extruder for correct nozzle count (#364)
+- AFC textarea jumping, corrected purge/wipe config sources, removed dead config section
+- AFC mutex added to get_device_sections to prevent race condition
+- AMS section rows always navigating to Setup due to wrong event target
+
 ## [0.97.4] - 2026-03-09
 
 ### Added
@@ -1773,6 +1789,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.97.5]: https://github.com/prestonbrown/helixscreen/compare/v0.97.4...v0.97.5
 [0.97.4]: https://github.com/prestonbrown/helixscreen/compare/v0.97.3...v0.97.4
 [0.97.3]: https://github.com/prestonbrown/helixscreen/compare/v0.97.2...v0.97.3
 [0.97.2]: https://github.com/prestonbrown/helixscreen/compare/v0.97.1...v0.97.2
