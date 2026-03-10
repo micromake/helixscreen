@@ -7,7 +7,12 @@
 ## Overview
 
 Add Bluetooth as a third connection option for label printers (alongside USB and Network).
-Supports both BT Classic SPP (Brother QL series) and BLE GATT (Phomemo M110/M120).
+Supports three printer families over two Bluetooth transports:
+
+- **Brother QL** — BT Classic SPP (RFCOMM), same ESC/P raster protocol as network
+- **Phomemo** — BT Classic SPP (RFCOMM) or BLE GATT, ESC/POS-style raster protocol
+- **Niimbot** — BLE GATT only, custom packet protocol with XOR checksum framing
+
 Built as a runtime-loadable shared library plugin — zero memory footprint on devices
 without Bluetooth hardware.
 
@@ -23,7 +28,8 @@ Main Binary                          libhelix-bluetooth.so
 │   dlsym() ABI fns   │              │   BlueZ D-Bus calls   │
 │                     │              │                      │
 │ BrotherQLBTPrinter  │──rfcomm fd──▶│ bt_rfcomm.cpp        │
-│ PhomemoBTPrinter    │──ble handle─▶│ bt_ble.cpp           │
+│ PhomemoBTPrinter    │──rfcomm/ble─▶│ bt_ble.cpp           │
+│ NiimbotBTPrinter    │──ble handle─▶│                      │
 │                     │              │ bt_discovery.cpp     │
 │ bluetooth_plugin.h  │◀─shared ABI─▶│ bluetooth_plugin.h   │
 └─────────────────────┘              └──────────────────────┘
@@ -132,7 +138,8 @@ Extracts from `PhomemoPrinter::print()`:
 | `BrotherQLPrinter` | Builds raster + writes TCP | Calls `brother_ql_build_raster()` + writes TCP |
 | `PhomemoPrinter` | Builds raster + writes USB | Calls `phomemo_build_raster()` + writes USB |
 | `BrotherQLBluetoothPrinter` | — | Calls `brother_ql_build_raster()` + writes RFCOMM fd |
-| `PhomemoBluetoothPrinter` | — | Calls `phomemo_build_raster()` + chunks through BLE GATT |
+| `PhomemoBluetoothPrinter` | — | Calls `phomemo_build_raster()` + writes RFCOMM/BLE |
+| `NiimbotBluetoothPrinter` | — | Calls `niimbot_build_print_job()` + writes BLE GATT |
 
 ## Bluetooth Printer Backends
 
@@ -148,6 +155,17 @@ Extracts from `PhomemoPrinter::print()`:
 - Uses `helix_bt_connect_ble(mac, "0000ff02-0000-1000-8000-00805f9b34fb")`
 - Writes `phomemo_build_raster()` output via `helix_bt_ble_write()`
 - BLE write handles chunking to MTU internally in plugin
+- Async on detached thread, callback via `queue_update()`
+
+### `NiimbotBluetoothPrinter` (implements `ILabelPrinter`)
+
+- Uses `helix_bt_connect_ble(mac, "e7810a71-73ae-499d-8c15-faa9aef0c3f2")` (Transparent UART)
+- `niimbot_build_print_job()` generates complete packet sequence from bitmap
+- Packet format: `[0x55 0x55 CMD LEN DATA... XOR_CHECKSUM 0xAA 0xAA]`
+- Sends packets sequentially: 10ms delay for image rows, 100ms for commands
+- Supports B21 (384px/48mm printhead) and D11/D110 (96px/12mm printhead)
+- Model auto-detected from BLE device name for correct printhead width
+- Row compression: blank rows → `PrintEmptyRow`, identical rows → repeat count
 - Async on detached thread, callback via `queue_update()`
 
 ## Discovery & Pairing
@@ -218,6 +236,10 @@ include/bluetooth_plugin.h          # C ABI header (shared)
 include/bluetooth_loader.h          # dlopen wrapper singleton
 include/brother_ql_protocol.h       # Extracted protocol (shared)
 include/phomemo_protocol.h          # Extracted protocol (shared)
+include/niimbot_protocol.h          # Niimbot BLE protocol (packet builder + print job)
+include/niimbot_bt_printer.h        # Niimbot BLE printer backend
+include/bt_discovery_utils.h        # Brand detection table (Brother/Niimbot/Phomemo)
+include/bt_print_utils.h            # Shared RFCOMM send helper
 ```
 
 ### Makefile
@@ -271,6 +293,7 @@ only when building the bluetooth plugin target.
 
 - Given known `LabelBitmap` + `LabelSize`, assert `brother_ql_build_raster()` output matches expected bytes
 - Same for `phomemo_build_raster()`
+- Niimbot: `test_niimbot_protocol.cpp` — packet framing, checksum, print job sequence, blank row compression, label sizes (9 tests, 59 assertions)
 - Validates the extraction didn't change protocol behavior
 
 ### Plugin ABI Tests (unit, mock sd-bus)

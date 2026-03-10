@@ -8,6 +8,8 @@
 #include "bt_discovery_utils.h"
 #include "label_printer_settings.h"
 #include "label_renderer.h"
+#include "niimbot_bt_printer.h"
+#include "niimbot_protocol.h"
 #include "phomemo_bt_printer.h"
 #include "phomemo_printer.h"
 #include "ui_update_queue.h"
@@ -30,9 +32,13 @@ void print_spool_label(const SpoolInfo& spool, PrintCallback callback) {
         sizes = PhomemoPrinter::supported_sizes_static();
     } else if (is_bt) {
         const auto bt_name = settings.get_bt_name();
-        sizes = helix::bluetooth::is_brother_printer(bt_name.c_str())
-                    ? BrotherQLPrinter::supported_sizes_static()
-                    : PhomemoPrinter::supported_sizes_static();
+        if (helix::bluetooth::is_brother_printer(bt_name.c_str())) {
+            sizes = BrotherQLPrinter::supported_sizes_static();
+        } else if (helix::bluetooth::is_niimbot_printer(bt_name.c_str())) {
+            sizes = helix::label::niimbot_sizes_for_model(bt_name);
+        } else {
+            sizes = PhomemoPrinter::supported_sizes_static();
+        }
     } else {
         sizes = BrotherQLPrinter::supported_sizes_static();
     }
@@ -84,6 +90,10 @@ void print_spool_label(const SpoolInfo& spool, PrintCallback callback) {
         if (helix::bluetooth::is_brother_printer(bt_name.c_str())) {
             helix::label::BrotherQLBluetoothPrinter printer;
             printer.set_device(bt_address);
+            printer.print(bitmap, label_size, callback);
+        } else if (helix::bluetooth::is_niimbot_printer(bt_name.c_str())) {
+            helix::label::NiimbotBluetoothPrinter printer;
+            printer.set_device(bt_address, bt_name);
             printer.print(bitmap, label_size, callback);
         } else {
             helix::label::PhomemoBluetoothPrinter printer;

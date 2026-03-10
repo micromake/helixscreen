@@ -20,6 +20,8 @@ namespace helix::bluetooth {
 /// Target service UUID prefixes (8-char hex)
 inline constexpr const char* SPP_UUID_PREFIX = "00001101";
 inline constexpr const char* PHOMEMO_BLE_UUID_PREFIX = "0000ff00";
+/// Niimbot Transparent UART service UUID (full 128-bit, matched by prefix)
+inline constexpr const char* NIIMBOT_BLE_UUID_PREFIX = "e7810a71";
 
 /// Check if a UUID string matches one of our target label printer service UUIDs.
 /// Comparison is case-insensitive on the first 8 hex characters (the UUID16 prefix).
@@ -28,54 +30,58 @@ inline bool is_label_printer_uuid(const char* uuid)
     if (!uuid) return false;
     if (strncasecmp(uuid, SPP_UUID_PREFIX, 8) == 0) return true;
     if (strncasecmp(uuid, PHOMEMO_BLE_UUID_PREFIX, 8) == 0) return true;
+    if (strncasecmp(uuid, NIIMBOT_BLE_UUID_PREFIX, 8) == 0) return true;
     return false;
 }
 
-/// Determine if a UUID indicates a BLE device (Phomemo BLE service).
+/// Determine if a UUID indicates a BLE device.
 inline bool uuid_is_ble(const char* uuid)
 {
     if (!uuid) return false;
-    return strncasecmp(uuid, PHOMEMO_BLE_UUID_PREFIX, 8) == 0;
+    if (strncasecmp(uuid, PHOMEMO_BLE_UUID_PREFIX, 8) == 0) return true;
+    if (strncasecmp(uuid, NIIMBOT_BLE_UUID_PREFIX, 8) == 0) return true;
+    return false;
 }
 
 /// Known printer brand entry for unified matching.
 struct PrinterBrand {
     const char* prefix;
-    bool is_ble;     // true = BLE-only (no SPP/RFCOMM)
-    bool is_brother;  // true = Brother QL protocol
+    bool is_ble;      // true = BLE-only (no SPP/RFCOMM)
+    bool is_brother;   // true = Brother QL protocol
+    bool is_niimbot;   // true = Niimbot protocol
 };
 
 // Shared table of known label printer brands.
 // Phomemo M/Q series support both BLE and SPP but need SPP for printing.
 inline constexpr PrinterBrand KNOWN_BRANDS[] = {
     // Brother QL/PT/TD/RJ series — SPP only
-    {"QL-", false, true},
-    {"PT-", false, true},
-    {"TD-", false, true},
-    {"RJ-", false, true},
+    {"QL-", false, true, false},
+    {"PT-", false, true, false},
+    {"TD-", false, true, false},
+    {"RJ-", false, true, false},
 
     // Phomemo — dual-mode but prints via SPP
-    {"Phomemo", false, false},
+    {"Phomemo", false, false, false},
 
     // Dymo — SPP
-    {"LW-", false, false},
-    {"DYMO", false, false},
+    {"LW-", false, false, false},
+    {"DYMO", false, false, false},
 
     // MUNBYN — SPP
-    {"MUNBYN", false, false},
+    {"MUNBYN", false, false, false},
 
-    // Niimbot — BLE only
-    {"Niimbot", true, false},
-    {"B21", true, false},
-    {"D11", true, false},
-    {"D110", true, false},
+    // Niimbot — BLE only, custom protocol
+    {"Niimbot", true, false, true},
+    {"B21", true, false, true},
+    {"D11", true, false, true},
+    {"D110", true, false, true},
 
     // Supvan / KataSymbol — BLE only
-    {"Supvan", true, false},
-    {"KataSymbol", true, false},
-    {"E10", true, false},
-    {"E16", true, false},
-    {"T50M", true, false},
+    {"Supvan", true, false, false},
+    {"KataSymbol", true, false, false},
+    {"E10", true, false, false},
+    {"E16", true, false, false},
+    {"T50M", true, false, false},
 };
 
 /// Find a matching brand entry for a device name, or nullptr if unknown.
@@ -90,7 +96,7 @@ inline const PrinterBrand* find_brand(const char* name)
     // Phomemo M/Q series: single letter + digits (e.g. M110, Q199)
     if ((name[0] == 'M' || name[0] == 'Q') && name[1] >= '0' && name[1] <= '9') {
         // Return a static entry for this pattern
-        static constexpr PrinterBrand phomemo_mq = {"M/Q", false, false};
+        static constexpr PrinterBrand phomemo_mq = {"M/Q", false, false, false};
         return &phomemo_mq;
     }
 
@@ -122,6 +128,13 @@ inline bool is_brother_printer(const char* name)
 {
     auto* brand = find_brand(name);
     return brand && brand->is_brother;
+}
+
+/// Check if a device name indicates a Niimbot printer.
+inline bool is_niimbot_printer(const char* name)
+{
+    auto* brand = find_brand(name);
+    return brand && brand->is_niimbot;
 }
 
 }  // namespace helix::bluetooth
