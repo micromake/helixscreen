@@ -7,7 +7,6 @@
 #include "panel_widget.h"
 #include "panel_widget_manager.h"
 #include "panel_widget_registry.h"
-#include "static_subject_registry.h"
 #include "ui_callback_helpers.h"
 #include "ui_event_safety.h"
 #include "ui_lock_screen.h"
@@ -34,32 +33,18 @@ class LockWidget : public PanelWidget {
     ~LockWidget() override { detach(); }
 
     void attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) override {
+        (void)parent_screen;
         widget_obj_ = widget_obj;
-        parent_screen_ = parent_screen;
-
-        lock_btn_ = lv_obj_find_by_name(widget_obj_, "lock_button");
-        if (lock_btn_) {
-            lv_obj_set_user_data(lock_btn_, this);
-        } else {
-            spdlog::warn("[LockWidget] Could not find lock_button in widget tree");
-        }
     }
 
     void detach() override {
-        if (lock_btn_) {
-            lv_obj_set_user_data(lock_btn_, nullptr);
-            lock_btn_ = nullptr;
-        }
         widget_obj_ = nullptr;
-        parent_screen_ = nullptr;
     }
 
     const char* id() const override { return "lock"; }
 
   private:
     lv_obj_t* widget_obj_ = nullptr;
-    lv_obj_t* lock_btn_ = nullptr;
-    lv_obj_t* parent_screen_ = nullptr;
 };
 
 // ============================================================================
