@@ -175,7 +175,15 @@ class SymbolCache:
 # ---------------------------------------------------------------------------
 
 def is_static_platform(platform: str) -> bool:
-    """Platforms built with -static (no shared libraries at all)."""
+    """Platforms built with -static that should have no shared libraries.
+
+    Note: Even with -static, glibc's NSS subsystem may dlopen() shared
+    libraries (libresolv, libnss_dns, libnss_files, and even libc itself)
+    at runtime for DNS resolution.  So "static" platforms CAN have shared
+    lib addresses in their backtraces — but only in the NSS/resolver area.
+    We still return True here; the caller should use the precise range
+    check (load_base + sym_max) when available, which handles this correctly.
+    """
     return platform in ("ad5m", "ad5x", "cc1")
 
 
@@ -193,12 +201,12 @@ def is_shared_lib_addr(addr: int, platform: str, load_base: int = 0,
     When load_base and sym_max are provided, uses precise range check:
     if addr is outside [load_base, load_base + sym_max], it's a shared lib.
     """
-    # Static builds have no shared libraries — every frame is ours
-    if is_static_platform(platform):
-        return False
-
-    # Precise range check: if we know the binary span, anything outside is a lib
-    if load_base > 0 and sym_max > 0:
+    # Precise range check (non-static platforms only): if we know the binary
+    # span, anything outside is a shared lib.
+    # NOTE: Do NOT use sym_max for static platforms — their .sym files are
+    # often from debug builds with different section layouts (e.g., 462MB sym
+    # range vs 12MB actual binary), causing wrong classification.
+    if not is_static_platform(platform) and load_base > 0 and sym_max > 0:
         binary_end = load_base + sym_max + 0x10000  # generous padding
         return addr < load_base or addr > binary_end
 
@@ -209,6 +217,20 @@ def is_shared_lib_addr(addr: int, platform: str, load_base: int = 0,
         top_byte = (addr >> 40) & 0xFF
         # Binary ASLR range is 0x55-0x56 or 0xaa-0xab; everything 0x7f+ is lib
         return top_byte >= 0x7F
+
+    # Static platforms (ad5m, cc1): built with -static, but glibc's NSS
+    # subsystem dlopen()s libc.so, libresolv.so, libnss_dns.so at runtime.
+    # Binary text is typically < 20MB starting at 0x10000.
+    # NSS shared libs land at 0xa0000000+ on ARM32.
+    if platform in ("ad5m", "cc1"):
+        return addr >= 0x10000000
+
+    # AD5X (MIPS): binary at load_base (~0x55640000), shared libs at 0x70000000+
+    if platform == "ad5x":
+        if load_base > 0 and sym_max > 0:
+            binary_end = load_base + sym_max + 0x10000
+            return addr < load_base or addr > binary_end
+        return addr >= 0x70000000
 
     # Heuristic fallbacks for 32-bit platforms without load_base
     if platform == "pi32":
