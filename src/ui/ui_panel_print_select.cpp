@@ -56,6 +56,7 @@
 #include <ctime>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -932,8 +933,34 @@ void PrintSelectPanel::process_metadata_result(size_t i, const std::string& file
     // Extract all values (this runs on background thread - metadata is const ref)
     int print_time_minutes = static_cast<int>(metadata.estimated_time / 60.0);
     float filament_grams = static_cast<float>(metadata.filament_weight_total);
-    std::string filament_type = metadata.filament_type;
-    std::string filament_name = metadata.filament_name;
+    std::string filament_type_raw = metadata.filament_type;
+    std::string filament_name_raw = metadata.filament_name;
+
+    // Parse per-tool filament types and names from semicolon-separated metadata
+    // (e.g., "PLA;PLA;PETG" → ["PLA", "PLA", "PETG"])
+    std::vector<std::string> filament_types;
+    if (!filament_type_raw.empty()) {
+        std::istringstream type_stream(filament_type_raw);
+        std::string token;
+        while (std::getline(type_stream, token, ';')) {
+            filament_types.push_back(token);
+        }
+    }
+    std::vector<std::string> filament_names;
+    if (!filament_name_raw.empty()) {
+        std::istringstream name_stream(filament_name_raw);
+        std::string token;
+        while (std::getline(name_stream, token, ';')) {
+            filament_names.push_back(token);
+        }
+    }
+
+    // Scalar fields use only the first tool's value for display
+    std::string filament_type = filament_types.empty() ? "" : filament_types.front();
+    std::string filament_name = filament_names.empty() ? "" : filament_names.front();
+
+    // Copy filament colors (per-tool hex colors parsed from Moonraker)
+    std::vector<std::string> filament_colors = metadata.filament_colors;
     uint32_t layer_count = metadata.layer_count;
     double object_height = metadata.object_height;
     double layer_height = metadata.layer_height;
@@ -993,6 +1020,9 @@ void PrintSelectPanel::process_metadata_result(size_t i, const std::string& file
         std::string thumb_path;
         bool thumb_is_local;
         helix::ThumbnailTarget thumb_target;
+        std::vector<std::string> filament_types;
+        std::vector<std::string> filament_names;
+        std::vector<std::string> filament_colors;
     };
 
     helix::ui::queue_update<MetadataUpdate>(
@@ -1000,7 +1030,9 @@ void PrintSelectPanel::process_metadata_result(size_t i, const std::string& file
             MetadataUpdate{this, i, filename, print_time_minutes, filament_grams, filament_type,
                            filament_name, print_time_str, filament_str, layer_count,
                            layer_count_str, object_height, print_height_str, layer_height,
-                           layer_height_str, uuid, thumb_path, thumb_is_local, target}),
+                           layer_height_str, uuid, thumb_path, thumb_is_local, target,
+                           std::move(filament_types), std::move(filament_names),
+                           std::move(filament_colors)}),
         [](MetadataUpdate* d) {
             auto* self = d->panel;
 
@@ -1026,9 +1058,14 @@ void PrintSelectPanel::process_metadata_result(size_t i, const std::string& file
             self->file_list_[d->index].layer_height = d->layer_height;
             self->file_list_[d->index].layer_height_str = d->layer_height_str;
             self->file_list_[d->index].uuid = d->uuid;
+            self->file_list_[d->index].filament_types = std::move(d->filament_types);
+            self->file_list_[d->index].filament_names = std::move(d->filament_names);
+            self->file_list_[d->index].filament_colors = std::move(d->filament_colors);
 
-            spdlog::trace("[{}] Updated metadata for {}: {}min, {}g, {} layers", self->get_name(),
-                          d->filename, d->print_time_minutes, d->filament_grams, d->layer_count);
+            spdlog::trace("[{}] Updated metadata for {}: {}min, {}g, {} layers, {} types, {} colors",
+                          self->get_name(), d->filename, d->print_time_minutes, d->filament_grams,
+                          d->layer_count, self->file_list_[d->index].filament_types.size(),
+                          self->file_list_[d->index].filament_colors.size());
 
             // Handle thumbnail with pre-scaling optimization
             if (!d->thumb_path.empty() && self->api_) {
@@ -1493,7 +1530,8 @@ void PrintSelectPanel::show_detail_view() {
     if (detail_view_) {
         std::string filename(selected_filename_buffer_);
         detail_view_->show(filename, current_path_, selected_filament_type_,
-                           selected_filament_colors_, selected_file_size_bytes_);
+                           selected_filament_colors_, selected_filament_materials_,
+                           selected_file_size_bytes_);
         // Update history status display in detail view
         detail_view_->update_history_status(selected_history_status_, selected_success_count_);
     }
@@ -1989,6 +2027,9 @@ void PrintSelectPanel::create_detail_view() {
         PrintStatusPanel::push_overlay(parent_screen_);
     });
 
+    // Crash recovery: restore firmware mapping if app restarted mid-print
+    print_controller_->recover_pending_remap();
+
     spdlog::debug("[{}] Detail view module initialized", get_name());
 }
 
@@ -2060,6 +2101,7 @@ void PrintSelectPanel::handle_file_click(size_t file_index) {
                           file.layer_height_str.c_str(), filament_display.c_str());
         selected_filament_type_ = file.filament_type;
         selected_filament_colors_ = file.filament_colors;
+        selected_filament_materials_ = file.filament_types;
         selected_file_size_bytes_ = file.file_size_bytes;
         selected_history_status_ = file.history_status;
         selected_success_count_ = file.success_count;

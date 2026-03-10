@@ -453,6 +453,7 @@ class PrintSelectPanel : public PanelBase {
     std::string last_populated_path_;    ///< Track path for scroll preservation on refresh
     std::string selected_filament_type_; ///< Filament type of selected file (for dropdown default)
     std::vector<std::string> selected_filament_colors_; ///< Tool colors of selected file
+    std::vector<std::string> selected_filament_materials_; ///< Per-tool material types of selected file
     size_t selected_file_size_bytes_ = 0; ///< File size of selected file (for safety checks)
     FileHistoryStatus selected_history_status_ =
         FileHistoryStatus::NEVER_PRINTED; ///< History status of selected file

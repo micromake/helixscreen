@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "ui_filament_mapping_card.h"
 #include "ui_print_preparation_manager.h"
 
 #include "overlay_base.h"
@@ -167,7 +168,9 @@ class PrintSelectDetailView : public OverlayBase {
      */
     void show(const std::string& filename, const std::string& current_path,
               const std::string& filament_type,
-              const std::vector<std::string>& filament_colors = {}, size_t file_size_bytes = 0);
+              const std::vector<std::string>& filament_colors = {},
+              const std::vector<std::string>& filament_materials = {},
+              size_t file_size_bytes = 0);
 
     /**
      * @brief Hide the detail view overlay
@@ -214,6 +217,13 @@ class PrintSelectDetailView : public OverlayBase {
      */
     [[nodiscard]] PrintPreparationManager* get_prep_manager() const {
         return prep_manager_.get();
+    }
+
+    /**
+     * @brief Get current filament mappings from the mapping card
+     */
+    [[nodiscard]] std::vector<helix::ToolMapping> get_filament_mappings() const {
+        return filament_mapping_card_.get_mappings();
     }
 
     // === Checkbox Access (for prep manager setup) ===
@@ -334,11 +344,15 @@ class PrintSelectDetailView : public OverlayBase {
     // Print preparation manager (owns it)
     std::unique_ptr<PrintPreparationManager> prep_manager_;
 
+    // Filament mapping card (replaces color swatches when AMS available)
+    FilamentMappingCard filament_mapping_card_;
+
     // === Cached show() parameters (used by on_activate) ===
     std::string current_filename_;
     std::string current_path_;
     std::string current_filament_type_;
     std::vector<std::string> current_filament_colors_;
+    std::vector<std::string> current_filament_materials_;
     size_t current_file_size_bytes_ = 0;
 
     // === Async Safety [L012] ===
@@ -373,6 +387,11 @@ class PrintSelectDetailView : public OverlayBase {
      * Reads AMS slot colors when available, falls back to file metadata colors.
      */
     void apply_tool_colors();
+
+    /**
+     * @brief Re-apply tool colors from user's filament mapping choices
+     */
+    void apply_mapped_tool_colors();
 
     /**
      * @brief Static callback for delete confirmation

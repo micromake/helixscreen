@@ -43,8 +43,10 @@ struct PrintFileData {
     time_t modified_timestamp;          ///< Last modified timestamp
     int print_time_minutes;             ///< Print time in minutes
     float filament_grams;               ///< Filament weight in grams
-    std::string filament_type;          ///< Filament type (e.g., "PLA", "PETG", "ABS")
-    std::string filament_name;          ///< Full filament name (e.g., "PolyMaker PolyLite ABS")
+    std::string filament_type;          ///< Filament type (e.g., "PLA", "PETG", "ABS") — first tool only
+    std::string filament_name;          ///< Full filament name (e.g., "PolyMaker PolyLite ABS") — first tool only
+    std::vector<std::string> filament_types; ///< Per-tool filament types parsed from semicolon-separated metadata
+    std::vector<std::string> filament_names; ///< Per-tool filament names parsed from semicolon-separated metadata
     uint32_t layer_count = 0;           ///< Total layer count from slicer
     double object_height = 0.0;         ///< Object height in mm
     double layer_height = 0.0;          ///< Layer height in mm (e.g., 0.24)

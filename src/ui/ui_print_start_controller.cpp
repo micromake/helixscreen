@@ -25,11 +25,16 @@
 #include "filament_sensor_manager.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
+#include "observer_factory.h"
 #include "printer_state.h"
+
+#include "hv/json.hpp"
 
 #include <spdlog/spdlog.h>
 
 #include <chrono>
+#include <filesystem>
+#include <fstream>
 
 namespace helix::ui {
 
@@ -43,6 +48,17 @@ PrintStartController::PrintStartController(PrinterState& printer_state, Moonrake
 }
 
 PrintStartController::~PrintStartController() {
+    // Warn if we still have a pending remap restore — the mapping will NOT be
+    // restored automatically since the observer is about to be destroyed.
+    if (!saved_tool_mapping_.empty()) {
+        spdlog::warn("[PrintStartController] Destroyed with pending remap restore "
+                     "({} tools on backend {}) — mapping will not be restored",
+                     saved_tool_mapping_.size(), saved_backend_index_);
+    }
+
+    // Clear print state observer before modal cleanup
+    print_state_observer_.reset();
+
     // Clean up any open modals - only if LVGL is still initialized
     // (destructor may be called after lv_deinit() during shutdown)
     if (lv_is_initialized()) {
@@ -177,6 +193,12 @@ void PrintStartController::execute_print_start() {
         "clean={}, timelapse={})",
         filename_to_print, options.bed_mesh, options.qgl, options.z_tilt, options.nozzle_clean,
         options.timelapse);
+
+    // Apply filament remaps if user changed any mappings
+    bool remaps_applied = apply_filament_remaps();
+    if (remaps_applied) {
+        observe_print_state_for_restore();
+    }
 
     // Enable timelapse recording if requested (Moonraker-Timelapse plugin)
     if (options.timelapse && api_) {
@@ -476,6 +498,276 @@ void PrintStartController::on_color_mismatch_cancel_static(lv_event_t* e) {
         spdlog::debug("[PrintStartController] Print cancelled by user (color mismatch warning)");
     }
     LVGL_SAFE_EVENT_CB_END();
+}
+
+// ============================================================================
+// Filament Remap Lifecycle
+// ============================================================================
+
+bool PrintStartController::apply_filament_remaps() {
+    if (!detail_view_) {
+        return false;
+    }
+
+    auto mappings = detail_view_->get_filament_mappings();
+    if (mappings.empty()) {
+        return false;
+    }
+
+    // Check if any mapping is non-auto (user made explicit choices)
+    bool has_explicit_mapping = false;
+    for (const auto& m : mappings) {
+        if (!m.is_auto && m.mapped_slot >= 0) {
+            has_explicit_mapping = true;
+            break;
+        }
+    }
+
+    if (!has_explicit_mapping) {
+        spdlog::debug("[PrintStartController] All mappings are auto — no remaps needed");
+        return false;
+    }
+
+    // Get the AMS backend for remapping
+    auto& ams = AmsState::instance();
+    if (!ams.is_available()) {
+        spdlog::warn("[PrintStartController] AMS not available for remapping");
+        return false;
+    }
+
+    // Use the first explicit mapping's backend.
+    // Multi-backend remap is not yet supported — warn if mappings span backends.
+    int backend_idx = 0;
+    bool backend_set = false;
+    for (const auto& m : mappings) {
+        if (m.mapped_backend >= 0) {
+            if (!backend_set) {
+                backend_idx = m.mapped_backend;
+                backend_set = true;
+            } else if (m.mapped_backend != backend_idx) {
+                spdlog::warn("[PrintStartController] Mappings span multiple backends "
+                             "({} and {}) — only backend {} will be remapped",
+                             backend_idx, m.mapped_backend, backend_idx);
+                break;
+            }
+        }
+    }
+
+    auto* backend = ams.get_backend(backend_idx);
+    if (!backend) {
+        spdlog::warn("[PrintStartController] Backend {} not found", backend_idx);
+        return false;
+    }
+
+    // Check if backend supports tool mapping
+    auto caps = backend->get_tool_mapping_capabilities();
+    if (!caps.supported || !caps.editable) {
+        spdlog::debug("[PrintStartController] Backend does not support editable tool mapping");
+        return false;
+    }
+
+    // Snapshot current firmware mapping BEFORE sending any remaps
+    saved_tool_mapping_ = backend->get_tool_mapping();
+    saved_backend_index_ = backend_idx;
+
+    spdlog::info("[PrintStartController] Saved firmware mapping ({} tools) from backend {}",
+                 saved_tool_mapping_.size(), backend_idx);
+
+    // Send remap commands for changed mappings only.
+    // Note: set_tool_mapping() is fire-and-forget (async G-code via WebSocket).
+    // There is a small race window where the print could start before Klipper
+    // processes all remap commands. In practice the window is negligible because
+    // prep_manager->start_print() also sends an async request to Moonraker.
+    int remaps_sent = 0;
+    for (const auto& m : mappings) {
+        if (m.is_auto || m.mapped_slot < 0) {
+            continue; // Skip auto mappings — firmware decides
+        }
+
+        // Check if this mapping differs from current firmware mapping
+        int current_slot = -1;
+        if (m.tool_index >= 0 && m.tool_index < static_cast<int>(saved_tool_mapping_.size())) {
+            current_slot = saved_tool_mapping_[m.tool_index];
+        }
+
+        if (m.mapped_slot == current_slot) {
+            spdlog::debug("[PrintStartController] T{} already mapped to slot {} — skipping",
+                          m.tool_index, m.mapped_slot);
+            continue;
+        }
+
+        spdlog::info("[PrintStartController] Remapping T{}: slot {} -> slot {}", m.tool_index,
+                     current_slot, m.mapped_slot);
+
+        auto err = backend->set_tool_mapping(m.tool_index, m.mapped_slot);
+        if (err.result != AmsResult::SUCCESS) {
+            spdlog::error("[PrintStartController] Failed to remap T{}: {}", m.tool_index,
+                          err.technical_msg);
+            // Continue trying other remaps — partial success is better than none
+        } else {
+            ++remaps_sent;
+        }
+    }
+
+    if (remaps_sent > 0) {
+        spdlog::info("[PrintStartController] Sent {} remap command(s)", remaps_sent);
+        persist_remap_state();
+        return true;
+    }
+
+    // No actual remaps sent (all matched current mapping)
+    saved_tool_mapping_.clear();
+    saved_backend_index_ = -1;
+    return false;
+}
+
+void PrintStartController::observe_print_state_for_restore() {
+    auto* subject = printer_state_.get_print_state_enum_subject();
+    if (!subject) {
+        spdlog::warn("[PrintStartController] No print state subject — cannot auto-restore mapping");
+        return;
+    }
+
+    // Note: observe_int_sync fires immediately with the current value.
+    // At registration time, state is typically STANDBY (print hasn't started yet).
+    // We only trigger restore on terminal states (COMPLETE/CANCELLED/ERROR),
+    // NOT STANDBY — otherwise the immediate fire would undo our remaps.
+    print_state_observer_ = observe_int_sync<PrintStartController>(
+        subject, this, [](PrintStartController* self, int state_val) {
+            auto state = static_cast<PrintJobState>(state_val);
+            if (state == PrintJobState::COMPLETE || state == PrintJobState::CANCELLED ||
+                state == PrintJobState::ERROR) {
+                self->restore_filament_mapping();
+                self->print_state_observer_.reset();
+            }
+        });
+
+    spdlog::debug("[PrintStartController] Observing print state for mapping restore");
+}
+
+void PrintStartController::restore_filament_mapping() {
+    if (saved_tool_mapping_.empty() || saved_backend_index_ < 0) {
+        return; // Nothing to restore
+    }
+
+    auto& ams = AmsState::instance();
+    auto* backend = ams.get_backend(saved_backend_index_);
+    if (!backend) {
+        spdlog::warn("[PrintStartController] Backend {} gone — cannot restore mapping",
+                     saved_backend_index_);
+        saved_tool_mapping_.clear();
+        saved_backend_index_ = -1;
+        return;
+    }
+
+    // Get current mapping to compare
+    auto current_mapping = backend->get_tool_mapping();
+
+    int restores_sent = 0;
+    for (size_t i = 0; i < saved_tool_mapping_.size(); ++i) {
+        int saved_slot = saved_tool_mapping_[i];
+        int current_slot = (i < current_mapping.size()) ? current_mapping[i] : -1;
+
+        if (saved_slot != current_slot) {
+            spdlog::info("[PrintStartController] Restoring T{}: slot {} -> slot {}", i,
+                         current_slot, saved_slot);
+            auto err = backend->set_tool_mapping(static_cast<int>(i), saved_slot);
+            if (err.result != AmsResult::SUCCESS) {
+                spdlog::error("[PrintStartController] Failed to restore T{}: {}", i,
+                              err.technical_msg);
+            } else {
+                ++restores_sent;
+            }
+        }
+    }
+
+    spdlog::info("[PrintStartController] Restored {} mapping(s) on print end", restores_sent);
+    saved_tool_mapping_.clear();
+    saved_backend_index_ = -1;
+    clear_persisted_remap_state();
+}
+
+// ============================================================================
+// Crash Recovery Persistence
+// ============================================================================
+
+static constexpr const char* PENDING_REMAP_FILENAME = "pending_remap.json";
+
+void PrintStartController::persist_remap_state() {
+    namespace fs = std::filesystem;
+
+    if (saved_tool_mapping_.empty() || saved_backend_index_ < 0) {
+        return;
+    }
+
+    nlohmann::json j;
+    j["backend_index"] = saved_backend_index_;
+    j["tool_mapping"] = saved_tool_mapping_;
+
+    auto path = fs::path("config") / PENDING_REMAP_FILENAME;
+    try {
+        fs::create_directories("config");
+        std::ofstream ofs(path);
+        if (ofs.is_open()) {
+            ofs << j.dump(2);
+            spdlog::debug("[PrintStartController] Persisted remap state to {}", path.string());
+        }
+    } catch (const std::exception& e) {
+        spdlog::warn("[PrintStartController] Failed to persist remap state: {}", e.what());
+    }
+}
+
+void PrintStartController::clear_persisted_remap_state() {
+    namespace fs = std::filesystem;
+
+    auto path = fs::path("config") / PENDING_REMAP_FILENAME;
+    try {
+        if (fs::exists(path)) {
+            fs::remove(path);
+            spdlog::debug("[PrintStartController] Cleared persisted remap state");
+        }
+    } catch (const std::exception& e) {
+        spdlog::warn("[PrintStartController] Failed to clear remap state: {}", e.what());
+    }
+}
+
+void PrintStartController::recover_pending_remap() {
+    namespace fs = std::filesystem;
+
+    auto path = fs::path("config") / PENDING_REMAP_FILENAME;
+    if (!fs::exists(path)) {
+        return;
+    }
+
+    try {
+        std::ifstream ifs(path);
+        if (!ifs.is_open()) {
+            return;
+        }
+
+        auto j = nlohmann::json::parse(ifs);
+        int backend_idx = j.value("backend_index", -1);
+        auto mapping = j.value("tool_mapping", std::vector<int>{});
+
+        if (backend_idx < 0 || mapping.empty()) {
+            spdlog::debug("[PrintStartController] Invalid pending remap file — removing");
+            clear_persisted_remap_state();
+            return;
+        }
+
+        // Load saved state and attempt restore
+        saved_tool_mapping_ = std::move(mapping);
+        saved_backend_index_ = backend_idx;
+
+        spdlog::info("[PrintStartController] Crash recovery: found pending remap "
+                     "({} tools, backend {}) — restoring",
+                     saved_tool_mapping_.size(), saved_backend_index_);
+
+        restore_filament_mapping();
+    } catch (const std::exception& e) {
+        spdlog::warn("[PrintStartController] Failed to load pending remap: {}", e.what());
+        clear_persisted_remap_state();
+    }
 }
 
 } // namespace helix::ui

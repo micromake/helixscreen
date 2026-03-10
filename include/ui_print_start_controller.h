@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include "filament_mapper.h"
+#include "ui_observer_guard.h"
+
 #include <functional>
 #include <lvgl.h>
 #include <memory>
@@ -192,6 +195,36 @@ class PrintStartController {
     HideDetailViewCallback hide_detail_view_;
     ShowDetailViewCallback show_detail_view_;
     NavigateToPrintStatusCallback navigate_to_print_status_;
+
+    // === Filament Remap State ===
+    // Saved firmware mapping before we send remaps (for restore on print end)
+    std::vector<int> saved_tool_mapping_;
+    int saved_backend_index_ = -1; ///< Which backend we remapped
+
+    // Observer for print state changes (to restore mapping on print end)
+    ObserverGuard print_state_observer_;
+
+    // === Filament Remap Methods ===
+    /// Snapshot current firmware mapping, send remap commands, return true if remaps were sent
+    bool apply_filament_remaps();
+
+    /// Restore original firmware mapping (called on print end)
+    void restore_filament_mapping();
+
+    /// Set up observer for print state to auto-restore mapping
+    void observe_print_state_for_restore();
+
+    // === Crash Recovery Persistence ===
+    /// Save remap state to disk so it survives app restart
+    void persist_remap_state();
+
+    /// Delete persisted remap state (called after successful restore)
+    void clear_persisted_remap_state();
+
+public:
+    /// Check for and restore any pending remap from a previous crashed session.
+    /// Call once after AMS backends are initialized.
+    void recover_pending_remap();
 };
 
 } // namespace helix::ui

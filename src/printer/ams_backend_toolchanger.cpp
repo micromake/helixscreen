@@ -25,7 +25,7 @@ AmsBackendToolChanger::AmsBackendToolChanger(MoonrakerAPI* api, MoonrakerClient*
 
     // Tool changer capabilities
     system_info_.supports_endless_spool = false; // Not applicable
-    system_info_.supports_tool_mapping = false;  // Tools ARE the slots
+    system_info_.supports_tool_mapping = true;   // Via klipper-toolchanger ASSIGN_TOOL
     system_info_.supports_bypass = false;        // No bypass on tool changers
     system_info_.has_hardware_bypass_sensor = false;
 
@@ -469,20 +469,92 @@ AmsError AmsBackendToolChanger::set_slot_info(int slot_index, const SlotInfo& in
     return AmsErrorHelper::success();
 }
 
-AmsError AmsBackendToolChanger::set_tool_mapping(int /*tool_number*/, int /*slot_index*/) {
-    // Tool changers don't have tool-to-slot mapping - tools ARE slots
-    return AmsErrorHelper::not_supported("Tool mapping");
+AmsError AmsBackendToolChanger::set_tool_mapping(int tool_number, int slot_index) {
+    // Remap G-code tool number to a different physical tool via klipper-toolchanger's
+    // ASSIGN_TOOL command. This makes Klipper's T<tool_number> command activate the
+    // physical tool at slot_index instead of tool_number.
+    //
+    // Example: set_tool_mapping(0, 2) sends "ASSIGN_TOOL TOOL=T2 N=0"
+    //   → G-code "T0" now activates physical tool T2
+    std::string physical_tool_name;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        int tool_count = static_cast<int>(tool_names_.size());
+        if (tool_number < 0 || tool_number >= tool_count) {
+            return AmsError(AmsResult::INVALID_TOOL,
+                            "Tool " + std::to_string(tool_number) + " out of range",
+                            "Invalid tool number", "");
+        }
+        if (slot_index < 0 || slot_index >= tool_count) {
+            return AmsErrorHelper::invalid_slot(slot_index, tool_count - 1);
+        }
+
+        // The physical tool to assign (slot_index maps to tool_names_[slot_index])
+        physical_tool_name = tool_names_[slot_index];
+
+        // Update internal mapping
+        if (tool_number < static_cast<int>(system_info_.tool_to_slot_map.size())) {
+            system_info_.tool_to_slot_map[tool_number] = slot_index;
+        }
+    }
+
+    // Send ASSIGN_TOOL: assign physical tool to respond to T<tool_number> commands
+    std::ostringstream cmd;
+    cmd << "ASSIGN_TOOL TOOL=" << physical_tool_name << " N=" << tool_number;
+
+    spdlog::info("[AMS ToolChanger] Remapping T{} -> physical {} (slot {})",
+                 tool_number, physical_tool_name, slot_index);
+    return execute_gcode(cmd.str());
 }
 
 helix::printer::ToolMappingCapabilities
 AmsBackendToolChanger::get_tool_mapping_capabilities() const {
-    // Tool changers have fixed 1:1 mapping - tools ARE slots, not configurable
-    return {false, false, ""};
+    // klipper-toolchanger supports ASSIGN_TOOL for tool remapping
+    return {true, true, "Tool reassignment via ASSIGN_TOOL"}; // i18n: do not translate
 }
 
 std::vector<int> AmsBackendToolChanger::get_tool_mapping() const {
-    // Tool changers have fixed 1:1 mapping - return empty (not supported)
-    return {};
+    std::lock_guard<std::mutex> lock(mutex_);
+    return system_info_.tool_to_slot_map;
+}
+
+AmsError AmsBackendToolChanger::reset_tool_mappings() {
+    // Restore identity mapping: each tool number maps to its own physical tool.
+    // Sends ASSIGN_TOOL for each tool that was remapped away from identity.
+    std::vector<std::pair<int, std::string>> remaps_needed;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        int tool_count = static_cast<int>(tool_names_.size());
+        for (int i = 0; i < tool_count; ++i) {
+            if (i < static_cast<int>(system_info_.tool_to_slot_map.size()) &&
+                system_info_.tool_to_slot_map[i] != i) {
+                // Tool i is currently mapped to a different slot — restore to identity
+                remaps_needed.emplace_back(i, tool_names_[i]);
+                system_info_.tool_to_slot_map[i] = i;
+            }
+        }
+    }
+
+    if (remaps_needed.empty()) {
+        spdlog::debug("[AMS ToolChanger] All tools already at identity mapping");
+        return AmsErrorHelper::success();
+    }
+
+    AmsError last_error = AmsErrorHelper::success();
+    for (const auto& [tool_num, tool_name] : remaps_needed) {
+        std::ostringstream cmd;
+        cmd << "ASSIGN_TOOL TOOL=" << tool_name << " N=" << tool_num;
+        spdlog::info("[AMS ToolChanger] Resetting T{} -> physical {} (identity)",
+                     tool_num, tool_name);
+        auto err = execute_gcode(cmd.str());
+        if (err.result != AmsResult::SUCCESS) {
+            last_error = err;
+        }
+    }
+
+    spdlog::info("[AMS ToolChanger] Reset {} tool mapping(s) to identity", remaps_needed.size());
+    return last_error;
 }
 
 // ============================================================================
