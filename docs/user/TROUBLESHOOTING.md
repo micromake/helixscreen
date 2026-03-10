@@ -497,6 +497,93 @@ Remove the `rotate` and `rotation_probed` keys from your config file's `display`
 
 ---
 
+### Colors are wrong (red and blue swapped)
+
+**Symptoms:**
+- Red images appear blue and blue images appear red
+- Green colors display correctly
+- UI elements with red/blue tints look "off"
+
+**Cause:**
+Your display's framebuffer uses BGR pixel order instead of RGB, but the kernel driver reports the wrong format. This is common on some Allwinner SoCs (H616, R818, etc.) with RGB parallel (40-pin) display interfaces.
+
+HelixScreen auto-detects BGR layout from the kernel's `fb_var_screeninfo`, but some display drivers report incorrect pixel offsets. You can verify with:
+
+```bash
+fbset -i -fb /dev/fb0
+```
+
+Look at the `rgba` line. If it shows `8/16,8/8,8/0,0/24` (red at offset 16), the kernel claims RGB. If your colors are swapped despite this, the kernel is wrong and you need a manual override.
+
+**Solution:**
+
+Add this line to your `helixscreen.env` file (typically `~/helixscreen/config/helixscreen.env`):
+
+```bash
+HELIX_COLOR_SWAP_RB=1
+```
+
+Then restart HelixScreen:
+```bash
+sudo systemctl restart helixscreen
+```
+
+To disable the swap (if auto-detection is wrong in the other direction), use `HELIX_COLOR_SWAP_RB=0`.
+
+**Verifying the fix:**
+After restart, flags on the language selection screen should show correct colors (e.g., the French flag should be blue-white-red, not red-white-blue).
+
+---
+
+### 5GHz WiFi networks not showing
+
+**Symptoms:**
+- Only 2.4GHz WiFi networks appear in the network list
+- 5GHz networks visible in KlipperScreen or other tools but not in HelixScreen
+- WiFi adapter supports 5GHz (e.g., AP6256) but only 2.4GHz networks shown
+
+**Cause:**
+HelixScreen displays all networks returned by the WiFi subsystem (`wpa_supplicant` or `NetworkManager`). If 5GHz networks are missing, the issue is typically in the underlying WiFi configuration rather than HelixScreen itself.
+
+**Solutions:**
+
+**Check if your WiFi adapter sees 5GHz networks at the OS level:**
+```bash
+# For NetworkManager systems:
+nmcli device wifi list
+
+# For wpa_supplicant systems:
+sudo wpa_cli scan
+sudo wpa_cli scan_results
+```
+
+If 5GHz networks don't appear here either, the issue is in the WiFi driver or configuration.
+
+**Verify 5GHz support is detected:**
+```bash
+iw phy phy0 info | grep -A 20 "Frequencies"
+```
+Look for frequencies above 5000 MHz (e.g., 5180, 5240).
+
+**Check wpa_supplicant configuration:**
+If your `wpa_supplicant.conf` has a `freq_list=` parameter that only lists 2.4GHz frequencies, 5GHz networks won't be scanned. Remove the `freq_list` line or add 5GHz frequencies.
+
+**Check country code is set:**
+5GHz channels require a regulatory domain. Without it, the kernel may block 5GHz scanning:
+```bash
+sudo iw reg get
+```
+If it shows "country 00", set your country code:
+```bash
+sudo iw reg set US   # Replace US with your country code
+```
+
+To make permanent, add `country=US` to `/etc/wpa_supplicant/wpa_supplicant.conf` or set `wifi.powersave = 2` in NetworkManager.
+
+**After changing WiFi hardware** (e.g., swapping from AP6212 to AP6256), a reboot is recommended to ensure the correct driver and firmware are loaded.
+
+---
+
 ## Touch Input Issues
 
 ### Touch not responding

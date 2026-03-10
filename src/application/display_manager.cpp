@@ -731,18 +731,24 @@ void DisplayManager::check_display_sleep() {
             enter_sleep(sleep_timeout_sec);
         }
     } else {
-        // Currently awake - check if we should dim or sleep
+        // Currently awake - check if we should dim, start screensaver, or sleep
         bool can_dim = m_backlight && m_backlight->supports_dimming();
+#ifdef HELIX_ENABLE_SCREENSAVER
+        bool has_screensaver = ScreensaverManager::configured_type() != ScreensaverType::OFF;
+#else
+        bool has_screensaver = false;
+#endif
         if (sleep_timeout_sec > 0 && inactive_ms >= sleep_timeout_ms) {
             // Skip dim, go straight to sleep (sleep timeout <= dim timeout)
             enter_sleep(sleep_timeout_sec);
-        } else if (can_dim && m_dim_timeout_sec > 0 && inactive_ms >= dim_timeout_ms) {
-            // Dim the display (only if backlight supports continuous dimming)
+        } else if (m_dim_timeout_sec > 0 && inactive_ms >= dim_timeout_ms &&
+                   (can_dim || has_screensaver)) {
+            // Dim timeout reached — start screensaver and/or dim backlight.
+            // On devices without backlight dimming, screensaver alone provides
+            // the idle visual state (instead of skipping to sleep).
             m_display_dimmed = true;
 #ifdef HELIX_ENABLE_SCREENSAVER
-            // Start screensaver instead of just dimming (if configured)
-            if (!m_screensaver_active &&
-                ScreensaverManager::configured_type() != ScreensaverType::OFF) {
+            if (!m_screensaver_active && has_screensaver) {
                 ScreensaverManager::instance().start(ScreensaverManager::configured_type());
                 m_screensaver_active = true;
                 if (m_backlight) {
