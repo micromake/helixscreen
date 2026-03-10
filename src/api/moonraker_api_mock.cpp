@@ -1400,6 +1400,9 @@ void MoonrakerSpoolmanAPIMock::update_spoolman_spool(int spool_id, const nlohman
             if (spool_data.contains("comment")) {
                 spool.comment = spool_data["comment"].get<std::string>();
             }
+            if (spool_data.contains("location")) {
+                spool.location = spool_data["location"].get<std::string>();
+            }
             if (spool_data.contains("filament_id")) {
                 spool.filament_id = spool_data["filament_id"].get<int>();
             }
