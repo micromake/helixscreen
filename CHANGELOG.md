@@ -7,14 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.98.0] - 2026-03-10
+
+Bluetooth label printing, filament mapping, Spoolman location support, and new home panel widgets.
+
 ### Added
-- AD5X IFS backend for FlashForge Adventurer 5X Intelligent Filament Switching (testing)
-  - Auto-detection via IFS port/motion sensors in Klipper
-  - 4-lane filament switching with tool mapping (T0-T15)
-  - Color, material, and presence tracking via save_variables
-  - Load/unload/change tool operations via IFS G-code macros
-  - Bypass (external spool) mode support
+- Bluetooth label printing with Brother QL (RFCOMM), Phomemo (SPP), and Niimbot (BLE GATT) support
+  - BlueZ D-Bus device discovery and pairing UI in label printer settings
+  - Bluetooth plugin loaded dynamically via dlopen for optional dependency
+- Filament mapping modal for print-time tool-to-spool remapping
+- Spoolman location field — filter by location, edit in spool modal, shown inline in list rows
+- Bed temperature home panel widget (1x1, scalable to 2x2)
+- AD5X IFS backend for FlashForge Adventurer 5X Intelligent Filament Switching
+  - 4-lane switching with tool mapping, color/material/presence tracking, bypass mode
   - Mock mode: `HELIX_MOCK_AMS=ifs`
+- Venture Delta printer to database
+- Label printing user guide for Brother, Phomemo, and Niimbot printers
+
+### Fixed
+- AD5X heuristics strengthened to prevent AD5M misdetection (#375)
+- Screws tilt panel always shows results table with success banner (#309)
+- LED strip list no longer lost when strips are pruned during discovery (#373)
+- LVGL observer null-guard prevents crash on subject removal (#378)
+- AFC lane tracking on print start with toolchanger tool_number parse (#379)
+- AMS spoolman_actions visibility race on modal open (#311)
+- Screensaver activation on devices without backlight dimming
+- macOS build using pkg-config for libusb
+
+### Changed
+- Home panel widget guide updated with all current widgets
 
 ## [0.97.5] - 2026-03-10
 
@@ -1800,6 +1821,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.98.0]: https://github.com/prestonbrown/helixscreen/compare/v0.97.5...v0.98.0
 [0.97.5]: https://github.com/prestonbrown/helixscreen/compare/v0.97.4...v0.97.5
 [0.97.4]: https://github.com/prestonbrown/helixscreen/compare/v0.97.3...v0.97.4
 [0.97.3]: https://github.com/prestonbrown/helixscreen/compare/v0.97.2...v0.97.3
