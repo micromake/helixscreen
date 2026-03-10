@@ -780,6 +780,25 @@ void AmsEditModal::update_spoolman_button_state() {
         return;
     }
 
+    // Ensure the spoolman_actions container visibility matches the current subject value.
+    // The XML bind_flag_if_eq fires asynchronously, so when the modal opens before Spoolman
+    // detection completes, the container stays hidden even after the subject becomes 1.
+    // Reading the subject synchronously here closes that race window (#311).
+    lv_obj_t* actions_container = find_widget("spoolman_actions");
+    if (actions_container) {
+        auto* spoolman_subj = lv_xml_get_subject(nullptr, "printer_has_spoolman");
+        bool has_spoolman = spoolman_subj && lv_subject_get_int(spoolman_subj) == 1;
+        if (has_spoolman) {
+            lv_obj_remove_flag(actions_container, LV_OBJ_FLAG_HIDDEN);
+            // Retry vendor fetch if it was skipped due to the race (#311)
+            if (!vendors_loaded_) {
+                fetch_vendors_from_spoolman();
+            }
+        } else {
+            lv_obj_add_flag(actions_container, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
     lv_obj_t* btn_change = find_widget("btn_change_spool");
     lv_obj_t* btn_unlink = find_widget("btn_unlink_spool");
 
