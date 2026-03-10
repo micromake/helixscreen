@@ -92,7 +92,8 @@ class AmsBackendToolChanger : public AmsSubscriptionBackend {
     AmsError set_slot_info(int slot_index, const SlotInfo& info, bool persist = true) override;
     AmsError set_tool_mapping(int tool_number, int slot_index) override;
 
-    // Tool mapping - Tool changers have fixed mapping (tools ARE slots)
+    // Tool mapping via klipper-toolchanger ASSIGN_TOOL command
+    AmsError reset_tool_mappings() override;
     [[nodiscard]] helix::printer::ToolMappingCapabilities
     get_tool_mapping_capabilities() const override;
     [[nodiscard]] std::vector<int> get_tool_mapping() const override;

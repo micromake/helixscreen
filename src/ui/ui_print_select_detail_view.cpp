@@ -239,6 +239,12 @@ lv_obj_t* PrintSelectDetailView::create(lv_obj_t* parent_screen) {
     color_requirements_card_ = lv_obj_find_by_name(overlay_root_, "color_requirements_card");
     color_swatches_row_ = lv_obj_find_by_name(overlay_root_, "color_swatches_row");
 
+    // Look up and initialize filament mapping card
+    lv_obj_t* mapping_card = lv_obj_find_by_name(overlay_root_, "filament_mapping_card");
+    lv_obj_t* mapping_rows = lv_obj_find_by_name(overlay_root_, "filament_mapping_rows");
+    lv_obj_t* mapping_warning = lv_obj_find_by_name(overlay_root_, "filament_mapping_warning");
+    filament_mapping_card_.create(mapping_card, mapping_rows, mapping_warning);
+
     // Look up history status display
     history_status_row_ = lv_obj_find_by_name(overlay_root_, "history_status_row");
     history_status_icon_ = lv_obj_find_by_name(overlay_root_, "history_status_icon");
@@ -287,6 +293,7 @@ void PrintSelectDetailView::set_dependencies(MoonrakerAPI* api, PrinterState* pr
 void PrintSelectDetailView::show(const std::string& filename, const std::string& current_path,
                                  const std::string& filament_type,
                                  const std::vector<std::string>& filament_colors,
+                                 const std::vector<std::string>& filament_materials,
                                  size_t file_size_bytes) {
     // Lazy re-create widget tree if it was destroyed by destroy-on-close
     if (!overlay_root_ && parent_screen_) {
@@ -311,10 +318,22 @@ void PrintSelectDetailView::show(const std::string& filename, const std::string&
     current_path_ = current_path;
     current_filament_type_ = filament_type;
     current_filament_colors_ = filament_colors;
+    current_filament_materials_ = filament_materials;
     current_file_size_bytes_ = file_size_bytes;
 
-    // Update color requirements display (immediate, not deferred)
-    update_color_swatches(filament_colors);
+    // Update filament mapping card (shown when AMS is available)
+    filament_mapping_card_.update(filament_colors, filament_materials);
+
+    // Show either the interactive mapping card OR the simple color swatches, never both
+    if (filament_mapping_card_.is_visible()) {
+        // Mapping card is active — hide legacy color swatches
+        if (color_requirements_card_) {
+            lv_obj_add_flag(color_requirements_card_, LV_OBJ_FLAG_HIDDEN);
+        }
+    } else {
+        // No AMS — fall back to simple color swatches display
+        update_color_swatches(filament_colors);
+    }
 
     // Register with NavigationManager for lifecycle callbacks
     NavigationManager::instance().register_overlay_instance(overlay_root_, this);
@@ -480,6 +499,9 @@ void PrintSelectDetailView::on_ui_destroyed() {
     // Color requirements display
     color_requirements_card_ = nullptr;
     color_swatches_row_ = nullptr;
+
+    // Filament mapping card
+    filament_mapping_card_.on_ui_destroyed();
 
     // History status display
     history_status_row_ = nullptr;
