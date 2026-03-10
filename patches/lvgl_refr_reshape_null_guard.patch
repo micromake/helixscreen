@@ -14,7 +14,7 @@
      LV_UNUSED(ret);
      LV_ASSERT_NULL(ret);
 +    if(ret == NULL) {
-+        LV_LOG_ERROR("draw_buf reshape failed for %dx%d stride %u - skipping render",
++        LV_LOG_ERROR("draw_buf reshape failed for %dx%d stride %" LV_PRIu32 " - skipping render",
 +                     (int)lv_area_get_width(&layer->buf_area),
 +                     (int)lv_area_get_height(&layer->buf_area), stride);
 +        return false;
