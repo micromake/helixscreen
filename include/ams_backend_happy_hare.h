@@ -8,6 +8,7 @@
 
 #include <atomic>
 #include <memory>
+#include <optional>
 #include <string>
 
 /**
@@ -250,4 +251,57 @@ class AmsBackendHappyHare : public AmsSubscriptionBackend {
 
     // Error state tracking
     std::string reason_for_pause_; ///< Last reason_for_pause from MMU (descriptive error text)
+
+    // --- Config defaults from configfile.settings.mmu ---
+
+    /// Cached config defaults parsed from configfile.settings.mmu
+    struct ConfigDefaults {
+        float gear_from_buffer_speed = 150.0f;
+        float gear_from_spool_speed = 60.0f;
+        float gear_unload_speed = 80.0f;
+        float selector_move_speed = 200.0f;
+        float extruder_load_speed = 45.0f;
+        float extruder_unload_speed = 45.0f;
+        float toolhead_sensor_to_nozzle = 62.0f;
+        float toolhead_extruder_to_nozzle = 72.0f;
+        float toolhead_entry_to_extruder = 0.0f;
+        float toolhead_ooze_reduction = 2.0f;
+        int sync_to_extruder = 0;
+        int clog_detection = 0;
+        bool loaded = false;
+    };
+    ConfigDefaults config_defaults_;
+
+    /// User overrides (set via UI, persisted to Config)
+    struct UserOverrides {
+        std::optional<float> gear_from_buffer_speed;
+        std::optional<float> gear_from_spool_speed;
+        std::optional<float> gear_unload_speed;
+        std::optional<float> selector_move_speed;
+        std::optional<float> extruder_load_speed;
+        std::optional<float> extruder_unload_speed;
+        std::optional<float> toolhead_sensor_to_nozzle;
+        std::optional<float> toolhead_extruder_to_nozzle;
+        std::optional<float> toolhead_entry_to_extruder;
+        std::optional<float> toolhead_ooze_reduction;
+        std::optional<int> sync_to_extruder;
+        std::optional<int> clog_detection;
+    };
+    UserOverrides user_overrides_;
+
+    // Status-backed values (from printer.mmu.* subscriptions)
+    std::string led_exit_effect_;
+    std::string espooler_active_;
+    int flowguard_encoder_mode_ = -1; ///< -1 = not yet received from Moonraker
+
+    void query_config_defaults();
+    void load_persisted_overrides();
+    void save_override(const std::string& key, float value);
+    void save_override(const std::string& key, int value);
+    void reapply_overrides();
+
+    /// Get the config default float for a given action key
+    [[nodiscard]] float get_config_default_float(const std::string& key) const;
+    /// Get the config default int for a given action key
+    [[nodiscard]] int get_config_default_int(const std::string& key) const;
 };

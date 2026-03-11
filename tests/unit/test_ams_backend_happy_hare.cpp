@@ -134,12 +134,39 @@ class AmsBackendHappyHareTestHelper : public AmsBackendHappyHare {
         selector_type_ = type;
     }
 
+    /**
+     * @brief Set config defaults for device actions testing
+     *
+     * Populates config_defaults_ with known values so tests can verify
+     * that get_device_actions() overlays them correctly.
+     */
+    void set_config_defaults_for_test() {
+        config_defaults_.gear_from_buffer_speed = 180.0f;
+        config_defaults_.gear_from_spool_speed = 70.0f;
+        config_defaults_.gear_unload_speed = 90.0f;
+        config_defaults_.selector_move_speed = 200.0f;
+        config_defaults_.extruder_load_speed = 45.0f;
+        config_defaults_.extruder_unload_speed = 45.0f;
+        config_defaults_.toolhead_sensor_to_nozzle = 62.0f;
+        config_defaults_.toolhead_extruder_to_nozzle = 72.0f;
+        config_defaults_.toolhead_entry_to_extruder = 0.0f;
+        config_defaults_.toolhead_ooze_reduction = 2.0f;
+        config_defaults_.sync_to_extruder = 0;
+        config_defaults_.clog_detection = 0;
+        config_defaults_.loaded = true;
+    }
+
     void apply_selector_type_update() {
         update_unit_topologies();
     }
 
     void clear_captured_gcodes() {
         captured_gcodes.clear();
+    }
+
+    /// Expose reapply_overrides for testing
+    void test_reapply_overrides() {
+        reapply_overrides();
     }
 
     /**
@@ -2194,4 +2221,528 @@ TEST_CASE("Happy Hare parses sync_feedback_bias fields", "[ams][happy_hare][v4][
         REQUIRE(info.sync_feedback_bias == Catch::Approx(-2.0f));
         REQUIRE(info.sync_feedback_bias_raw == Catch::Approx(-2.0f));
     }
+}
+
+// --- Phase 10: Expanded device defaults (Task 2) ---
+
+TEST_CASE("Happy Hare device sections include toolhead", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    auto sections = helper.get_device_sections();
+
+    bool found_toolhead = false;
+    for (const auto& s : sections) {
+        if (s.id == "toolhead") {
+            found_toolhead = true;
+            REQUIRE(s.label == "Toolhead");
+            break;
+        }
+    }
+    REQUIRE(found_toolhead);
+}
+
+TEST_CASE("Happy Hare sections have correct ordering", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    auto sections = helper.get_device_sections();
+
+    REQUIRE(sections.size() == 5);
+    REQUIRE(sections[0].id == "setup");
+    REQUIRE(sections[1].id == "speed");
+    REQUIRE(sections[2].id == "toolhead");
+    REQUIRE(sections[3].id == "accessories");
+    REQUIRE(sections[4].id == "maintenance");
+}
+
+TEST_CASE("Happy Hare actions include split gear speeds", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    auto actions = helper.get_device_actions();
+
+    auto find_action = [&](const std::string& id) -> const helix::printer::DeviceAction* {
+        for (const auto& a : actions) {
+            if (a.id == id) return &a;
+        }
+        return nullptr;
+    };
+
+    // Split gear speeds should exist
+    auto* buf = find_action("gear_from_buffer_speed");
+    REQUIRE(buf != nullptr);
+    REQUIRE(buf->section == "speed");
+    REQUIRE(std::any_cast<double>(buf->current_value) == Catch::Approx(150.0));
+
+    auto* spool = find_action("gear_from_spool_speed");
+    REQUIRE(spool != nullptr);
+    REQUIRE(spool->section == "speed");
+    REQUIRE(std::any_cast<double>(spool->current_value) == Catch::Approx(60.0));
+
+    // Old gear_load_speed should NOT exist
+    REQUIRE(find_action("gear_load_speed") == nullptr);
+}
+
+TEST_CASE("Happy Hare actions include extruder speeds", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    auto actions = helper.get_device_actions();
+
+    auto find_action = [&](const std::string& id) -> const helix::printer::DeviceAction* {
+        for (const auto& a : actions) {
+            if (a.id == id) return &a;
+        }
+        return nullptr;
+    };
+
+    auto* ext_load = find_action("extruder_load_speed");
+    REQUIRE(ext_load != nullptr);
+    REQUIRE(ext_load->section == "speed");
+
+    auto* ext_unload = find_action("extruder_unload_speed");
+    REQUIRE(ext_unload != nullptr);
+    REQUIRE(ext_unload->section == "speed");
+}
+
+TEST_CASE("Happy Hare actions include toolhead sliders", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    auto actions = helper.get_device_actions();
+
+    auto find_action = [&](const std::string& id) -> const helix::printer::DeviceAction* {
+        for (const auto& a : actions) {
+            if (a.id == id) return &a;
+        }
+        return nullptr;
+    };
+
+    REQUIRE(find_action("toolhead_sensor_to_nozzle") != nullptr);
+    REQUIRE(find_action("toolhead_extruder_to_nozzle") != nullptr);
+    REQUIRE(find_action("toolhead_entry_to_extruder") != nullptr);
+    REQUIRE(find_action("toolhead_ooze_reduction") != nullptr);
+
+    // Verify they're in the toolhead section
+    REQUIRE(find_action("toolhead_sensor_to_nozzle")->section == "toolhead");
+    REQUIRE(find_action("toolhead_ooze_reduction")->section == "toolhead");
+}
+
+TEST_CASE("Happy Hare actions include sync_to_extruder toggle",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    auto actions = helper.get_device_actions();
+
+    auto find_action = [&](const std::string& id) -> const helix::printer::DeviceAction* {
+        for (const auto& a : actions) {
+            if (a.id == id) return &a;
+        }
+        return nullptr;
+    };
+
+    auto* sync = find_action("sync_to_extruder");
+    REQUIRE(sync != nullptr);
+    REQUIRE(sync->section == "accessories");
+    REQUIRE(sync->type == helix::printer::ActionType::TOGGLE);
+}
+
+TEST_CASE("Happy Hare actions include test_move button", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    auto actions = helper.get_device_actions();
+
+    auto find_action = [&](const std::string& id) -> const helix::printer::DeviceAction* {
+        for (const auto& a : actions) {
+            if (a.id == id) return &a;
+        }
+        return nullptr;
+    };
+
+    auto* move = find_action("test_move");
+    REQUIRE(move != nullptr);
+    REQUIRE(move->section == "maintenance");
+    REQUIRE(move->type == helix::printer::ActionType::BUTTON);
+}
+
+TEST_CASE("Happy Hare actions do NOT include calibrate_servo",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    auto actions = helper.get_device_actions();
+
+    for (const auto& a : actions) {
+        REQUIRE(a.id != "calibrate_servo");
+    }
+}
+
+// --- Phase 11: Live value population (Task 4) ---
+
+TEST_CASE("get_device_actions returns live config values", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_config_defaults_for_test();
+
+    auto actions = helper.get_device_actions();
+
+    for (const auto& a : actions) {
+        if (a.id == "gear_from_buffer_speed") {
+            REQUIRE(a.current_value.has_value());
+            auto val = std::any_cast<double>(a.current_value);
+            REQUIRE(val == Catch::Approx(180.0));
+        }
+        if (a.id == "gear_unload_speed") {
+            REQUIRE(a.current_value.has_value());
+            auto val = std::any_cast<double>(a.current_value);
+            REQUIRE(val == Catch::Approx(90.0));
+        }
+    }
+}
+
+TEST_CASE("get_device_actions disables non-buttons when config not loaded",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    // Do NOT call set_config_defaults_for_test() — config_defaults_.loaded is false
+
+    auto actions = helper.get_device_actions();
+
+    for (const auto& a : actions) {
+        if (a.type != helix::printer::ActionType::BUTTON) {
+            REQUIRE_FALSE(a.enabled);
+            REQUIRE(a.disable_reason == "Loading configuration...");
+        }
+    }
+}
+
+TEST_CASE("get_device_actions overlays sync_to_extruder as bool",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_config_defaults_for_test();
+
+    auto actions = helper.get_device_actions();
+
+    for (const auto& a : actions) {
+        if (a.id == "sync_to_extruder") {
+            REQUIRE(a.current_value.has_value());
+            auto val = std::any_cast<bool>(a.current_value);
+            REQUIRE(val == false);
+        }
+    }
+}
+
+// --- Phase 12: Parse status for LED/eSpooler/flowguard (Task 5) ---
+
+TEST_CASE("parse_mmu_state extracts flowguard encoder_mode",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+
+    nlohmann::json mmu_data;
+    mmu_data["flowguard"] = {{"encoder_mode", 2}};
+    helper.test_parse_mmu_state(mmu_data);
+
+    helper.set_config_defaults_for_test();
+    auto actions = helper.get_device_actions();
+    for (const auto& a : actions) {
+        if (a.id == "clog_detection") {
+            auto val = std::any_cast<std::string>(a.current_value);
+            REQUIRE(val == "Auto");
+        }
+    }
+}
+
+TEST_CASE("parse_mmu_state extracts LED exit_effect", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_config_defaults_for_test();
+
+    nlohmann::json mmu_data;
+    mmu_data["leds"] = {{"unit0", {{"exit_effect", "breathing"}}}};
+    helper.test_parse_mmu_state(mmu_data);
+
+    auto actions = helper.get_device_actions();
+    for (const auto& a : actions) {
+        if (a.id == "led_mode") {
+            auto val = std::any_cast<std::string>(a.current_value);
+            REQUIRE(val == "breathing");
+        }
+    }
+}
+
+TEST_CASE("parse_mmu_state populates espooler_active for device actions",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_config_defaults_for_test();
+
+    nlohmann::json mmu_data;
+    mmu_data["espooler_active"] = "assist";
+    helper.test_parse_mmu_state(mmu_data);
+
+    auto actions = helper.get_device_actions();
+    for (const auto& a : actions) {
+        if (a.id == "espooler_mode") {
+            auto val = std::any_cast<std::string>(a.current_value);
+            REQUIRE(val == "assist");
+        }
+    }
+}
+
+// --- Phase 13: Topology filtering (Task 6) ---
+
+TEST_CASE("Type B topology hides servo and selector actions",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_config_defaults_for_test();
+    helper.set_selector_type("VirtualSelector");
+
+    auto actions = helper.get_device_actions();
+    for (const auto& a : actions) {
+        if (a.id == "servo_buzz" || a.id == "calibrate_encoder") {
+            REQUIRE_FALSE(a.enabled);
+            REQUIRE_FALSE(a.disable_reason.empty());
+        }
+        if (a.id == "selector_speed") {
+            REQUIRE_FALSE(a.enabled);
+        }
+        if (a.id == "clog_detection") {
+            REQUIRE_FALSE(a.enabled);
+        }
+    }
+}
+
+TEST_CASE("Type A topology shows all actions", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_config_defaults_for_test();
+    // selector_type_ defaults to "" (not VirtualSelector) = Type A
+
+    auto actions = helper.get_device_actions();
+    for (const auto& a : actions) {
+        if (a.id == "selector_speed") {
+            REQUIRE(a.enabled);
+        }
+    }
+}
+
+// ============================================================================
+// Task 7: execute_device_action Tests
+// ============================================================================
+
+TEST_CASE("execute_device_action sends correct G-code for speed sliders",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+
+    SECTION("gear_from_buffer_speed") {
+        auto result = helper.execute_device_action("gear_from_buffer_speed", std::any(200.0));
+        REQUIRE(result.success());
+        REQUIRE(helper.has_gcode_containing("GEAR_FROM_BUFFER_SPEED=200"));
+    }
+
+    SECTION("gear_from_spool_speed") {
+        auto result = helper.execute_device_action("gear_from_spool_speed", std::any(80.0));
+        REQUIRE(result.success());
+        REQUIRE(helper.has_gcode_containing("GEAR_FROM_SPOOL_SPEED=80"));
+    }
+
+    SECTION("gear_unload_speed") {
+        auto result = helper.execute_device_action("gear_unload_speed", std::any(90.0));
+        REQUIRE(result.success());
+        REQUIRE(helper.has_gcode_containing("GEAR_UNLOAD_SPEED=90"));
+    }
+
+    SECTION("selector_speed") {
+        auto result = helper.execute_device_action("selector_speed", std::any(200.0));
+        REQUIRE(result.success());
+        REQUIRE(helper.has_gcode_containing("SELECTOR_MOVE_SPEED=200"));
+    }
+
+    SECTION("extruder_load_speed") {
+        auto result = helper.execute_device_action("extruder_load_speed", std::any(45.0));
+        REQUIRE(result.success());
+        REQUIRE(helper.has_gcode_containing("EXTRUDER_LOAD_SPEED=45"));
+    }
+
+    SECTION("extruder_unload_speed") {
+        auto result = helper.execute_device_action("extruder_unload_speed", std::any(50.0));
+        REQUIRE(result.success());
+        REQUIRE(helper.has_gcode_containing("EXTRUDER_UNLOAD_SPEED=50"));
+    }
+}
+
+TEST_CASE("execute_device_action sends correct G-code for toolhead distances",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+
+    SECTION("toolhead_sensor_to_nozzle") {
+        auto result = helper.execute_device_action("toolhead_sensor_to_nozzle", std::any(58.5));
+        REQUIRE(result.success());
+        REQUIRE(helper.has_gcode_containing("TOOLHEAD_SENSOR_TO_NOZZLE=58.5"));
+    }
+
+    SECTION("toolhead_extruder_to_nozzle") {
+        auto result = helper.execute_device_action("toolhead_extruder_to_nozzle", std::any(72.3));
+        REQUIRE(result.success());
+        REQUIRE(helper.has_gcode_containing("TOOLHEAD_EXTRUDER_TO_NOZZLE=72.3"));
+    }
+
+    SECTION("toolhead_entry_to_extruder") {
+        auto result = helper.execute_device_action("toolhead_entry_to_extruder", std::any(0.0));
+        REQUIRE(result.success());
+        REQUIRE(helper.has_gcode_containing("TOOLHEAD_ENTRY_TO_EXTRUDER=0.0"));
+    }
+
+    SECTION("toolhead_ooze_reduction") {
+        auto result = helper.execute_device_action("toolhead_ooze_reduction", std::any(2.5));
+        REQUIRE(result.success());
+        REQUIRE(helper.has_gcode_containing("TOOLHEAD_OOZE_REDUCTION=2.5"));
+    }
+}
+
+TEST_CASE("execute_device_action sends correct G-code for sync toggle",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+
+    SECTION("enable sync") {
+        auto result = helper.execute_device_action("sync_to_extruder", std::any(true));
+        REQUIRE(result.success());
+        REQUIRE(helper.has_gcode_containing("SYNC_TO_EXTRUDER=1"));
+    }
+
+    SECTION("disable sync") {
+        auto result = helper.execute_device_action("sync_to_extruder", std::any(false));
+        REQUIRE(result.success());
+        REQUIRE(helper.has_gcode_containing("SYNC_TO_EXTRUDER=0"));
+    }
+}
+
+TEST_CASE("execute_device_action sends test_move G-code",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+
+    auto result = helper.execute_device_action("test_move", std::any());
+    REQUIRE(result.success());
+    REQUIRE(helper.has_gcode("MMU_TEST_MOVE"));
+}
+
+TEST_CASE("execute_device_action motors_toggle uses MMU_HOME for enable",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+
+    SECTION("enable motors sends MMU_HOME") {
+        auto result = helper.execute_device_action("motors_toggle", std::any(true));
+        REQUIRE(result.success());
+        REQUIRE(helper.has_gcode("MMU_HOME"));
+    }
+
+    SECTION("disable motors sends MMU_MOTORS_OFF") {
+        auto result = helper.execute_device_action("motors_toggle", std::any(false));
+        REQUIRE(result.success());
+        REQUIRE(helper.has_gcode("MMU_MOTORS_OFF"));
+    }
+}
+
+TEST_CASE("execute_device_action servo_buzz uses MMU_SERVO without args",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+
+    auto result = helper.execute_device_action("servo_buzz", std::any());
+    REQUIRE(result.success());
+    REQUIRE(helper.has_gcode("MMU_SERVO"));
+    // Must NOT have BUZZ=1 argument
+    REQUIRE_FALSE(helper.has_gcode_containing("BUZZ=1"));
+}
+
+TEST_CASE("execute_device_action calibrate_servo is not a valid action",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+
+    auto result = helper.execute_device_action("calibrate_servo", std::any());
+    REQUIRE_FALSE(result.success());
+}
+
+TEST_CASE("execute_device_action clog_detection saves override",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_config_defaults_for_test();
+
+    auto result = helper.execute_device_action("clog_detection", std::any(std::string("Auto")));
+    REQUIRE(result.success());
+    REQUIRE(helper.has_gcode_containing("CLOG_DETECTION=2"));
+}
+
+// ============================================================================
+// Task 8: Persistence / Override Tests
+// ============================================================================
+
+TEST_CASE("user override persists and reapplies via in-memory cache",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_config_defaults_for_test();
+
+    // Simulate user changing gear buffer speed
+    helper.execute_device_action("gear_from_buffer_speed", std::any(200.0));
+
+    // Verify the override is reflected in get_device_actions
+    auto actions = helper.get_device_actions();
+    for (const auto& a : actions) {
+        if (a.id == "gear_from_buffer_speed") {
+            auto val = std::any_cast<double>(a.current_value);
+            REQUIRE(val == Catch::Approx(200.0));
+        }
+    }
+}
+
+TEST_CASE("user override for toolhead distance persists",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_config_defaults_for_test();
+
+    helper.execute_device_action("toolhead_sensor_to_nozzle", std::any(58.5));
+
+    auto actions = helper.get_device_actions();
+    for (const auto& a : actions) {
+        if (a.id == "toolhead_sensor_to_nozzle") {
+            auto val = std::any_cast<double>(a.current_value);
+            REQUIRE(val == Catch::Approx(58.5));
+        }
+    }
+}
+
+TEST_CASE("user override for sync_to_extruder persists",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_config_defaults_for_test();
+
+    helper.execute_device_action("sync_to_extruder", std::any(true));
+
+    auto actions = helper.get_device_actions();
+    for (const auto& a : actions) {
+        if (a.id == "sync_to_extruder") {
+            auto val = std::any_cast<bool>(a.current_value);
+            REQUIRE(val == true);
+        }
+    }
+}
+
+TEST_CASE("reapply_overrides batches into single MMU_TEST_CONFIG command",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_config_defaults_for_test();
+
+    // Set multiple overrides
+    helper.execute_device_action("gear_from_buffer_speed", std::any(200.0));
+    helper.execute_device_action("extruder_load_speed", std::any(50.0));
+    helper.captured_gcodes.clear();
+
+    // Reapply should batch all overrides
+    helper.test_reapply_overrides();
+
+    // Should have exactly one G-code with both params
+    REQUIRE(helper.captured_gcodes.size() == 1);
+    REQUIRE(helper.has_gcode_containing("GEAR_FROM_BUFFER_SPEED=200"));
+    REQUIRE(helper.has_gcode_containing("EXTRUDER_LOAD_SPEED=50"));
 }
