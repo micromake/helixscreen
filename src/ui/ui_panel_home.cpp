@@ -130,7 +130,7 @@ void HomePanel::setup_widget_gate_observers() {
         // Skip if any widget has a fullscreen overlay open — detach() would
         // destroy the overlay LVGL objects mid-display (camera fullscreen).
         for (const auto& w : active_widgets_) {
-            if (w->has_overlay_open()) {
+            if (w && w->has_overlay_open()) {
                 spdlog::debug("[{}] Skipping gate rebuild while widget '{}' has overlay open",
                               get_name(), w->id());
                 return;
@@ -271,7 +271,7 @@ void HomePanel::on_activate() {
 
     // Notify all widgets that the panel is visible
     for (auto& w : active_widgets_) {
-        w->on_activate();
+        if (w) w->on_activate();
     }
 
     // Start Spoolman polling for AMS mini status updates
@@ -287,8 +287,9 @@ void HomePanel::on_deactivate() {
     }
 
     // Notify all widgets that the panel is going offscreen
+    // (null check: entries may be moved-from during rebuild; see gate rebuild code)
     for (auto& w : active_widgets_) {
-        w->on_deactivate();
+        if (w) w->on_deactivate();
     }
 
     AmsState::instance().stop_spoolman_polling();

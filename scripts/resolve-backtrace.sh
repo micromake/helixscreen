@@ -223,15 +223,24 @@ elif [[ -n "$CRASH_FILE" ]]; then
         exit 1
     fi
 
-    # Extract version
+    # Extract version — supports both raw format (version:X.Y.Z) and
+    # pretty-printed crash_report.txt format (Version:   X.Y.Z)
     VERSION=$(grep "^version:" "$CRASH_FILE" | cut -d: -f2 | tr -d '[:space:]' || true)
+    if [[ -z "$VERSION" ]]; then
+        # Try pretty-printed format: "Version:   0.97.2"
+        VERSION=$(grep -i "^Version:" "$CRASH_FILE" | sed 's/^[Vv]ersion:[[:space:]]*//' | tr -d '[:space:]' || true)
+    fi
     if [[ -z "$VERSION" ]]; then
         echo "Error: No version found in crash file" >&2
         exit 1
     fi
 
     # Extract platform from file, or use command-line override
+    # Supports raw (platform:pi) and pretty-printed (Platform:  pi)
     FILE_PLATFORM=$(grep "^platform:" "$CRASH_FILE" | cut -d: -f2 | tr -d '[:space:]' || true)
+    if [[ -z "$FILE_PLATFORM" ]]; then
+        FILE_PLATFORM=$(grep -i "^Platform:" "$CRASH_FILE" | sed 's/^[Pp]latform:[[:space:]]*//' | tr -d '[:space:]' || true)
+    fi
     if [[ $# -ge 1 ]]; then
         PLATFORM="$1"
         shift
@@ -243,8 +252,12 @@ elif [[ -n "$CRASH_FILE" ]]; then
     fi
 
     # Extract load_base if present and not overridden by --base
+    # Supports raw (load_base:0x...) and pretty-printed (Load Base: 0x...)
     if (( LOAD_BASE == 0 )); then
         file_base=$(grep "^load_base:" "$CRASH_FILE" | cut -d: -f2 | tr -d '[:space:]' || true)
+        if [[ -z "$file_base" ]]; then
+            file_base=$(grep -i "^Load Base:" "$CRASH_FILE" | sed 's/^[Ll]oad [Bb]ase:[[:space:]]*//' | tr -d '[:space:]' || true)
+        fi
         if [[ -n "$file_base" ]]; then
             base_hex="${file_base#0x}"
             base_hex="${base_hex#0X}"
@@ -254,6 +267,8 @@ elif [[ -n "$CRASH_FILE" ]]; then
     fi
 
     # Extract backtrace addresses
+    # Supports raw format (bt:0x...) and pretty-printed (bare hex addresses
+    # under a "--- Backtrace ---" section)
     ADDRS=()
     while IFS= read -r line; do
         addr=$(echo "$line" | cut -d: -f2 | tr -d '[:space:]')
@@ -263,11 +278,36 @@ elif [[ -n "$CRASH_FILE" ]]; then
     done < <(grep "^bt:" "$CRASH_FILE" || true)
 
     if [[ ${#ADDRS[@]} -eq 0 ]]; then
+        # Try pretty-printed format: bare hex addresses after "--- Backtrace ---"
+        in_backtrace=false
+        while IFS= read -r line; do
+            line_trimmed=$(echo "$line" | tr -d '[:space:]')
+            if [[ "$line" == *"--- Backtrace ---"* ]]; then
+                in_backtrace=true
+                continue
+            fi
+            if [[ "$line" == *"---"* ]] && $in_backtrace; then
+                break
+            fi
+            if $in_backtrace && [[ "$line_trimmed" =~ ^0x[0-9a-fA-F]+$ ]]; then
+                ADDRS+=("$line_trimmed")
+            fi
+        done < "$CRASH_FILE"
+    fi
+
+    if [[ ${#ADDRS[@]} -eq 0 ]]; then
         echo "Error: No backtrace addresses found in crash file" >&2
 
         # Fall back to registers
         reg_pc=$(grep "^reg_pc:" "$CRASH_FILE" | cut -d: -f2 | tr -d '[:space:]' || true)
         reg_lr=$(grep "^reg_lr:" "$CRASH_FILE" | cut -d: -f2 | tr -d '[:space:]' || true)
+        # Also try pretty-printed register format: "  PC: 0x..."
+        if [[ -z "$reg_pc" ]]; then
+            reg_pc=$(grep -i "^[[:space:]]*PC:" "$CRASH_FILE" | sed 's/^[[:space:]]*[Pp][Cc]:[[:space:]]*//' | tr -d '[:space:]' || true)
+        fi
+        if [[ -z "$reg_lr" ]]; then
+            reg_lr=$(grep -i "^[[:space:]]*LR:" "$CRASH_FILE" | sed 's/^[[:space:]]*[Ll][Rr]:[[:space:]]*//' | tr -d '[:space:]' || true)
+        fi
         if [[ -n "$reg_pc" ]]; then
             echo "Using PC/LR registers as fallback" >&2
             ADDRS+=("$reg_pc")
@@ -278,24 +318,43 @@ elif [[ -n "$CRASH_FILE" ]]; then
     fi
 
     # Extract memory map entries for shared library resolution
-    while IFS= read -r line; do
-        map_line="${line#map:}"
-        # /proc/self/maps format: start-end perms offset dev inode pathname
-        # e.g. 7f1234000-7f1235000 r-xp 00000000 08:01 12345 /usr/lib/libfoo.so
-        # We only care about executable mappings (perms contain 'x')
+    # Supports raw format (map:...) and pretty-printed (bare maps lines
+    # under "--- Memory Map" section)
+    _parse_map_line() {
+        local map_line="$1"
         if [[ "$map_line" =~ ^([0-9a-fA-F]+)-([0-9a-fA-F]+)[[:space:]]+(r|-)(w|-)(x)(p|s) ]]; then
-            map_start_hex="${BASH_REMATCH[1]}"
-            map_end_hex="${BASH_REMATCH[2]}"
-            map_start_dec=$((16#$map_start_hex))
-            map_end_dec=$((16#$map_end_hex))
-            # Extract the pathname (last field, may contain spaces)
+            local map_start_hex="${BASH_REMATCH[1]}"
+            local map_end_hex="${BASH_REMATCH[2]}"
+            local map_start_dec=$((16#$map_start_hex))
+            local map_end_dec=$((16#$map_end_hex))
+            local map_path
             map_path=$(echo "$map_line" | awk '{print $NF}')
-            # Skip anonymous mappings, stack, heap, vdso, etc.
             if [[ "$map_path" == /* ]]; then
                 MEMORY_MAPS+=("${map_start_dec} ${map_end_dec} ${map_start_hex} ${map_path}")
             fi
         fi
+    }
+
+    while IFS= read -r line; do
+        _parse_map_line "${line#map:}"
     done < <(grep "^map:" "$CRASH_FILE" || true)
+
+    # Fall back to pretty-printed format if no raw map: entries found
+    if [[ ${#MEMORY_MAPS[@]} -eq 0 ]]; then
+        in_maps=false
+        while IFS= read -r line; do
+            if [[ "$line" == *"--- Memory Map"* ]]; then
+                in_maps=true
+                continue
+            fi
+            if [[ "$line" == "---"* ]] && $in_maps; then
+                break
+            fi
+            if $in_maps; then
+                _parse_map_line "$line"
+            fi
+        done < "$CRASH_FILE"
+    fi
 
     if [[ ${#MEMORY_MAPS[@]} -gt 0 ]]; then
         echo "Parsed ${#MEMORY_MAPS[@]} executable memory mappings from crash file" >&2

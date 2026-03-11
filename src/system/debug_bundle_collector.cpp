@@ -269,34 +269,40 @@ std::string DebugBundleCollector::collect_log_tail(int num_lines) {
 // =============================================================================
 
 std::string DebugBundleCollector::collect_crash_txt() {
-    // Try common config locations for crash.txt
-    std::vector<std::string> crash_paths = {
-        "config/crash.txt",
-    };
+    // Build list of config directories to search
+    std::vector<std::string> config_dirs = {"config"};
 
     const char* home = std::getenv("HOME");
     if (home && home[0] != '\0') {
-        crash_paths.push_back(std::string(home) + "/helixscreen/config/crash.txt");
+        config_dirs.push_back(std::string(home) + "/helixscreen/config");
     }
 
     // Absolute paths for embedded platforms (AD5M, AD5X, K1, etc.)
-    crash_paths.push_back("/opt/helixscreen/config/crash.txt");
-    crash_paths.push_back("/srv/helixscreen/config/crash.txt");
-    crash_paths.push_back("/usr/data/helixscreen/config/crash.txt");
+    config_dirs.push_back("/opt/helixscreen/config");
+    config_dirs.push_back("/srv/helixscreen/config");
+    config_dirs.push_back("/usr/data/helixscreen/config");
 
-    for (const auto& path : crash_paths) {
-        std::ifstream file(path);
-        if (!file.good()) {
-            continue;
-        }
+    // Try crash.txt first, then rotated files (crash_1.txt, crash_2.txt, crash_3.txt).
+    // The crash reporter rotates crash.txt → crash_1.txt after consuming it,
+    // so the raw file is usually only available as a rotated copy.
+    static constexpr const char* suffixes[] = {"crash.txt", "crash_1.txt", "crash_2.txt", "crash_3.txt"};
 
-        std::ostringstream content;
-        content << file.rdbuf();
-        std::string result = content.str();
+    for (const auto& suffix : suffixes) {
+        for (const auto& dir : config_dirs) {
+            std::string path = dir + "/" + suffix;
+            std::ifstream file(path);
+            if (!file.good()) {
+                continue;
+            }
 
-        if (!result.empty()) {
-            spdlog::debug("[DebugBundle] Read crash.txt from {}", path);
-            return result;
+            std::ostringstream content;
+            content << file.rdbuf();
+            std::string result = content.str();
+
+            if (!result.empty()) {
+                spdlog::debug("[DebugBundle] Read {} from {}", suffix, path);
+                return result;
+            }
         }
     }
 
