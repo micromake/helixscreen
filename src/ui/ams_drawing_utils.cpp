@@ -382,28 +382,46 @@ SystemToolLayout compute_system_tool_layout(const AmsSystemInfo& info, const Ams
         utl.hub_tool_label = unit.hub_tool_label;
 
         if (topo == PathTopology::MIXED) {
-            // MIXED: count unique extruders/nozzles, not lanes.
-            // Hub lanes sharing a mapped_tool value share a physical nozzle.
-            // Direct lanes each get their own physical nozzle.
-            std::set<int> unique_tools;
+            // MIXED: direct lanes each get their own nozzle position,
+            // hub lanes share one nozzle position regardless of mapped_tool.
+            // Count = number of direct lanes + 1 per hub group.
+            int direct_count = 0;
+            bool has_hub_group = false;
+            int hub_tool = -1; // lowest mapped_tool among hub lanes (for label)
+            std::vector<int> direct_tools; // mapped_tools for direct lanes
+
             for (int s = 0; s < unit.slot_count; s++) {
+                bool is_hub = (s < static_cast<int>(unit.lane_is_hub_routed.size()))
+                                  ? unit.lane_is_hub_routed[s]
+                                  : false;
                 int gi = unit.first_slot_global_index + s;
                 auto slot = backend ? backend->get_slot_info(gi) : SlotInfo{};
-                if (slot.mapped_tool >= 0)
-                    unique_tools.insert(slot.mapped_tool);
-                else
-                    unique_tools.insert(gi); // fallback: treat each slot as unique
+                int tool = (slot.mapped_tool >= 0) ? slot.mapped_tool : gi;
+
+                if (is_hub) {
+                    has_hub_group = true;
+                    if (hub_tool < 0 || tool < hub_tool)
+                        hub_tool = tool;
+                } else {
+                    direct_count++;
+                    direct_tools.push_back(tool);
+                }
             }
-            utl.tool_count =
-                unique_tools.empty() ? unit.slot_count : static_cast<int>(unique_tools.size());
+            utl.tool_count = direct_count + (has_hub_group ? 1 : 0);
             utl.first_physical_tool = total_physical;
 
-            // Map each unique tool to a physical position (sorted order)
+            // Map direct lane tools to physical positions first (sorted)
+            std::sort(direct_tools.begin(), direct_tools.end());
             int idx = 0;
-            for (int t : unique_tools) {
+            for (int t : direct_tools) {
                 result.virtual_to_physical[t] = total_physical + idx;
                 physical_label_overrides[total_physical + idx] = t;
                 ++idx;
+            }
+            // Hub group gets last physical position
+            if (has_hub_group && hub_tool >= 0) {
+                result.virtual_to_physical[hub_tool] = total_physical + idx;
+                physical_label_overrides[total_physical + idx] = hub_tool;
             }
 
             total_physical += utl.tool_count;

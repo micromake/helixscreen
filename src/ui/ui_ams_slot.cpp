@@ -662,7 +662,7 @@ static void create_spool_visualization(AmsSlotData* data) {
         if (plus_glyph) {
             lv_obj_t* plus = lv_label_create(ph);
             lv_label_set_text(plus, plus_glyph);
-            lv_obj_set_style_text_font(plus, &mdi_icons_16, LV_PART_MAIN);
+            lv_obj_set_style_text_font(plus, &mdi_icons_24, LV_PART_MAIN);
             lv_obj_set_style_text_color(plus, theme_manager_get_color("text_muted"), LV_PART_MAIN);
             lv_obj_set_style_text_opa(plus, LV_OPA_60, LV_PART_MAIN);
             lv_obj_align(plus, LV_ALIGN_CENTER, 0, 0);

@@ -352,6 +352,7 @@ AmsSystemInfo AmsBackendMock::get_system_info() const {
         info.units[u].hub_sensor_triggered = system_info_.units[u].hub_sensor_triggered;
         info.units[u].buffer_health = system_info_.units[u].buffer_health;
         info.units[u].topology = system_info_.units[u].topology;
+        info.units[u].lane_is_hub_routed = system_info_.units[u].lane_is_hub_routed;
         info.units[u].hub_tool_label = system_info_.units[u].hub_tool_label;
         info.units[u].has_encoder = system_info_.units[u].has_encoder;
         info.units[u].has_toolhead_sensor = system_info_.units[u].has_toolhead_sensor;
