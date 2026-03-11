@@ -299,4 +299,9 @@ class AmsBackendHappyHare : public AmsSubscriptionBackend {
     void save_override(const std::string& key, float value);
     void save_override(const std::string& key, int value);
     void reapply_overrides();
+
+    /// Get the config default float for a given action key
+    [[nodiscard]] float get_config_default_float(const std::string& key) const;
+    /// Get the config default int for a given action key
+    [[nodiscard]] int get_config_default_int(const std::string& key) const;
 };
