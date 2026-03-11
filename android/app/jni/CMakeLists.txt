@@ -99,6 +99,7 @@ list(FILTER HELIX_SOURCES EXCLUDE REGEX ".*/test_.*\\.cpp$")
 list(FILTER HELIX_SOURCES EXCLUDE REGEX ".*/helix_splash\\.cpp$")
 list(FILTER HELIX_SOURCES EXCLUDE REGEX ".*/helix_watchdog\\.cpp$")
 list(FILTER HELIX_SOURCES EXCLUDE REGEX ".*/lvgl-demo/.*")
+list(FILTER HELIX_SOURCES EXCLUDE REGEX ".*/bluetooth/.*\\.cpp$")
 
 # Also exclude Objective-C++ files (.mm) - they're macOS only
 # (CMake won't glob them with *.cpp anyway, but be explicit)

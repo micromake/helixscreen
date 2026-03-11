@@ -254,8 +254,9 @@ endif
 # NOTE: No DEPFLAGS for internal LVGL headers - 600+ files whose deps bloat make startup.
 # However, lv_conf.h IS tracked as an explicit prerequisite since it controls feature flags
 # (e.g. LV_BIN_DECODER_RAM_LOAD) and missing rebuilds cause subtle runtime failures.
+# PATCHES_STAMP ensures patches are applied before compiling (race with -j on fresh checkout).
 # Emits .ccj fragment for incremental compile_commands.json generation
-$(OBJ_DIR)/lvgl/%.o: $(LVGL_DIR)/%.c lv_conf.h
+$(OBJ_DIR)/lvgl/%.o: $(LVGL_DIR)/%.c lv_conf.h $(PATCHES_STAMP)
 	$(Q)mkdir -p $(dir $@)
 	$(ECHO) "$(CYAN)[CC]$(RESET) $<"
 ifeq ($(V),1)
@@ -307,7 +308,7 @@ endif
 # Only the assets/ subdirectory needs C++ — the rest compiles fine as C.
 # -fpermissive allows void* implicit conversions from C-style LVGL allocations.
 # Only built when ENABLE_OPENGLES=yes (LVGL_OPENGLES_OBJS is empty otherwise).
-$(LVGL_OPENGLES_OBJS): $(OBJ_DIR)/lvgl/%.o: $(LVGL_DIR)/%.c lv_conf.h
+$(LVGL_OPENGLES_OBJS): $(OBJ_DIR)/lvgl/%.o: $(LVGL_DIR)/%.c lv_conf.h $(PATCHES_STAMP)
 	$(Q)mkdir -p $(dir $@)
 	$(ECHO) "$(CYAN)[CXX/GLES]$(RESET) $<"
 	$(Q)$(CXX) $(SUBMODULE_CXXFLAGS) -fpermissive $(INCLUDES) $(LV_CONF) -c $< -o $@ || { \

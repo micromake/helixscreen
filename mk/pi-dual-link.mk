@@ -179,7 +179,7 @@ FBDEV_LDFLAGS := $(filter-out -ldrm -linput -lEGL -lGLESv2 -lgbm,$(LDFLAGS))
 
 $(FBDEV_TARGET): $(APP_C_OBJS) $(FBDEV_APP_OBJS) $(FBDEV_GLES_VARIANT_OBJS) $(FBDEV_CRASH_OBJ) \
                  $(FBDEV_LVGL_OBJS) $(HELIX_XML_OBJS) $(THORVG_OBJS) $(LV_MARKDOWN_OBJS) \
-                 $(FONT_OBJS) $(TRANS_OBJS) $(DISPLAY_LIB_FBDEV) $(WPA_DEPS)
+                 $(QUIRC_OBJS) $(FONT_OBJS) $(TRANS_OBJS) $(DISPLAY_LIB_FBDEV) $(WPA_DEPS)
 	$(Q)mkdir -p $(dir $@)
 	$(ECHO) "$(MAGENTA)$(BOLD)[LD/fbdev]$(RESET) $@"
 	$(Q)$(CXX) $(CXXFLAGS) \
