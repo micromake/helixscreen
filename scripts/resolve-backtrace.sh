@@ -328,10 +328,20 @@ else
         mkdir -p "$(dirname "$SYM_FILE")"
         SYM_URL="${R2_BASE_URL}/v${VERSION}/${PLATFORM}.sym"
         if ! curl -fsSL -o "$SYM_FILE" "$SYM_URL"; then
-            echo "Error: Failed to download symbol map from $SYM_URL" >&2
-            echo "  Check version/platform or set HELIX_SYM_FILE for a local file." >&2
             rm -f "$SYM_FILE"
-            exit 1
+            # Fall back to GitHub release assets (R2 only keeps 5 most recent)
+            REPO="${HELIX_GITHUB_REPO:-prestonbrown/helixscreen}"
+            GH_SYM_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${PLATFORM}.sym"
+            echo "R2 symbol not found, trying GitHub release asset..." >&2
+            if ! curl -fsSL -L -o "$SYM_FILE" "$GH_SYM_URL"; then
+                echo "Error: Failed to download symbol map from both:" >&2
+                echo "  R2:     $SYM_URL" >&2
+                echo "  GitHub: $GH_SYM_URL" >&2
+                echo "  Check version/platform or set HELIX_SYM_FILE for a local file." >&2
+                rm -f "$SYM_FILE"
+                exit 1
+            fi
+            echo "Downloaded from GitHub release (R2 version was pruned)" >&2
         fi
         echo "Cached: $SYM_FILE" >&2
         prune_cache

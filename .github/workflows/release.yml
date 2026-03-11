@@ -286,6 +286,27 @@ jobs:
         echo "Release files:"
         ls -lh release-files/
 
+    - name: Prepare symbol files for release
+      run: |
+        mkdir -p release-files/symbols
+        # Flatten symbol artifacts (same logic as upload-r2 job)
+        for dir in artifacts/symbols-*/; do
+          [ -d "$dir" ] || continue
+          platform=$(basename "$dir" | sed 's/symbols-//')
+
+          # DRM symbols (not in -fbdev path)
+          sym=$(find "$dir" -name 'helix-screen.sym' -not -path '*-fbdev*' | head -1)
+          [ -n "$sym" ] && cp "$sym" "release-files/${platform}.sym"
+
+          # fbdev symbols (Pi variants)
+          sym_fb=$(find "$dir" -name 'helix-screen.sym' -path '*-fbdev*' | head -1)
+          [ -n "$sym_fb" ] && cp "$sym_fb" "release-files/${platform}-fbdev.sym"
+        done
+
+        sym_count=$(find release-files -maxdepth 1 -name '*.sym' 2>/dev/null | wc -l)
+        echo "Symbol files attached to release ($sym_count .sym files):"
+        ls -lh release-files/*.sym 2>/dev/null || echo "  (none)"
+
     - name: Extract version from tag
       id: version
       run: |
@@ -395,6 +416,7 @@ jobs:
           release-files/*.tar.gz
           release-files/*.zip
           release-files/*.apk
+          release-files/*.sym
           release-files/install.sh
         fail_on_unmatched_files: false
       env:
