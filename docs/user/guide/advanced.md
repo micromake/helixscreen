@@ -63,6 +63,20 @@ Execute custom Klipper macros:
 
 ---
 
+## Probe Management
+
+View and control your Z probe. HelixScreen auto-detects your probe type (Cartographer, Beacon, BLTouch, BTT Eddy, Mellow Fly Eddy, Voron Tap, Klicky, or standard probe) and shows type-specific controls.
+
+1. Navigate to **Advanced > Probe Management** (only visible when a probe is detected)
+2. View probe type, Z-offset, and sensor readings (coil temperature for Cartographer, sensor temperature for Beacon)
+3. Use type-specific buttons (Calibrate, Touch Cal, Scan Cal, Auto-Cal, Deploy/Dock, etc.)
+4. Access universal actions: Accuracy Test, Z-Offset Calibration, Bed Mesh
+5. Edit probe configuration values (offsets, samples, speed, tolerance)
+
+For full details, see [Calibration & Tuning — Probe Management](calibration.md#probe-management).
+
+---
+
 ## Power Device Control
 
 Control Moonraker power devices from the full power panel or the home panel quick-toggle button.

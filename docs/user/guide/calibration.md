@@ -73,17 +73,50 @@ Tune vibration compensation for smoother, faster prints:
 
 ---
 
+## Probe Management
+
+View and control your Z probe from **Advanced > Probe Management**. HelixScreen auto-detects your probe type and shows the appropriate controls.
+
+**Supported probe types:**
+
+| Probe | Detected As | Type-Specific Controls |
+|-------|-------------|----------------------|
+| **Cartographer** | Cartographer | Calibrate, Touch Cal, Scan Cal |
+| **Beacon** | Beacon | Calibrate, Auto-Calibrate |
+| **BTT Eddy / Mellow Fly Eddy** | Eddy Current | Calibrate, Drive Current Cal |
+| **BLTouch** | BLTouch | Deploy, Stow, Reset, Self-Test |
+| **Voron Tap** | Voron Tap | — |
+| **Klicky** | Klicky | Deploy, Dock |
+| **Standard probe** | Probe | — |
+
+**Universal actions** (all probe types):
+
+| Button | What It Does |
+|--------|--------------|
+| **Accuracy Test** | Runs `PROBE_ACCURACY` to check probe repeatability |
+| **Z-Offset Cal** | Opens the interactive Z-offset calibration panel |
+| **Bed Mesh** | Opens the bed mesh calibration panel |
+
+**Configuration:** Tap any config row (X/Y offset, samples, speed, retract distance, tolerance) to edit probe settings directly — changes are saved to your Klipper config with a firmware restart.
+
+---
+
 ## Z-Offset Calibration
 
 ![Z-Offset Panel](../../images/user/advanced-zoffset.png)
 
-Dedicated panel for dialing in your Z-offset when not printing:
+Interactive panel for dialing in your Z-offset when not printing. Works with all probe types — Cartographer, Beacon, BLTouch, eddy current probes, and standard probes.
 
-1. Navigate to **Advanced > Z-Offset**
-2. Home the printer
-3. Use adjustment buttons to set the gap
-4. Paper test: adjust until paper drags slightly
-5. Tap **Save** to write to Klipper config
+1. Navigate to **Advanced > Z-Offset**, or tap **Z-Offset Cal** in the Probe Management overlay
+2. Optionally enable **Warm Bed** to heat the bed before calibrating (accounts for thermal expansion)
+3. Tap **Start** — the printer homes and begins the calibration sequence
+4. Use the **+/−** adjustment buttons to lower the nozzle (paper test: adjust until paper drags slightly)
+5. Tap **Accept** when satisfied, or **Abort** to cancel
+6. The offset is saved to your Klipper config automatically
+
+HelixScreen picks the right calibration command for your setup (`PROBE_CALIBRATE`, `Z_ENDSTOP_CALIBRATE`, or `SET_GCODE_OFFSET`) based on your printer's detected probe configuration.
+
+> **Quick access:** A **Z Calibration** button is also available on the Controls panel for one-tap access.
 
 ---
 
