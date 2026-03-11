@@ -429,6 +429,7 @@ void FanStackWidget::bind_carousel_fans() {
         lv_obj_set_style_border_width(page, 0, 0);
         lv_obj_set_style_bg_opa(page, LV_OPA_TRANSP, 0);
         lv_obj_remove_flag(page, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(page, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
 
         // Create the core arc widget (no card chrome, no buttons)
         char val_str[16];
@@ -452,10 +453,6 @@ void FanStackWidget::bind_carousel_fans() {
         lv_obj_set_size(arc_core, LV_PCT(100), LV_PCT(100));
         lv_obj_set_flex_grow(arc_core, 1);
 
-        // Strip top padding — fan_arc_core has pad_top for overlay cards with
-        // a name label above, but the carousel has no label above the arc
-        lv_obj_set_style_pad_top(arc_core, 0, 0);
-
         lv_obj_t* name_lbl = lv_label_create(page);
         lv_label_set_text(name_lbl, entry.display_name.c_str());
         lv_obj_set_style_text_color(name_lbl, text_muted, 0);
@@ -473,6 +470,11 @@ void FanStackWidget::bind_carousel_fans() {
             lv_obj_set_style_text_font(cp.speed_label, xs_font, 0);
 
         set_icon_pivot(cp.fan_icon);
+
+        // Shrink knob for compact carousel display
+        if (cp.arc) {
+            lv_obj_set_style_pad_all(cp.arc, 2, LV_PART_KNOB);
+        }
 
         // Auto-controlled fans: hide knob, disable arc interaction
         if (!entry.is_controllable && cp.arc) {
