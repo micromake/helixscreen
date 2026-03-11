@@ -627,8 +627,24 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription() {
     subscription_objects["idle_timeout"] = nullptr;
 
     // Happy Hare MMU object (gate status, colors, materials, filament info)
+    // Subscribe to specific fields only — nullptr means ALL fields, which causes
+    // excessive notifications and Klipper-side serialization cost (#388)
     if (hardware_.has_mmu()) {
-        subscription_objects["mmu"] = nullptr;
+        subscription_objects["mmu"] = json::array({
+            "gate", "tool", "filament", "action", "reason_for_pause", "filament_pos",
+            "gate_status", "gate_color_rgb", "gate_color", "gate_material",
+            "gate_name", "gate_filament_name", "gate_spool_id", "gate_temperature",
+            "has_bypass", "num_units", "num_gates", "unit_gate_counts", "unit",
+            "ttg_map", "endless_spool_groups",
+            "sensors", "bowden_progress",
+            "clog_detection_enabled", "encoder", "flowguard",
+            "drying_state",
+            "sync_feedback_state", "sync_feedback_bias_modelled",
+            "sync_feedback_bias_raw", "sync_feedback_flow_rate", "sync_drive",
+            "spoolman_support", "pending_spool_id", "espooler_active",
+            "num_toolchanges", "slicer_tool_map", "toolchange_purge_volume",
+            "leds"
+        });
         spdlog::info("[Moonraker Client] Subscribing to MMU object (Happy Hare)");
     }
 
