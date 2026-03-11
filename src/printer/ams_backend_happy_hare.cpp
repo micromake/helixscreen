@@ -565,6 +565,7 @@ void AmsBackendHappyHare::parse_mmu_state(const nlohmann::json& mmu_data) {
     // Parse espooler_active: printer.mmu.espooler_active (v4)
     if (mmu_data.contains("espooler_active") && mmu_data["espooler_active"].is_string()) {
         system_info_.espooler_state = mmu_data["espooler_active"].get<std::string>();
+        espooler_active_ = system_info_.espooler_state;
         spdlog::trace("[AMS HappyHare] eSpooler state: {}", system_info_.espooler_state);
     }
 
@@ -658,9 +659,24 @@ void AmsBackendHappyHare::parse_mmu_state(const nlohmann::json& mmu_data) {
         if (fg.contains("max_tangle") && fg["max_tangle"].is_number()) {
             system_info_.flowguard_info.max_tangle = fg["max_tangle"].get<float>();
         }
+        if (fg.contains("encoder_mode") && fg["encoder_mode"].is_number()) {
+            flowguard_encoder_mode_ = fg["encoder_mode"].get<int>();
+        }
         spdlog::trace("[AMS HappyHare] Flowguard: enabled={} active={} trigger={} level={:.2f}",
                       system_info_.flowguard_info.enabled, system_info_.flowguard_info.active,
                       system_info_.flowguard_info.trigger, system_info_.flowguard_info.level);
+    }
+
+    // Parse LED state: printer.mmu.leds.unit0.exit_effect (v4)
+    if (mmu_data.contains("leds") && mmu_data["leds"].is_object()) {
+        const auto& leds = mmu_data["leds"];
+        if (leds.contains("unit0") && leds["unit0"].is_object()) {
+            const auto& u0 = leds["unit0"];
+            if (u0.contains("exit_effect") && u0["exit_effect"].is_string()) {
+                led_exit_effect_ = u0["exit_effect"].get<std::string>();
+                spdlog::trace("[AMS HappyHare] LED exit effect: {}", led_exit_effect_);
+            }
+        }
     }
 
     // Parse sync_feedback_flow_rate: printer.mmu.sync_feedback_flow_rate (top-level)

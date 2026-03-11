@@ -2414,3 +2414,61 @@ TEST_CASE("get_device_actions overlays sync_to_extruder as bool",
         }
     }
 }
+
+// --- Phase 12: Parse status for LED/eSpooler/flowguard (Task 5) ---
+
+TEST_CASE("parse_mmu_state extracts flowguard encoder_mode",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+
+    nlohmann::json mmu_data;
+    mmu_data["flowguard"] = {{"encoder_mode", 2}};
+    helper.test_parse_mmu_state(mmu_data);
+
+    helper.set_config_defaults_for_test();
+    auto actions = helper.get_device_actions();
+    for (const auto& a : actions) {
+        if (a.id == "clog_detection") {
+            auto val = std::any_cast<std::string>(a.current_value);
+            REQUIRE(val == "Auto");
+        }
+    }
+}
+
+TEST_CASE("parse_mmu_state extracts LED exit_effect", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_config_defaults_for_test();
+
+    nlohmann::json mmu_data;
+    mmu_data["leds"] = {{"unit0", {{"exit_effect", "breathing"}}}};
+    helper.test_parse_mmu_state(mmu_data);
+
+    auto actions = helper.get_device_actions();
+    for (const auto& a : actions) {
+        if (a.id == "led_mode") {
+            auto val = std::any_cast<std::string>(a.current_value);
+            REQUIRE(val == "breathing");
+        }
+    }
+}
+
+TEST_CASE("parse_mmu_state populates espooler_active for device actions",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_config_defaults_for_test();
+
+    nlohmann::json mmu_data;
+    mmu_data["espooler_active"] = "assist";
+    helper.test_parse_mmu_state(mmu_data);
+
+    auto actions = helper.get_device_actions();
+    for (const auto& a : actions) {
+        if (a.id == "espooler_mode") {
+            auto val = std::any_cast<std::string>(a.current_value);
+            REQUIRE(val == "assist");
+        }
+    }
+}
