@@ -2472,3 +2472,41 @@ TEST_CASE("parse_mmu_state populates espooler_active for device actions",
         }
     }
 }
+
+// --- Phase 13: Topology filtering (Task 6) ---
+
+TEST_CASE("Type B topology hides servo and selector actions",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_config_defaults_for_test();
+    helper.set_selector_type("VirtualSelector");
+
+    auto actions = helper.get_device_actions();
+    for (const auto& a : actions) {
+        if (a.id == "servo_buzz" || a.id == "calibrate_encoder") {
+            REQUIRE_FALSE(a.enabled);
+            REQUIRE_FALSE(a.disable_reason.empty());
+        }
+        if (a.id == "selector_speed") {
+            REQUIRE_FALSE(a.enabled);
+        }
+        if (a.id == "clog_detection") {
+            REQUIRE_FALSE(a.enabled);
+        }
+    }
+}
+
+TEST_CASE("Type A topology shows all actions", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_config_defaults_for_test();
+    // selector_type_ defaults to "" (not VirtualSelector) = Type A
+
+    auto actions = helper.get_device_actions();
+    for (const auto& a : actions) {
+        if (a.id == "selector_speed") {
+            REQUIRE(a.enabled);
+        }
+    }
+}

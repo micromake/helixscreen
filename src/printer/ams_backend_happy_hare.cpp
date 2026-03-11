@@ -1916,6 +1916,22 @@ std::vector<helix::printer::DeviceAction> AmsBackendHappyHare::get_device_action
         }
     }
 
+    // --- Topology filtering (Type B = hub-based, no servo/selector/encoder) ---
+    if (is_type_b()) {
+        for (auto& a : actions) {
+            if (a.id == "calibrate_encoder" || a.id == "servo_buzz") {
+                a.enabled = false;
+                a.disable_reason = "Not available on hub-based (Type B) systems";
+            } else if (a.id == "selector_speed") {
+                a.enabled = false;
+                a.disable_reason = "No selector on hub-based systems";
+            } else if (a.id == "clog_detection") {
+                a.enabled = false;
+                a.disable_reason = "Encoder-based clog detection not available on Type B";
+            }
+        }
+    }
+
     return actions;
 }
 
