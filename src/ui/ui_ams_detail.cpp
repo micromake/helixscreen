@@ -408,6 +408,10 @@ void ams_detail_update_badges(AmsDetailWidgets& w, lv_obj_t* slot_widgets[], int
     if (!w.badge_layer)
         return;
 
+    // Clean stale badges from previous unit view (badges are reparented here
+    // from slot widgets, so they persist across unit switches if not cleaned)
+    lv_obj_clean(w.badge_layer);
+
     int32_t slot_spacing = layout.slot_width - layout.overlap;
 
     for (int i = 0; i < slot_count; ++i) {
@@ -491,6 +495,19 @@ void ams_detail_setup_path_canvas(lv_obj_t* canvas, lv_obj_t* slot_grid, int uni
     for (int i = 0; i < slot_count; ++i) {
         bool has_prep = backend->slot_has_prep_sensor(slot_offset + i);
         ui_filament_path_canvas_set_slot_prep_sensor(canvas, i, has_prep);
+    }
+
+    // Plumb per-slot metadata (mapped_tool, hub routing) to path canvas
+    if (unit_index >= 0 && unit_index < static_cast<int>(info.units.size())) {
+        const auto& unit = info.units[unit_index];
+        for (int i = 0; i < slot_count; ++i) {
+            int gi = slot_offset + i;
+            SlotInfo slot = backend->get_slot_info(gi);
+            ui_filament_path_canvas_set_slot_mapped_tool(canvas, i, slot.mapped_tool);
+            if (i < static_cast<int>(unit.lane_is_hub_routed.size())) {
+                ui_filament_path_canvas_set_slot_hub_routed(canvas, i, unit.lane_is_hub_routed[i]);
+            }
+        }
     }
 
     // Set per-slot filament states (using local indices for unit-scoped views)
