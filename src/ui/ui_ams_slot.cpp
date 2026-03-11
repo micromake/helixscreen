@@ -296,6 +296,10 @@ static void apply_slot_status(AmsSlotData* data, int status_int) {
             // Unassigned and empty: hide spool, show empty placeholder circle
             show_spool = false;
             show_empty_placeholder = true;
+            // Show "Empty" in the material label so the slot's purpose is clear
+            if (data->material_label) {
+                lv_label_set_text(data->material_label, lv_tr("Empty"));
+            }
         }
     }
 
@@ -639,7 +643,7 @@ static void create_spool_visualization(AmsSlotData* data) {
         spdlog::debug("[AmsSlot] Created flat spool rings ({}x{})", spool_size, spool_size);
     }
 
-    // Create empty slot placeholder (muted circle outline, initially hidden)
+    // Create empty slot placeholder (circle outline with plus icon, initially hidden)
     {
         lv_obj_t* ph = lv_obj_create(data->spool_container);
         lv_obj_set_size(ph, spool_size - 4, spool_size - 4);
@@ -648,10 +652,23 @@ static void create_spool_visualization(AmsSlotData* data) {
         lv_obj_set_style_bg_opa(ph, LV_OPA_TRANSP, LV_PART_MAIN);
         lv_obj_set_style_border_width(ph, 2, LV_PART_MAIN);
         lv_obj_set_style_border_color(ph, theme_manager_get_color("text_muted"), LV_PART_MAIN);
-        lv_obj_set_style_border_opa(ph, LV_OPA_40, LV_PART_MAIN);
+        lv_obj_set_style_border_opa(ph, LV_OPA_60, LV_PART_MAIN);
         lv_obj_remove_flag(ph, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_flag(ph, LV_OBJ_FLAG_EVENT_BUBBLE);
         lv_obj_add_flag(ph, LV_OBJ_FLAG_HIDDEN);
+
+        // Plus icon centered in circle to communicate "empty, add filament"
+        const char* plus_glyph = ui_icon::lookup_codepoint("plus");
+        if (plus_glyph) {
+            lv_obj_t* plus = lv_label_create(ph);
+            lv_label_set_text(plus, plus_glyph);
+            lv_obj_set_style_text_font(plus, &mdi_icons_16, LV_PART_MAIN);
+            lv_obj_set_style_text_color(plus, theme_manager_get_color("text_muted"), LV_PART_MAIN);
+            lv_obj_set_style_text_opa(plus, LV_OPA_60, LV_PART_MAIN);
+            lv_obj_align(plus, LV_ALIGN_CENTER, 0, 0);
+            lv_obj_add_flag(plus, LV_OBJ_FLAG_EVENT_BUBBLE);
+        }
+
         data->empty_placeholder = ph;
     }
 
