@@ -21,6 +21,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <linux/fb.h>
+#include <linux/kd.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -181,7 +182,9 @@ DisplayBackendDRM::DisplayBackendDRM() : drm_device_(auto_detect_drm_device()) {
 
 DisplayBackendDRM::DisplayBackendDRM(const std::string& drm_device) : drm_device_(drm_device) {}
 
-DisplayBackendDRM::~DisplayBackendDRM() = default;
+DisplayBackendDRM::~DisplayBackendDRM() {
+    restore_console();
+}
 
 bool DisplayBackendDRM::is_available() const {
     if (drm_device_.empty()) {
@@ -291,6 +294,8 @@ lv_display_t* DisplayBackendDRM::create_display(int width, int height) {
 #else
     spdlog::info("[DRM Backend] DRM display active (dumb buffers, CPU rendering)");
 #endif
+
+    suppress_console();
 
     return display_;
 }
@@ -563,6 +568,116 @@ bool DisplayBackendDRM::clear_framebuffer(uint32_t color) {
     munmap(fbp, screensize);
     close(fd);
     return true;
+}
+
+/**
+ * @brief Check if fbcon is actively bound to a framebuffer vtconsole.
+ *
+ * On kernel 6.x, sun4i-drm (and other DRM drivers) register DRM fbdev
+ * emulation via drm_fbdev_dma_setup(), causing fbcon to paint the text
+ * console over DRM/EGL output.  On older kernels (5.x) the DRM driver
+ * doesn't register fbdev emulation, so fbcon isn't an issue and calling
+ * KD_GRAPHICS actually blanks the display.
+ *
+ * We detect this by checking /sys/class/vtconsole/vtcon* — if a "frame
+ * buffer" vtconsole exists and is bound, fbcon is active and we need to
+ * suppress it.
+ */
+static bool is_fbcon_bound() {
+    DIR* dir = opendir("/sys/class/vtconsole");
+    if (!dir) {
+        return false;
+    }
+
+    bool found = false;
+    struct dirent* entry = nullptr;
+    while ((entry = readdir(dir)) != nullptr) {
+        if (strncmp(entry->d_name, "vtcon", 5) != 0) {
+            continue;
+        }
+
+        // Check if this vtconsole is a framebuffer type
+        std::string name_path =
+            std::string("/sys/class/vtconsole/") + entry->d_name + "/name";
+        std::string bind_path =
+            std::string("/sys/class/vtconsole/") + entry->d_name + "/bind";
+
+        // Read name — look for "frame buffer"
+        int name_fd = open(name_path.c_str(), O_RDONLY);
+        if (name_fd < 0) {
+            continue;
+        }
+        char name_buf[128] = {};
+        auto nr = read(name_fd, name_buf, sizeof(name_buf) - 1);
+        close(name_fd);
+        if (nr <= 0 || strstr(name_buf, "frame buffer") == nullptr) {
+            continue;
+        }
+
+        // Check if it's bound (bind == "1\n" or "Y\n")
+        int bind_fd = open(bind_path.c_str(), O_RDONLY);
+        if (bind_fd < 0) {
+            continue;
+        }
+        char bind_buf[8] = {};
+        auto br = read(bind_fd, bind_buf, sizeof(bind_buf) - 1);
+        close(bind_fd);
+        if (br > 0 && (bind_buf[0] == '1' || bind_buf[0] == 'Y')) {
+            found = true;
+            spdlog::debug("[DRM Backend] fbcon bound on {}", entry->d_name);
+            break;
+        }
+    }
+
+    closedir(dir);
+    return found;
+}
+
+void DisplayBackendDRM::suppress_console() {
+    // Only suppress if fbcon is actively bound to a framebuffer vtconsole.
+    // On kernel 5.x the old sun4i driver doesn't register DRM fbdev emulation,
+    // so fbcon isn't painting over us.  Calling KD_GRAPHICS on those kernels
+    // blanks the display entirely.  On kernel 6.x, DRM fbdev emulation causes
+    // fbcon to bind and paint the text console over DRM/EGL output.
+    if (!is_fbcon_bound()) {
+        spdlog::info("[DRM Backend] fbcon not bound — skipping console suppression");
+        return;
+    }
+
+    // Switch the VT to KD_GRAPHICS mode so the kernel stops rendering console
+    // text on the framebuffer.  Standard approach used by X11, Weston, SDL2.
+    //
+    // Use O_WRONLY: under systemd with SupplementaryGroups=tty, the tty group
+    // only has write permission (crw--w----). O_RDWR fails with EACCES.
+    static const char* tty_paths[] = {"/dev/tty0", "/dev/tty1", "/dev/tty", nullptr};
+
+    for (int i = 0; tty_paths[i] != nullptr; ++i) {
+        tty_fd_ = open(tty_paths[i], O_WRONLY | O_CLOEXEC);
+        if (tty_fd_ >= 0) {
+            if (ioctl(tty_fd_, KDSETMODE, KD_GRAPHICS) == 0) {
+                spdlog::info("[DRM Backend] Console suppressed via KDSETMODE KD_GRAPHICS on {}",
+                             tty_paths[i]);
+                return;
+            }
+            spdlog::debug("[DRM Backend] KDSETMODE failed on {}: {}", tty_paths[i],
+                          strerror(errno));
+            close(tty_fd_);
+            tty_fd_ = -1;
+        }
+    }
+
+    spdlog::warn("[DRM Backend] Could not suppress console — kernel messages may bleed through");
+}
+
+void DisplayBackendDRM::restore_console() {
+    if (tty_fd_ >= 0) {
+        if (ioctl(tty_fd_, KDSETMODE, KD_TEXT) != 0) {
+            spdlog::warn("[DRM Backend] KDSETMODE KD_TEXT failed: {}", strerror(errno));
+        }
+        close(tty_fd_);
+        tty_fd_ = -1;
+        spdlog::debug("[DRM Backend] Console restored to KD_TEXT mode");
+    }
 }
 
 #endif // HELIX_DISPLAY_DRM

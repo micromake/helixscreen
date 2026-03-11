@@ -1,5 +1,5 @@
 diff --git a/src/drivers/display/drm/lv_linux_drm.c b/src/drivers/display/drm/lv_linux_drm.c
-index 2a6ca6ed0..3a6608d7e 100644
+index 2a6ca6ed0..1edc255d3 100644
 --- a/src/drivers/display/drm/lv_linux_drm.c
 +++ b/src/drivers/display/drm/lv_linux_drm.c
 @@ -78,6 +78,7 @@ typedef struct {
@@ -92,7 +92,7 @@ index 2a6ca6ed0..3a6608d7e 100644
  static int drm_dmabuf_set_plane(drm_dev_t * drm_dev, drm_buffer_t * buf)
  {
      int ret;
-@@ -482,10 +537,46 @@ static int drm_dmabuf_set_plane(drm_dev_t * drm_dev, drm_buffer_t * buf)
+@@ -482,16 +537,80 @@ static int drm_dmabuf_set_plane(drm_dev_t * drm_dev, drm_buffer_t * buf)
      drm_add_plane_property(drm_dev, "CRTC_W", drm_dev->width);
      drm_add_plane_property(drm_dev, "CRTC_H", drm_dev->height);
  
@@ -141,7 +141,50 @@ index 2a6ca6ed0..3a6608d7e 100644
          return ret;
      }
  
-@@ -508,7 +599,10 @@ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane
+     return 0;
+ }
+ 
++/**
++ * @brief Get the DRM plane type (PRIMARY, OVERLAY, or CURSOR) for a plane.
++ * @return DRM_PLANE_TYPE_PRIMARY (1), DRM_PLANE_TYPE_OVERLAY (0),
++ *         DRM_PLANE_TYPE_CURSOR (2), or -1 on error.
++ */
++static int get_plane_type(int fd, uint32_t plane_id)
++{
++    drmModeObjectPropertiesPtr props;
++    int type = -1;
++
++    props = drmModeObjectGetProperties(fd, plane_id, DRM_MODE_OBJECT_PLANE);
++    if(!props) return -1;
++
++    for(uint32_t i = 0; i < props->count_props; i++) {
++        drmModePropertyPtr prop = drmModeGetProperty(fd, props->props[i]);
++        if(!prop) continue;
++        if(!strcmp(prop->name, "type")) {
++            type = (int)props->prop_values[i];
++            drmModeFreeProperty(prop);
++            break;
++        }
++        drmModeFreeProperty(prop);
++    }
++
++    drmModeFreeObjectProperties(props);
++    return type;
++}
++
+ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane_id, uint32_t crtc_id,
+                       uint32_t crtc_idx)
+ {
+@@ -501,6 +620,8 @@ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane
+     unsigned int i;
+     unsigned int j;
+     int ret = 0;
++    uint32_t fallback_plane_id = 0;
++    int found_primary = 0;
+ 
+     planes = drmModeGetPlaneResources(drm_dev->fd);
+     if(!planes) {
+@@ -508,7 +629,10 @@ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane
          return -1;
      }
  
@@ -153,7 +196,7 @@ index 2a6ca6ed0..3a6608d7e 100644
  
      for(i = 0; i < planes->count_planes; ++i) {
          plane = drmModeGetPlane(drm_dev->fd, planes->planes[i]);
-@@ -519,6 +613,8 @@ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane
+@@ -519,6 +643,8 @@ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane
          }
  
          if(!(plane->possible_crtcs & (1 << crtc_idx))) {
@@ -162,7 +205,7 @@ index 2a6ca6ed0..3a6608d7e 100644
              drmModeFreePlane(plane);
              continue;
          }
-@@ -529,6 +625,8 @@ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane
+@@ -529,21 +655,43 @@ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane
          }
  
          if(j == plane->count_formats) {
@@ -171,16 +214,48 @@ index 2a6ca6ed0..3a6608d7e 100644
              drmModeFreePlane(plane);
              continue;
          }
-@@ -536,7 +634,7 @@ static int find_plane(drm_dev_t * drm_dev, unsigned int fourcc, uint32_t * plane
-         *plane_id = plane->plane_id;
-         drmModeFreePlane(plane);
+ 
+-        *plane_id = plane->plane_id;
+-        drmModeFreePlane(plane);
++        int ptype = get_plane_type(drm_dev->fd, plane->plane_id);
++        LV_LOG_INFO("drm: plane %u: format match, type=%d (%s)",
++                    plane->plane_id, ptype,
++                    ptype == DRM_PLANE_TYPE_PRIMARY ? "PRIMARY" :
++                    ptype == DRM_PLANE_TYPE_OVERLAY ? "OVERLAY" :
++                    ptype == DRM_PLANE_TYPE_CURSOR  ? "CURSOR"  : "UNKNOWN");
  
 -        LV_LOG_TRACE("found plane %d", *plane_id);
-+        LV_LOG_INFO("drm: found suitable plane %d", *plane_id);
++        if(ptype == DRM_PLANE_TYPE_PRIMARY) {
++            *plane_id = plane->plane_id;
++            drmModeFreePlane(plane);
++            found_primary = 1;
++            LV_LOG_INFO("drm: selected PRIMARY plane %d", *plane_id);
++            goto out;
++        }
++
++        /* Remember first suitable non-primary plane as fallback */
++        if(!fallback_plane_id && ptype != DRM_PLANE_TYPE_CURSOR) {
++            fallback_plane_id = plane->plane_id;
++        }
  
-         /* Success */
+-        /* Success */
++        drmModeFreePlane(plane);
++    }
++
++    /* No primary plane found — use fallback overlay if available */
++    if(fallback_plane_id) {
++        *plane_id = fallback_plane_id;
++        LV_LOG_WARN("drm: no PRIMARY plane found, using OVERLAY plane %d", *plane_id);
          goto out;
-@@ -579,16 +677,16 @@ static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id)
+     }
+ 
+-    if(i == planes->count_planes)
+-        ret = -1;
++    ret = -1;
+ out:
+     drmModeFreePlaneResources(planes);
+     return ret;
+@@ -579,16 +727,16 @@ static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id)
          }
  
          if(conn->connection == DRM_MODE_CONNECTED) {
@@ -201,7 +276,7 @@ index 2a6ca6ed0..3a6608d7e 100644
          }
  
          if(conn->connection == DRM_MODE_CONNECTED && conn->count_modes > 0)
-@@ -604,7 +702,7 @@ static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id)
+@@ -604,7 +752,7 @@ static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id)
      }
  
      drm_dev->conn_id = conn->connector_id;
@@ -210,7 +285,7 @@ index 2a6ca6ed0..3a6608d7e 100644
      drm_dev->mmWidth = conn->mmWidth;
      drm_dev->mmHeight = conn->mmHeight;
  
-@@ -635,9 +733,8 @@ static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id)
+@@ -635,9 +783,8 @@ static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id)
  
      if(enc) {
          drm_dev->enc_id = enc->encoder_id;
@@ -221,7 +296,7 @@ index 2a6ca6ed0..3a6608d7e 100644
          drmModeFreeEncoder(enc);
          enc = NULL;
      }
-@@ -698,7 +795,7 @@ static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id)
+@@ -698,7 +845,7 @@ static int drm_find_connector(drm_dev_t * drm_dev, int64_t connector_id)
          goto free_res;
      }
  
@@ -230,7 +305,7 @@ index 2a6ca6ed0..3a6608d7e 100644
      ret = 0;
  
  free_res:
-@@ -1052,11 +1149,18 @@ static void drm_flush_wait(lv_display_t * disp)
+@@ -1052,11 +1199,18 @@ static void drm_flush_wait(lv_display_t * disp)
      while(drm_dev->req) {
          int ret;
          do {
@@ -251,7 +326,7 @@ index 2a6ca6ed0..3a6608d7e 100644
          else {
              LV_LOG_ERROR("poll failed: %s", strerror(errno));
              return;
-@@ -1074,6 +1178,36 @@ static void drm_flush(lv_display_t * disp, const lv_area_t * area, uint8_t * px_
+@@ -1074,6 +1228,36 @@ static void drm_flush(lv_display_t * disp, const lv_area_t * area, uint8_t * px_
  
      LV_ASSERT(drm_dev->act_buf != NULL);
  

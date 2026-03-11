@@ -92,10 +92,16 @@ class DisplayBackendDRM : public DisplayBackend {
     }
 
   private:
+    /// Switch VT to KD_GRAPHICS so fbcon stops painting over DRM output.
+    /// Required on kernel 6.x where sun4i-drm registers DRM fbdev emulation.
+    void suppress_console();
+    void restore_console();
+
     std::string drm_device_;
     lv_display_t* display_ = nullptr;
     lv_indev_t* pointer_ = nullptr;
-    bool using_egl_ = false; ///< Track if GPU-accelerated path is active
+    int tty_fd_ = -1;           ///< TTY fd for KD_GRAPHICS console suppression
+    bool using_egl_ = false;    ///< Track if GPU-accelerated path is active
 
 };
 
