@@ -391,6 +391,10 @@ class TelemetryManager {
      */
     void check_previous_crash();
 
+    /// True if crash.txt was suppressed because update_success.json was present.
+    /// Used by Application to skip the crash report modal.
+    bool had_update_restart() const { return had_update_restart_; }
+
     // =========================================================================
     // QUEUE MANAGEMENT
     // =========================================================================
@@ -807,6 +811,9 @@ class TelemetryManager {
 
     /// Guards against double-initialization of subjects
     bool subjects_initialized_{false};
+
+    /// Set to true when crash.txt is suppressed due to update_success.json being present
+    bool had_update_restart_ = false;
 
     // =========================================================================
     // TRANSMISSION STATE (Phase 3)

@@ -1054,6 +1054,19 @@ void TelemetryManager::check_previous_crash() {
         return;
     }
 
+    // If update_success.json exists alongside crash.txt, this crash was from
+    // the expected post-update restart (old binary dying after install.sh swap).
+    // Don't enqueue a crash telemetry event. Don't delete crash.txt here —
+    // Application::run() calls CrashReporter::consume_crash_file() which
+    // rotates it to crash_1.txt for offline analysis.
+    std::string update_flag = config_dir_ + "/update_success.json";
+    std::error_code ec;
+    if (fs::exists(update_flag, ec) && !ec) {
+        spdlog::info("[TelemetryManager] Crash file is from post-update restart, suppressing");
+        had_update_restart_ = true;
+        return;
+    }
+
     spdlog::info("[TelemetryManager] Found crash file from previous session");
 
     auto crash_data = crash_handler::read_crash_file(crash_path);
