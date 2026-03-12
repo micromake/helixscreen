@@ -3,7 +3,10 @@
 
 #include "macro_executor.h"
 
+#include "device_display_name.h"
 #include "moonraker_api.h"
+#include "ui_toast_manager.h"
+#include "ui_update_queue.h"
 
 #include <spdlog/spdlog.h>
 
@@ -54,13 +57,22 @@ void execute_macro_gcode(MoonrakerAPI* api, const std::string& macro_name,
 
     std::string macro_copy = macro_name;
     std::string tag_copy = caller_tag;
+    std::string display_name = helix::get_display_name(macro_name, helix::DeviceType::MACRO);
     api->execute_gcode(
         gcode,
-        [tag_copy, macro_copy]() {
+        [tag_copy, macro_copy, display_name]() {
             spdlog::info("{} {} executed successfully", tag_copy, macro_copy);
+            std::string msg = display_name + " sent";
+            helix::ui::queue_update([msg]() {
+                ToastManager::instance().show(ToastSeverity::SUCCESS, msg.c_str(), 2000);
+            });
         },
-        [tag_copy, macro_copy](const MoonrakerError& err) {
+        [tag_copy, macro_copy, display_name](const MoonrakerError& err) {
             spdlog::error("{} {} failed: {}", tag_copy, macro_copy, err.message);
+            std::string msg = display_name + " failed";
+            helix::ui::queue_update([msg]() {
+                ToastManager::instance().show(ToastSeverity::ERROR, msg.c_str(), 4000);
+            });
         });
 }
 

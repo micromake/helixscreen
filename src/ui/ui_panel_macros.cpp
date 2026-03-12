@@ -188,11 +188,17 @@ void MacrosPanel::populate_macro_list() {
     bool has_macros = visible_count > 0;
     helix::ui::toggle_list_empty_state(macro_list_container_, empty_state_container_, has_macros);
 
-    // Update status
+    // Update status — hide label entirely when macros are present
     if (has_macros) {
-        status_buf_[0] = '\0'; // Clear status when macros are present
+        status_buf_[0] = '\0';
+        if (status_label_) {
+            lv_obj_add_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
+        }
     } else {
         std::snprintf(status_buf_, sizeof(status_buf_), "%s", lv_tr("No macros found"));
+        if (status_label_) {
+            lv_obj_remove_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
+        }
     }
     lv_subject_copy_string(&status_subject_, status_buf_);
 
@@ -208,15 +214,17 @@ void MacrosPanel::create_macro_card(const std::string& macro_name) {
     // Prettify the macro name for display
     std::string display_name = prettify_macro_name(macro_name);
 
-    // Look up description from cache
+    // Look up description and param info from cache
     auto cached = helix::MacroParamCache::instance().get(macro_name);
     bool has_desc = !cached.description.empty();
+    bool no_params = (cached.knowledge == helix::MacroParamKnowledge::KNOWN_NO_PARAMS);
 
     // Create card using XML component
     const char* attrs[] = {
         "macro_name",        display_name.c_str(),
         "macro_description", has_desc ? cached.description.c_str() : "",
         "hide_description",  has_desc ? "false" : "true",
+        "hide_chevron",      no_params ? "true" : "false",
         nullptr,             nullptr};
     lv_obj_t* card =
         static_cast<lv_obj_t*>(lv_xml_create(macro_list_container_, "macro_card", attrs));
