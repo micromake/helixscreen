@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "color_utils.h"
 #include "filament_mapper.h"
 #include "ui_observer_guard.h"
 

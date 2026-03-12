@@ -20,6 +20,7 @@
 
 #include "active_print_media_manager.h"
 #include "ams_state.h"
+#include "color_utils.h"
 #include "app_constants.h"
 #include "filament_sensor_manager.h"
 #include "lvgl/src/others/translation/lv_translation.h"

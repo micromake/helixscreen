@@ -12,10 +12,10 @@
 #include "ui_nav_manager.h"
 #include "ui_print_preparation_manager.h"
 #include "ui_update_queue.h"
-#include "color_utils.h"
 #include "ui_utils.h"
 
 #include "app_globals.h"
+#include "color_utils.h"
 #include "config.h"
 #include "display_settings_manager.h"
 #include "lvgl/src/others/translation/lv_translation.h"
