@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.98.3] - 2026-03-12
+
+Macro browser, toolhead renderer, touch and filament fixes, and internationalization improvements.
+
+### Added
+- Macro browser panel with description display, one-tap execution with toast feedback, and chevron hidden for no-parameter macros
+- JabberWocky V80 toolhead renderer
+- Client-side crash report deduplication to prevent repeated uploads
+- Default display brightness raised to 80% with automatic migration for existing users
+
+### Fixed
+- AFC direct_load hub field treated as direct instead of hub-routed (#392, #364)
+- Tool changer uses Tn gcode for tool changes, fixing load/unload/purge on non-T0 tools
+- IFS real-time sensor updates, stuck operations, and unload homing
+- Touch calibration auto-detects and corrects swapped touch axes
+- Display wakes on touch during dim/screensaver
+- Crash from pending layout flush before widget tree rebuild
+- Crash from safe_delete loop in MacrosPanel (#394)
+- Post-update restart no longer shows crash report modal or sends crash telemetry
+
+### Changed
+- Advanced panel sections reordered by usage frequency, emergency bar pinned at bottom
+- Color mismatch dialog shows color names instead of hex codes
+- Wizard and macro enhance strings wrapped for internationalization (20 new translation keys across 8 languages)
+
 ## [0.98.2] - 2026-03-12
 
 ### Fixed
@@ -1860,6 +1885,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.98.3]: https://github.com/prestonbrown/helixscreen/compare/v0.98.2...v0.98.3
 [0.98.2]: https://github.com/prestonbrown/helixscreen/compare/v0.98.1...v0.98.2
 [0.98.1]: https://github.com/prestonbrown/helixscreen/compare/v0.98.0...v0.98.1
 [0.98.0]: https://github.com/prestonbrown/helixscreen/compare/v0.97.5...v0.98.0
