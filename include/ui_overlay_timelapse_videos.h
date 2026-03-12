@@ -7,9 +7,12 @@
 #include "moonraker_api.h"
 #include "moonraker_types.h"
 #include "overlay_base.h"
+#include "thumbnail_cache.h"
+#include "thumbnail_load_context.h"
 
 #include <atomic>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -40,6 +43,8 @@ class TimelapseVideosOverlay : public OverlayBase {
 
     void fetch_video_list();
     void populate_video_grid(const std::vector<FileInfo>& files);
+    void load_thumbnail_for_card(lv_obj_t* card, const std::string& filename,
+                                 const std::set<std::string>& available_files);
     void clear_video_grid();
 
     void detect_playback_capability();
@@ -62,6 +67,7 @@ class TimelapseVideosOverlay : public OverlayBase {
 
     std::shared_ptr<std::atomic<bool>> alive_;
     std::atomic<uint32_t> nav_generation_{0};
+    std::atomic<uint32_t> thumb_generation_{0};
 
     lv_obj_t* video_grid_container_ = nullptr;
     lv_obj_t* video_grid_empty_ = nullptr;

@@ -5,6 +5,9 @@
 
 #include "helix-xml/src/xml/lv_xml.h"
 #include "static_panel_registry.h"
+#include "thumbnail_cache.h"
+#include "thumbnail_processor.h"
+#include "timelapse_state.h"
 #include "timelapse_thumbnailer.h"
 #include "ui_callback_helpers.h"
 #include "ui_modal.h"
@@ -129,12 +132,29 @@ void TimelapseVideosOverlay::on_activate() {
     spdlog::debug("[{}] on_activate() - fetching video list", get_name());
     detect_playback_capability();
     fetch_video_list();
+
+    // Register render-complete callback to auto-refresh the video list
+    // when a new timelapse render finishes (picks up new video + companion thumbnail)
+    auto alive = alive_;
+    helix::TimelapseState::instance().set_on_render_complete(
+        [this, alive](const std::string& filename) {
+            if (!alive || !alive->load()) return;
+            spdlog::info("[Timelapse Videos] Render complete for '{}', refreshing list", filename);
+            helix::ui::queue_update([this, alive]() {
+                if (!alive->load()) return;
+                fetch_video_list();
+            });
+        });
 }
 
 void TimelapseVideosOverlay::on_deactivate() {
     OverlayBase::on_deactivate();
     nav_generation_.fetch_add(1);
     clear_video_grid();
+
+    // Unregister render-complete callback to avoid dangling references
+    helix::TimelapseState::instance().set_on_render_complete(nullptr);
+
     spdlog::debug("[{}] on_deactivate()", get_name());
 }
 
@@ -253,6 +273,15 @@ void TimelapseVideosOverlay::populate_video_grid(const std::vector<FileInfo>& fi
 
     if (!video_grid_container_) return;
 
+    // Build set of available files for companion thumbnail lookup
+    std::set<std::string> available_files;
+    for (const auto& file : files) {
+        available_files.insert(file.filename);
+    }
+
+    // Bump thumbnail generation so stale callbacks are ignored
+    thumb_generation_.fetch_add(1);
+
     for (const auto& video : videos_) {
         const char* attrs[] = {"filename",  video.filename.c_str(),
                                "file_info", video.file_info.c_str(),
@@ -288,12 +317,166 @@ void TimelapseVideosOverlay::populate_video_grid(const std::vector<FileInfo>& fi
             }
         }
 
-        // Show no-thumbnail placeholder by default (thumbnail loading is Task 12)
-        lv_obj_t* no_thumb_icon = lv_obj_find_by_name(card, "no_thumbnail_icon");
+        // Load thumbnail (companion image) or show placeholder
+        load_thumbnail_for_card(card, video.filename, available_files);
+    }
+}
+
+void TimelapseVideosOverlay::load_thumbnail_for_card(
+    lv_obj_t* card, const std::string& filename,
+    const std::set<std::string>& available_files) {
+
+    lv_obj_t* thumbnail = lv_obj_find_by_name(card, "thumbnail");
+    lv_obj_t* no_thumb_icon = lv_obj_find_by_name(card, "no_thumbnail_icon");
+
+    // Use the companion filename (e.g., "video.thumb.jpg") as the Moonraker path
+    // within the "timelapse" root for ThumbnailCache
+    auto companion = helix::timelapse::TimelapseThumbnailer::companion_filename(filename);
+
+    // Check if companion thumbnail file exists in the timelapse directory listing
+    if (available_files.find(companion) == available_files.end()) {
+        // No companion thumbnail available -- show placeholder
+        spdlog::debug("[{}] No companion thumbnail '{}' for '{}'", get_name(), companion,
+                      filename);
         if (no_thumb_icon) {
             lv_obj_remove_flag(no_thumb_icon, LV_OBJ_FLAG_HIDDEN);
         }
+        if (thumbnail) {
+            lv_obj_add_flag(thumbnail, LV_OBJ_FLAG_HIDDEN);
+        }
+        return;
     }
+
+    // Build the relative path for Moonraker download: "timelapse/<companion>"
+    // ThumbnailCache::fetch_for_card_view uses api->download_thumbnail which
+    // expects a relative path. For timelapse files, we use the transfers API
+    // directly since these aren't gcode thumbnails.
+
+    // Use the cache key from TimelapseThumbnailer as the cache identifier
+    auto cache_key = helix::timelapse::TimelapseThumbnailer::cache_key(filename);
+    auto target = helix::ThumbnailProcessor::get_target_for_display(helix::ThumbnailSize::Card);
+
+    // Check if already cached (synchronous, fast path)
+    auto& cache = get_thumbnail_cache();
+    std::string cached = cache.get_if_optimized(cache_key, target);
+    if (!cached.empty()) {
+        spdlog::debug("[{}] Thumbnail cache hit for '{}'", get_name(), filename);
+        if (thumbnail) {
+            lv_image_set_src(thumbnail, cached.c_str());
+            lv_obj_remove_flag(thumbnail, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (no_thumb_icon) {
+            lv_obj_add_flag(no_thumb_icon, LV_OBJ_FLAG_HIDDEN);
+        }
+        return;
+    }
+
+    // Not cached -- download the companion file, pre-scale, and update
+    if (!api_) {
+        if (no_thumb_icon) {
+            lv_obj_remove_flag(no_thumb_icon, LV_OBJ_FLAG_HIDDEN);
+        }
+        return;
+    }
+
+    // Show placeholder while loading
+    if (no_thumb_icon) {
+        lv_obj_remove_flag(no_thumb_icon, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    auto ctx = ThumbnailLoadContext::capture(alive_, &thumb_generation_);
+    std::string filename_copy = filename;
+
+    // Download the companion thumbnail via the timelapse file root.
+    // Use fetch_for_card_view with the cache key so the pre-scaled .bin
+    // is stored under the timelapse-specific key.
+    // The companion .jpg is accessible at "timelapse/<companion>" via Moonraker's
+    // file download endpoint, which is what the thumbnail cache's fetch uses.
+    // However, fetch_for_card_view calls download_thumbnail which prefixes
+    // ".thumbnails/". For timelapse companions we need a direct download approach.
+
+    // Download companion to a temp location, then save to cache and pre-scale
+    std::string dest_path = "/tmp/helix_timelapse_thumb_" + companion;
+    auto alive = alive_;
+    uint32_t gen = thumb_generation_.load();
+
+    api_->transfers().download_file_to_path(
+        "timelapse", companion, dest_path,
+        [this, alive, gen, dest_path, cache_key, target, filename_copy](
+            const std::string& /*path*/) {
+            if (!alive || !alive->load() || gen != thumb_generation_.load()) return;
+
+            // Read the downloaded file into memory for ThumbnailProcessor
+            FILE* f = fopen(dest_path.c_str(), "rb");
+            if (!f) {
+                spdlog::warn("[Timelapse Videos] Failed to open downloaded thumbnail: {}",
+                             dest_path);
+                return;
+            }
+
+            fseek(f, 0, SEEK_END);
+            auto fsize = ftell(f);
+            fseek(f, 0, SEEK_SET);
+
+            if (fsize <= 0 || fsize > 10 * 1024 * 1024) {
+                fclose(f);
+                unlink(dest_path.c_str());
+                return;
+            }
+
+            std::vector<uint8_t> data(static_cast<size_t>(fsize));
+            size_t read = fread(data.data(), 1, data.size(), f);
+            fclose(f);
+            unlink(dest_path.c_str());
+
+            if (read != data.size()) return;
+
+            // Pre-scale via ThumbnailProcessor (runs on worker thread)
+            helix::ThumbnailProcessor::instance().process_async(
+                data, cache_key, target,
+                [this, alive, gen, filename_copy](const std::string& lvbin_path) {
+                    if (!alive || !alive->load() || gen != thumb_generation_.load()) return;
+
+                    helix::ui::queue_update(
+                        [this, alive, gen, filename_copy, lvbin_path]() {
+                            if (!alive->load() || gen != thumb_generation_.load()) return;
+                            if (!video_grid_container_) return;
+
+                            // Find the card for this filename by scanning children
+                            uint32_t count = lv_obj_get_child_count(video_grid_container_);
+                            for (uint32_t i = 0; i < count; i++) {
+                                lv_obj_t* child = lv_obj_get_child(video_grid_container_,
+                                                                    static_cast<int32_t>(i));
+                                auto* stored_name =
+                                    static_cast<const char*>(lv_obj_get_user_data(child));
+                                if (stored_name && filename_copy == stored_name) {
+                                    lv_obj_t* thumb = lv_obj_find_by_name(child, "thumbnail");
+                                    lv_obj_t* icon =
+                                        lv_obj_find_by_name(child, "no_thumbnail_icon");
+                                    if (thumb) {
+                                        lv_image_set_src(thumb, lvbin_path.c_str());
+                                        lv_obj_remove_flag(thumb, LV_OBJ_FLAG_HIDDEN);
+                                    }
+                                    if (icon) {
+                                        lv_obj_add_flag(icon, LV_OBJ_FLAG_HIDDEN);
+                                    }
+                                    spdlog::debug(
+                                        "[Timelapse Videos] Thumbnail loaded for '{}'",
+                                        filename_copy);
+                                    break;
+                                }
+                            }
+                        });
+                },
+                [filename_copy](const std::string& error) {
+                    spdlog::warn("[Timelapse Videos] Failed to process thumbnail for '{}': {}",
+                                 filename_copy, error);
+                });
+        },
+        [companion](const MoonrakerError& error) {
+            spdlog::debug("[Timelapse Videos] Failed to download companion '{}': {}", companion,
+                          error.message);
+        });
 }
 
 void TimelapseVideosOverlay::clear_video_grid() {
