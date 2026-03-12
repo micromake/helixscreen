@@ -280,6 +280,7 @@ void TelemetryManager::init(const std::string& config_dir) {
     // Reset in-memory state for clean initialization
     enabled_.store(false);
     shutting_down_.store(false);
+    had_update_restart_ = false;
     init_time_ = std::chrono::steady_clock::now();
     {
         std::lock_guard<std::mutex> lock(mutex_);

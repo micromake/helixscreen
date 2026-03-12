@@ -1328,6 +1328,103 @@ TEST_CASE_METHOD(TelemetryTestFixture, "Write update success flag: creates valid
 }
 
 // ============================================================================
+// Post-Update Crash Suppression [telemetry][update][crash]
+// ============================================================================
+
+TEST_CASE_METHOD(TelemetryTestFixture,
+                 "Post-update crash: crash.txt preserved when update_success.json present",
+                 "[telemetry][update][crash]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    // Simulate: update succeeded, but process crashed before _exit(0)
+    json flag;
+    flag["version"] = "0.14.0";
+    flag["from_version"] = "0.13.4";
+    flag["platform"] = "pi";
+    flag["timestamp"] = "2026-02-26T12:00:00Z";
+    write_file("update_success.json", flag.dump());
+    write_file("crash.txt", "signal:6\nname:SIGABRT\nversion:0.13.4\n");
+
+    tm.check_previous_crash();
+
+    // crash.txt should still exist (Application rotates it via consume_crash_file)
+    REQUIRE(fs::exists(temp_dir() / "crash.txt"));
+    // No crash event should be enqueued
+    REQUIRE(tm.queue_size() == 0);
+    // Flag should be set for Application to check
+    REQUIRE(tm.had_update_restart());
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture,
+                 "Post-update crash: update_success.json preserved for check_previous_update",
+                 "[telemetry][update][crash]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    json flag;
+    flag["version"] = "0.14.0";
+    flag["from_version"] = "0.13.4";
+    flag["platform"] = "pi";
+    flag["timestamp"] = "2026-02-26T12:00:00Z";
+    write_file("update_success.json", flag.dump());
+    write_file("crash.txt", "signal:6\nname:SIGABRT\nversion:0.13.4\n");
+
+    tm.check_previous_crash();
+
+    // update_success.json should NOT be deleted by check_previous_crash —
+    // it is consumed later by check_previous_update
+    REQUIRE(fs::exists(temp_dir() / "update_success.json"));
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture,
+                 "Normal crash: crash event enqueued when no update_success.json",
+                 "[telemetry][update][crash]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    // Only crash.txt, no update flag — this is a real crash
+    write_file("crash.txt", "signal:11\nname:SIGSEGV\nversion:0.14.0\n");
+
+    tm.check_previous_crash();
+
+    // Crash event should be enqueued
+    REQUIRE(tm.queue_size() == 1);
+    auto snapshot = tm.get_queue_snapshot();
+    REQUIRE(snapshot[0]["event"] == "crash");
+    // Flag should NOT be set
+    REQUIRE_FALSE(tm.had_update_restart());
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture,
+                 "Post-update crash: had_update_restart is false by default",
+                 "[telemetry][update][crash]") {
+    auto& tm = TelemetryManager::instance();
+    REQUIRE_FALSE(tm.had_update_restart());
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture,
+                 "Clean update: no crash flag when update_success.json exists without crash.txt",
+                 "[telemetry][update][crash]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    // Happy path: _exit(0) worked, no crash.txt written
+    json flag;
+    flag["version"] = "0.14.0";
+    flag["from_version"] = "0.13.4";
+    flag["platform"] = "pi";
+    flag["timestamp"] = "2026-02-26T12:00:00Z";
+    write_file("update_success.json", flag.dump());
+
+    tm.check_previous_crash();
+
+    // No crash file means had_update_restart stays false
+    REQUIRE_FALSE(tm.had_update_restart());
+    REQUIRE(tm.queue_size() == 0);
+}
+
+// ============================================================================
 // Memory Snapshot Event [telemetry][memory]
 // ============================================================================
 
