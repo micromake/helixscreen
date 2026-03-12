@@ -490,11 +490,16 @@ int Application::run(int argc, char** argv) {
     bool show_crash_dialog =
         !get_runtime_config()->is_test_mode() || get_runtime_config()->mock_crash;
     if (show_crash_dialog && CrashReporter::instance().has_crash_report()) {
-        spdlog::info("[Application] Previous crash detected — showing crash report dialog");
-        auto report = CrashReporter::instance().collect_report();
-        auto* modal = new CrashReportModal();
-        modal->set_report(report);
-        modal->show_modal(lv_screen_active());
+        if (TelemetryManager::instance().had_update_restart()) {
+            spdlog::info("[Application] Crash from post-update restart, suppressing crash dialog");
+            CrashReporter::instance().consume_crash_file();
+        } else {
+            spdlog::info("[Application] Previous crash detected — showing crash report dialog");
+            auto report = CrashReporter::instance().collect_report();
+            auto* modal = new CrashReportModal();
+            modal->set_report(report);
+            modal->show_modal(lv_screen_active());
+        }
     }
 
     // Register wizard completion callback for add-printer recovery
