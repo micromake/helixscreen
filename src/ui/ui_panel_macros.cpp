@@ -3,6 +3,7 @@
 
 #include "ui_panel_macros.h"
 
+#include "macro_executor.h"
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
 #include "ui_global_panel_helper.h"
@@ -28,19 +29,6 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
-
-namespace {
-
-/**
- * Dangerous macros that could cause issues if accidentally triggered
- */
-const std::unordered_set<std::string> DANGEROUS_MACROS = {
-    "SAVE_CONFIG",    "FIRMWARE_RESTART", "RESTART", "SHUTDOWN",
-    "M112", // Emergency stop
-    "EMERGENCY_STOP",
-};
-
-} // namespace
 
 // ============================================================================
 // Global Instance
@@ -230,7 +218,7 @@ void MacrosPanel::create_macro_card(const std::string& macro_name) {
         return;
     }
 
-    bool is_dangerous = is_dangerous_macro(macro_name);
+    bool is_dangerous = helix::is_dangerous_macro(macro_name);
 
     // Store entry info -- card pointer used for lookup in click callback
     MacroEntry entry;
@@ -249,14 +237,6 @@ std::string MacrosPanel::prettify_macro_name(const std::string& name) {
     return helix::get_display_name(name, helix::DeviceType::MACRO);
 }
 
-bool MacrosPanel::is_dangerous_macro(const std::string& name) {
-    // Check against known dangerous macros
-    std::string upper_name = name;
-    std::transform(upper_name.begin(), upper_name.end(), upper_name.begin(),
-                   [](unsigned char c) { return std::toupper(c); });
-    return DANGEROUS_MACROS.count(upper_name) > 0;
-}
-
 void MacrosPanel::execute_macro(const std::string& macro_name) {
     execute_with_params(macro_name, {});
 }
@@ -268,7 +248,7 @@ void MacrosPanel::fetch_params_and_execute(const std::string& macro_name) {
         return;
     }
 
-    bool dangerous = is_dangerous_macro(macro_name);
+    bool dangerous = helix::is_dangerous_macro(macro_name);
 
     // For dangerous macros, show confirmation before doing anything else
     if (dangerous) {
@@ -341,39 +321,7 @@ void MacrosPanel::fetch_params_and_run(const std::string& macro_name) {
 void MacrosPanel::execute_with_params(const std::string& macro_name,
                                       const helix::MacroParamResult& result) {
     MoonrakerAPI* api = get_moonraker_api();
-    if (!api) {
-        spdlog::warn("[{}] No MoonrakerAPI available - cannot execute macro", get_name());
-        return;
-    }
-
-    // Build gcode: SET_GCODE_VARIABLE commands for variable overrides, then macro call
-    std::string gcode;
-    for (const auto& [key, value] : result.variables) {
-        std::string var_lower = key;
-        std::transform(var_lower.begin(), var_lower.end(), var_lower.begin(),
-                       [](unsigned char c) { return std::tolower(c); });
-        gcode += "SET_GCODE_VARIABLE MACRO=" + macro_name + " VARIABLE=" + var_lower +
-                 " VALUE=" + value + "\n";
-    }
-
-    gcode += macro_name;
-    for (const auto& [key, value] : result.params) {
-        gcode += " " + key + "=" + value;
-    }
-
-    spdlog::info("[{}] Executing: {}", get_name(), gcode);
-
-    // L072: capture copies only — callbacks fire from WebSocket thread
-    std::string macro_copy = macro_name;
-    api->execute_gcode(
-        gcode,
-        [macro_copy]() {
-            spdlog::info("[MacrosPanel] Macro '{}' executed successfully", macro_copy);
-        },
-        [macro_copy](const MoonrakerError& err) {
-            spdlog::error("[MacrosPanel] Failed to execute macro '{}': {}", macro_copy,
-                          err.message);
-        });
+    helix::execute_macro_gcode(api, macro_name, result, "[MacrosPanel]");
 }
 
 void MacrosPanel::set_show_system_macros(bool show_system) {

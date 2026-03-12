@@ -13,7 +13,8 @@
       <text_small name="status_message" width="100%" text="" bind_text="macros_status" style_text_align="center"/>
       <!-- Scrollable macro list -->
       <lv_obj name="macro_list"
-              width="100%" flex_grow="1" scrollable="true" flex_flow="column" style_pad_gap="#space_sm">
+              width="100%" flex_grow="1" scrollable="true" flex_flow="column" style_pad_gap="#space_sm"
+              style_pad_top="0" style_pad_bottom="0" style_pad_left="0" style_pad_right="0">
         <!-- Macro cards populated dynamically by C++ -->
       </lv_obj>
       <!-- Empty state (shown when no macros available) -->

@@ -3,6 +3,7 @@
 
 #include "favorite_macro_widget.h"
 
+#include "macro_executor.h"
 #include "ui_event_safety.h"
 #include "ui_fonts.h"
 #include "ui_icon.h"
@@ -305,37 +306,7 @@ void FavoriteMacroWidget::fetch_and_execute() {
 
 void FavoriteMacroWidget::execute_with_params(const MacroParamResult& result) {
     MoonrakerAPI* api = get_api();
-    if (!api) {
-        return;
-    }
-
-    // Build gcode: SET_GCODE_VARIABLE commands for variable overrides, then macro call
-    std::string gcode;
-    for (const auto& [key, value] : result.variables) {
-        // Variable names are lowercase in Klipper
-        std::string var_lower = key;
-        std::transform(var_lower.begin(), var_lower.end(), var_lower.begin(),
-                       [](unsigned char c) { return std::tolower(c); });
-        gcode += "SET_GCODE_VARIABLE MACRO=" + macro_name_ + " VARIABLE=" + var_lower +
-                 " VALUE=" + value + "\n";
-    }
-
-    gcode += macro_name_;
-    for (const auto& [key, value] : result.params) {
-        gcode += " " + key + "=" + value;
-    }
-
-    spdlog::info("[FavoriteMacroWidget] Executing: {}", gcode);
-
-    std::string macro_name_copy = macro_name_;
-    api->execute_gcode(
-        gcode,
-        [macro_name_copy]() {
-            spdlog::info("[FavoriteMacroWidget] {} executed successfully", macro_name_copy);
-        },
-        [macro_name_copy](const MoonrakerError& err) {
-            spdlog::error("[FavoriteMacroWidget] {} failed: {}", macro_name_copy, err.message);
-        });
+    helix::execute_macro_gcode(api, macro_name_, result, "[FavoriteMacroWidget]");
 }
 
 void FavoriteMacroWidget::show_macro_picker() {

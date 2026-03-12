@@ -10,7 +10,6 @@
 
 #include <memory>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 /**
@@ -125,13 +124,6 @@ class MacrosPanel : public OverlayBase {
      * @return Prettified display name
      */
     static std::string prettify_macro_name(const std::string& name);
-
-    /**
-     * @brief Check if macro is potentially dangerous
-     * @param name Macro name
-     * @return true if macro could cause issues (SAVE_CONFIG, FIRMWARE_RESTART, etc.)
-     */
-    static bool is_dangerous_macro(const std::string& name);
 
     /**
      * @brief Toggle system macro visibility
