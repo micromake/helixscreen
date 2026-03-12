@@ -6,6 +6,7 @@
 #include "ui_callback_helpers.h"
 #include "ui_nav_manager.h"
 #include "ui_overlay_timelapse_install.h"
+#include "ui_overlay_timelapse_videos.h"
 #include "ui_panel_calibration_pid.h"
 #include "ui_panel_console.h"
 #include "ui_panel_macros.h"
@@ -241,8 +242,8 @@ void AdvancedPanel::on_pid_tuning_clicked(lv_event_t* /*e*/) {
 }
 
 void AdvancedPanel::on_timelapse_videos_clicked(lv_event_t* /*e*/) {
-    // TODO: Open timelapse videos overlay (Task 6)
-    spdlog::info("[AdvancedPanel] Timelapse Videos clicked (not yet implemented)");
+    spdlog::debug("[AdvancedPanel] Timelapse Videos clicked");
+    open_timelapse_videos();
 }
 
 void AdvancedPanel::on_timelapse_setup_clicked(lv_event_t* /*e*/) {
