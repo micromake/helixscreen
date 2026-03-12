@@ -159,8 +159,8 @@ void MacrosPanel::on_deactivate() {
 // ============================================================================
 
 void MacrosPanel::clear_macro_list() {
-    for (auto& entry : macro_entries_) {
-        helix::ui::safe_delete(entry.card);
+    if (macro_list_container_) {
+        lv_obj_clean(macro_list_container_);
     }
     macro_entries_.clear();
 }
