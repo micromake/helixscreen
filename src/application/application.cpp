@@ -494,11 +494,17 @@ int Application::run(int argc, char** argv) {
             spdlog::info("[Application] Crash from post-update restart, suppressing crash dialog");
             CrashReporter::instance().consume_crash_file();
         } else {
-            spdlog::info("[Application] Previous crash detected — showing crash report dialog");
             auto report = CrashReporter::instance().collect_report();
-            auto* modal = new CrashReportModal();
-            modal->set_report(report);
-            modal->show_modal(lv_screen_active());
+            if (CrashReporter::instance().is_duplicate(report)) {
+                spdlog::info("[Application] Duplicate crash ({}), suppressing dialog",
+                             CrashReporter::fingerprint(report));
+                CrashReporter::instance().consume_crash_file();
+            } else {
+                spdlog::info("[Application] Previous crash detected — showing crash report dialog");
+                auto* modal = new CrashReportModal();
+                modal->set_report(report);
+                modal->show_modal(lv_screen_active());
+            }
         }
     }
 

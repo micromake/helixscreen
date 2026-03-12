@@ -32,7 +32,17 @@ struct CrashHistoryEntry {
     int github_issue = 0;        // GitHub issue number (from crash worker)
     std::string github_url;      // GitHub issue URL (from crash worker)
     std::string sent_via;        // "crash_reporter" or "telemetry"
+    std::string fingerprint;     // Dedup key: "signal_name/app_version/backtrace[0]"
 };
+
+/**
+ * @brief Compute a crash fingerprint matching the server-side formula.
+ *
+ * Format: "signal_name/app_version/first_bt_frame"
+ * Matches crash-worker's crashFingerprint() in github-app.ts.
+ */
+std::string crash_fingerprint(const std::string& signal_name, const std::string& app_version,
+                              const std::string& first_bt_frame);
 
 class CrashHistory {
   public:
@@ -65,6 +75,12 @@ class CrashHistory {
      * @brief Get number of entries
      */
     size_t size() const;
+
+    /**
+     * @brief Check if a crash with this fingerprint has already been recorded
+     * @return true if any entry in history has a matching fingerprint
+     */
+    bool has_fingerprint(const std::string& fingerprint) const;
 
     /**
      * @brief Get entries as JSON array (for debug bundle inclusion)

@@ -481,6 +481,20 @@ void CrashReporter::consume_crash_file() {
 }
 
 // =============================================================================
+// Deduplication
+// =============================================================================
+
+std::string CrashReporter::fingerprint(const CrashReport& report) {
+    std::string first_frame = report.backtrace.empty() ? "" : report.backtrace[0];
+    return helix::crash_fingerprint(report.signal_name, report.app_version, first_frame);
+}
+
+bool CrashReporter::is_duplicate(const CrashReport& report) const {
+    std::string fp = fingerprint(report);
+    return helix::CrashHistory::instance().has_fingerprint(fp);
+}
+
+// =============================================================================
 // Auto-Send
 // =============================================================================
 
@@ -514,6 +528,7 @@ bool CrashReporter::try_auto_send(const CrashReport& report) {
             hist_entry.fault_addr = report.fault_addr;
             hist_entry.fault_code_name = report.fault_code_name;
             hist_entry.sent_via = "crash_reporter";
+            hist_entry.fingerprint = fingerprint(report);
 
             // Parse optional GitHub metadata from crash worker response
             try {

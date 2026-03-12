@@ -4,12 +4,25 @@
 
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 
 using json = nlohmann::json;
 
 namespace helix {
+
+// =============================================================================
+// Fingerprint
+// =============================================================================
+
+std::string crash_fingerprint(const std::string& signal_name, const std::string& app_version,
+                              const std::string& first_bt_frame) {
+    std::string sig = signal_name.empty() ? "UNKNOWN" : signal_name;
+    std::string ver = app_version.empty() ? "unknown" : app_version;
+    std::string frame = first_bt_frame.empty() ? "no-bt" : first_bt_frame;
+    return sig + "/" + ver + "/" + frame;
+}
 
 // =============================================================================
 // Singleton
@@ -70,6 +83,17 @@ std::vector<CrashHistoryEntry> CrashHistory::get_entries() const {
 size_t CrashHistory::size() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return entries_.size();
+}
+
+bool CrashHistory::has_fingerprint(const std::string& fingerprint) const {
+    if (fingerprint.empty()) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    return std::any_of(entries_.begin(), entries_.end(),
+                       [&fingerprint](const CrashHistoryEntry& e) {
+                           return e.fingerprint == fingerprint;
+                       });
 }
 
 json CrashHistory::to_json() const {
@@ -165,6 +189,7 @@ CrashHistoryEntry CrashHistory::entry_from_json(const json& j) {
     entry.github_issue = j.value("github_issue", 0);
     entry.github_url = j.value("github_url", "");
     entry.sent_via = j.value("sent_via", "");
+    entry.fingerprint = j.value("fingerprint", "");
     return entry;
 }
 
@@ -179,7 +204,8 @@ json CrashHistory::entry_to_json(const CrashHistoryEntry& entry) {
                     {"fault_code_name", entry.fault_code_name},
                     {"github_issue", entry.github_issue},
                     {"github_url", entry.github_url},
-                    {"sent_via", entry.sent_via}};
+                    {"sent_via", entry.sent_via},
+                    {"fingerprint", entry.fingerprint}};
     } catch (const std::exception& e) {
         spdlog::error("[CrashHistory] Failed to serialize entry: {}", e.what());
         return json{{"error", "serialization_failed"}};

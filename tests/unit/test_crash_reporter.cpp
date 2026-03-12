@@ -10,6 +10,7 @@
  */
 
 #include "system/crash_reporter.h"
+#include "system/crash_history.h"
 
 #include <chrono>
 #include <filesystem>
@@ -508,6 +509,73 @@ TEST_CASE_METHOD(CrashReporterTestFixture, "CrashReporter: shutdown clears state
 
     // Re-init for fixture teardown
     cr.init(temp_dir_.string());
+}
+
+// ============================================================================
+// Fingerprint & Deduplication [crash_reporter]
+// ============================================================================
+
+TEST_CASE_METHOD(CrashReporterTestFixture,
+                 "CrashReporter: fingerprint matches server-side formula",
+                 "[crash_reporter]") {
+    write_crash_file(11, "SIGSEGV", "0.9.9", {"0x400abc", "0x400def"});
+    auto& cr = CrashReporter::instance();
+    auto report = cr.collect_report();
+    std::string fp = CrashReporter::fingerprint(report);
+    REQUIRE(fp == "SIGSEGV/0.9.9/0x400abc");
+}
+
+TEST_CASE_METHOD(CrashReporterTestFixture,
+                 "CrashReporter: fingerprint uses no-bt when backtrace is empty",
+                 "[crash_reporter]") {
+    // Write crash file with no backtrace
+    std::ofstream ofs((temp_dir_ / "crash.txt").string());
+    ofs << "signal:11\nname:SIGSEGV\nversion:1.0.0\ntimestamp:1707350400\nuptime:3600\n";
+    ofs.close();
+
+    auto& cr = CrashReporter::instance();
+    auto report = cr.collect_report();
+    std::string fp = CrashReporter::fingerprint(report);
+    REQUIRE(fp == "SIGSEGV/1.0.0/no-bt");
+}
+
+TEST_CASE_METHOD(CrashReporterTestFixture,
+                 "CrashReporter: is_duplicate returns false with empty history",
+                 "[crash_reporter]") {
+    write_crash_file();
+    auto& cr = CrashReporter::instance();
+    auto report = cr.collect_report();
+
+    // Initialize CrashHistory to a fresh temp dir
+    helix::CrashHistory::instance().shutdown();
+    helix::CrashHistory::instance().init(temp_dir_.string());
+
+    REQUIRE_FALSE(cr.is_duplicate(report));
+
+    helix::CrashHistory::instance().shutdown();
+}
+
+TEST_CASE_METHOD(CrashReporterTestFixture,
+                 "CrashReporter: is_duplicate returns true when fingerprint matches history",
+                 "[crash_reporter]") {
+    write_crash_file(11, "SIGSEGV", "0.9.9", {"0x400abc", "0x400def"});
+    auto& cr = CrashReporter::instance();
+    auto report = cr.collect_report();
+
+    helix::CrashHistory::instance().shutdown();
+    helix::CrashHistory::instance().init(temp_dir_.string());
+
+    // Add matching entry to history
+    helix::CrashHistoryEntry entry;
+    entry.fingerprint = "SIGSEGV/0.9.9/0x400abc";
+    entry.signal_name = "SIGSEGV";
+    entry.app_version = "0.9.9";
+    entry.sent_via = "crash_reporter";
+    helix::CrashHistory::instance().add_entry(entry);
+
+    REQUIRE(cr.is_duplicate(report));
+
+    helix::CrashHistory::instance().shutdown();
 }
 
 // ============================================================================

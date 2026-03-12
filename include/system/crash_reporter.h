@@ -100,6 +100,22 @@ class CrashReporter {
     bool try_auto_send(const CrashReport& report);
 
     /**
+     * @brief Check if this crash has already been reported (client-side dedup)
+     *
+     * Computes a fingerprint matching the server-side formula and checks
+     * CrashHistory for a previous submission with the same fingerprint.
+     */
+    bool is_duplicate(const CrashReport& report) const;
+
+    /**
+     * @brief Compute the fingerprint for a crash report
+     *
+     * Format: signal_name/app_version/backtrace[0]
+     * Matches the server-side crashFingerprint() in crash-worker.
+     */
+    static std::string fingerprint(const CrashReport& report);
+
+    /**
      * @brief Generate a pre-filled GitHub issue URL (for QR code)
      *
      * URL is truncated to stay under ~2000 chars for QR code compatibility.

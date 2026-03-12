@@ -23,6 +23,7 @@
 #include "platform_capabilities.h"
 #include "printer_state.h"
 #include "system/crash_handler.h"
+#include "system/crash_history.h"
 #include "system/update_checker.h"
 #include "system_settings_manager.h"
 #include "temperature_sensor_manager.h"
@@ -1074,6 +1075,22 @@ void TelemetryManager::check_previous_crash() {
     if (crash_data.is_null()) {
         spdlog::warn("[TelemetryManager] Failed to parse crash file, skipping telemetry event");
         return;
+    }
+
+    // Client-side dedup: skip if we already sent a report with the same fingerprint
+    {
+        std::string sig = crash_data.value("signal_name", "");
+        std::string ver = crash_data.value("app_version", "");
+        std::string bt0;
+        if (crash_data.contains("backtrace") && crash_data["backtrace"].is_array() &&
+            !crash_data["backtrace"].empty()) {
+            bt0 = crash_data["backtrace"][0].get<std::string>();
+        }
+        std::string fp = helix::crash_fingerprint(sig, ver, bt0);
+        if (helix::CrashHistory::instance().has_fingerprint(fp)) {
+            spdlog::info("[TelemetryManager] Duplicate crash ({}), skipping telemetry event", fp);
+            return;
+        }
     }
 
     // Build a crash event following the telemetry schema

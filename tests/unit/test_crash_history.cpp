@@ -299,6 +299,95 @@ TEST_CASE_METHOD(CrashHistoryTestFixture,
 }
 
 // ============================================================================
+// Fingerprint & Deduplication [crash_history]
+// ============================================================================
+
+TEST_CASE("crash_fingerprint: standard format matches server formula", "[crash_history]") {
+    auto fp = helix::crash_fingerprint("SIGSEGV", "0.10.12", "0x400abc");
+    REQUIRE(fp == "SIGSEGV/0.10.12/0x400abc");
+}
+
+TEST_CASE("crash_fingerprint: empty signal defaults to UNKNOWN", "[crash_history]") {
+    auto fp = helix::crash_fingerprint("", "1.0.0", "0x400abc");
+    REQUIRE(fp == "UNKNOWN/1.0.0/0x400abc");
+}
+
+TEST_CASE("crash_fingerprint: empty version defaults to unknown", "[crash_history]") {
+    auto fp = helix::crash_fingerprint("SIGABRT", "", "0x400abc");
+    REQUIRE(fp == "SIGABRT/unknown/0x400abc");
+}
+
+TEST_CASE("crash_fingerprint: empty backtrace defaults to no-bt", "[crash_history]") {
+    auto fp = helix::crash_fingerprint("SIGSEGV", "0.10.12", "");
+    REQUIRE(fp == "SIGSEGV/0.10.12/no-bt");
+}
+
+TEST_CASE_METHOD(CrashHistoryTestFixture, "CrashHistory: has_fingerprint returns false when empty",
+                 "[crash_history]") {
+    auto& ch = helix::CrashHistory::instance();
+    REQUIRE_FALSE(ch.has_fingerprint("SIGSEGV/0.10.12/0x400abc"));
+}
+
+TEST_CASE_METHOD(CrashHistoryTestFixture,
+                 "CrashHistory: has_fingerprint returns true for matching entry",
+                 "[crash_history]") {
+    auto& ch = helix::CrashHistory::instance();
+    auto entry = make_entry();
+    entry.fingerprint = "SIGSEGV/0.10.12/0x400abc";
+    ch.add_entry(entry);
+
+    REQUIRE(ch.has_fingerprint("SIGSEGV/0.10.12/0x400abc"));
+}
+
+TEST_CASE_METHOD(CrashHistoryTestFixture,
+                 "CrashHistory: has_fingerprint returns false for different fingerprint",
+                 "[crash_history]") {
+    auto& ch = helix::CrashHistory::instance();
+    auto entry = make_entry();
+    entry.fingerprint = "SIGSEGV/0.10.12/0x400abc";
+    ch.add_entry(entry);
+
+    REQUIRE_FALSE(ch.has_fingerprint("SIGABRT/0.10.12/0x400abc"));
+}
+
+TEST_CASE_METHOD(CrashHistoryTestFixture,
+                 "CrashHistory: has_fingerprint with empty string returns false",
+                 "[crash_history]") {
+    auto& ch = helix::CrashHistory::instance();
+    auto entry = make_entry();
+    entry.fingerprint = "SIGSEGV/0.10.12/0x400abc";
+    ch.add_entry(entry);
+
+    REQUIRE_FALSE(ch.has_fingerprint(""));
+}
+
+TEST_CASE_METHOD(CrashHistoryTestFixture,
+                 "CrashHistory: fingerprint persists across re-init",
+                 "[crash_history]") {
+    auto& ch = helix::CrashHistory::instance();
+    auto entry = make_entry();
+    entry.fingerprint = "SIGSEGV/0.10.12/0x400abc";
+    ch.add_entry(entry);
+
+    ch.shutdown();
+    ch.init(temp_dir_.string());
+
+    REQUIRE(ch.has_fingerprint("SIGSEGV/0.10.12/0x400abc"));
+}
+
+TEST_CASE_METHOD(CrashHistoryTestFixture,
+                 "CrashHistory: same crash on new version is not duplicate",
+                 "[crash_history]") {
+    auto& ch = helix::CrashHistory::instance();
+    auto entry = make_entry();
+    entry.fingerprint = "SIGSEGV/0.10.12/0x400abc";
+    ch.add_entry(entry);
+
+    // Same signal+frame but different version — not a duplicate
+    REQUIRE_FALSE(ch.has_fingerprint("SIGSEGV/0.10.13/0x400abc"));
+}
+
+// ============================================================================
 // Safety [crash_history]
 // ============================================================================
 
