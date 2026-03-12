@@ -15,6 +15,11 @@
 #include <string>
 #include <vector>
 
+struct TimelapseCardDimensions {
+    int card_width;
+    int card_height;
+};
+
 class TimelapseVideosOverlay : public OverlayBase {
   public:
     explicit TimelapseVideosOverlay(MoonrakerAPI* api);
@@ -41,6 +46,7 @@ class TimelapseVideosOverlay : public OverlayBase {
     };
 
     void fetch_video_list();
+    TimelapseCardDimensions calculate_card_dimensions();
     void populate_video_grid(const std::vector<FileInfo>& files);
     void load_thumbnail_for_card(lv_obj_t* card, const std::string& filename,
                                  const std::set<std::string>& available_files);

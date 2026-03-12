@@ -204,6 +204,103 @@ void TimelapseVideosOverlay::fetch_video_list() {
 // VIDEO GRID MANAGEMENT
 // ============================================================================
 
+// Card sizing constants (same as print select)
+static constexpr int CARD_MIN_WIDTH = 140;
+static constexpr int CARD_MAX_WIDTH = 230;
+static constexpr int CARD_DEFAULT_HEIGHT = 220;
+
+TimelapseCardDimensions TimelapseVideosOverlay::calculate_card_dimensions() {
+    TimelapseCardDimensions dims{CARD_MIN_WIDTH, CARD_DEFAULT_HEIGHT};
+
+    if (!video_grid_container_ || !overlay_root_) {
+        spdlog::debug("[{}] Cannot calculate dimensions: container or root is null", get_name());
+        return dims;
+    }
+
+    // Force layout so dimensions are computed
+    lv_obj_update_layout(overlay_root_);
+
+    // Get overlay total height
+    lv_coord_t overlay_height = lv_obj_get_height(overlay_root_);
+
+    // Get header height (first child of overlay_root, from overlay_panel)
+    lv_obj_t* header = lv_obj_get_child(overlay_root_, 0);
+    lv_coord_t header_height = header ? lv_obj_get_height(header) : 56;
+
+    // Get overlay_content padding
+    lv_obj_t* content = lv_obj_find_by_name(overlay_root_, "overlay_content");
+    lv_coord_t content_pad_top = content ? lv_obj_get_style_pad_top(content, LV_PART_MAIN) : 0;
+    lv_coord_t content_pad_bottom =
+        content ? lv_obj_get_style_pad_bottom(content, LV_PART_MAIN) : 0;
+
+    // Check if render section is visible and get its height
+    lv_obj_t* render_section = lv_obj_find_by_name(overlay_root_, "render_section");
+    lv_coord_t render_height = 0;
+    if (render_section && !lv_obj_has_flag(render_section, LV_OBJ_FLAG_HIDDEN)) {
+        render_height = lv_obj_get_height(render_section);
+    }
+
+    // Check divider
+    lv_obj_t* divider = lv_obj_find_by_name(overlay_root_, "render_divider");
+    lv_coord_t divider_height = 0;
+    if (divider && !lv_obj_has_flag(divider, LV_OBJ_FLAG_HIDDEN)) {
+        divider_height = lv_obj_get_height(divider);
+    }
+
+    // Grid container top padding
+    lv_coord_t grid_pad_top =
+        lv_obj_get_style_pad_top(video_grid_container_, LV_PART_MAIN);
+
+    // Content row gap (between render section, divider, grid)
+    lv_coord_t content_gap = content ? lv_obj_get_style_pad_row(content, LV_PART_MAIN) : 0;
+
+    // Available height for video grid
+    lv_coord_t available_height = overlay_height - header_height - content_pad_top -
+                                  content_pad_bottom - render_height - divider_height -
+                                  grid_pad_top - content_gap * 2;
+
+    // Card gap from grid container
+    int card_gap = lv_obj_get_style_pad_row(video_grid_container_, LV_PART_MAIN);
+
+    // Calculate card height for 2 rows
+    int bottom_margin = card_gap / 2;
+    int row_height = (available_height - bottom_margin) / 2;
+    dims.card_height = row_height - card_gap;
+
+    // Clamp to reasonable range
+    dims.card_height = std::max(dims.card_height, 120);
+    dims.card_height = std::min(dims.card_height, 280);
+
+    spdlog::debug("[{}] Height calc: overlay={} - header={} - content_pad({}+{}) - "
+                  "render={} - divider={} - grid_pad={} - gaps={}*2 = available={}, "
+                  "card_height={}",
+                  get_name(), overlay_height, header_height, content_pad_top, content_pad_bottom,
+                  render_height, divider_height, grid_pad_top, content_gap, available_height,
+                  dims.card_height);
+
+    // Calculate card width: try column counts from 10 down to 1
+    lv_coord_t container_width = lv_obj_get_content_width(video_grid_container_);
+    int col_gap = lv_obj_get_style_pad_column(video_grid_container_, LV_PART_MAIN);
+
+    for (int cols = 10; cols >= 1; cols--) {
+        int total_gaps = (cols - 1) * col_gap;
+        int card_width = (container_width - total_gaps) / cols;
+
+        if (card_width >= CARD_MIN_WIDTH && card_width <= CARD_MAX_WIDTH) {
+            dims.card_width = card_width;
+            spdlog::debug("[{}] Card layout: {} columns, card={}x{}", get_name(), cols,
+                          dims.card_width, dims.card_height);
+            return dims;
+        }
+    }
+
+    // Fallback
+    dims.card_width = CARD_MIN_WIDTH;
+    spdlog::debug("[{}] Card layout fallback: card={}x{}", get_name(), dims.card_width,
+                  dims.card_height);
+    return dims;
+}
+
 /// Format unix timestamp to "Mon DD" string
 static std::string format_date_short(double modified) {
     auto t = static_cast<time_t>(modified);
@@ -258,6 +355,10 @@ void TimelapseVideosOverlay::populate_video_grid(const std::vector<FileInfo>& fi
 
     if (!video_grid_container_) return;
 
+    // Calculate responsive card dimensions to fit 2 rows on screen
+    lv_obj_update_layout(overlay_root_);
+    auto dims = calculate_card_dimensions();
+
     // Build set of available files for companion thumbnail lookup
     std::set<std::string> available_files;
     for (const auto& file : files) {
@@ -278,6 +379,18 @@ void TimelapseVideosOverlay::populate_video_grid(const std::vector<FileInfo>& fi
         if (!card) {
             spdlog::warn("[{}] Failed to create card for '{}'", get_name(), video.filename);
             continue;
+        }
+
+        // Apply responsive card dimensions
+        lv_obj_set_width(card, dims.card_width);
+        lv_obj_set_height(card, dims.card_height);
+        lv_obj_set_style_flex_grow(card, 0, LV_PART_MAIN);
+
+        // Resize gradient background to match card dimensions
+        lv_obj_t* gradient_bg = lv_obj_find_by_name(card, "gradient_bg");
+        if (gradient_bg) {
+            lv_obj_set_width(gradient_bg, dims.card_width);
+            lv_obj_set_height(gradient_bg, dims.card_height);
         }
 
         // Store filename in user_data for click handler (heap-allocated copy)
