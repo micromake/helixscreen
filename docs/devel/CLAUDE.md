@@ -55,6 +55,7 @@ All developer documentation lives here. When working on features, look up the re
 | `CRASH_REPORTER.md` | Crash reporter: detection, delivery pipeline, CF Worker, modal UI |
 | `CONFIG_MIGRATION.md` | Versioned config migration: adding new migrations, testing |
 | `STANDARD_MACROS_SPEC.md` | Standard macro specifications |
+| `MACROS_PANEL.md` | Macros panel architecture, parameter handling, home panel widgets |
 | `POWER_BUTTON_HANDLING.md` | Power button behavior |
 
 ## Platform & Deployment

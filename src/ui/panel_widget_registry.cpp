@@ -30,6 +30,7 @@ void register_printer_image_widget();
 void register_print_status_widget();
 void register_shutdown_widget();
 void register_lock_widget();
+void register_macros_widget();
 void register_clock_widget();
 void register_job_queue_widget();
 void register_clog_detection_widget();
@@ -74,6 +75,7 @@ static std::vector<PanelWidgetDef> s_widget_defs = {
     {"clog_detection",   "Clog Detection",    "water",            "Filament clog/flow detection meter",           "Clog Detection",   "clog_meter_mode",    "Requires clog detection hardware",    true,  1, 1, 1, 1, 2, 2},
     {"print_stats",      "Print Stats",       "printer_3d",       "Print history statistics",                     "Print Stats",      nullptr,              nullptr,                               false, 2, 2, 2, 1, 3, 2},
     {"gcode_console",    "GCode Console",     "console",          "Open G-code command console",                  "GCode Console",    nullptr,              nullptr,                               false, 1, 1, 1, 1, 1, 1},
+    {"macros",           "Macros",            "code_tags",        "Browse and execute Klipper macros",            "Macros",           nullptr,              nullptr,                               false, 1, 1, 1, 1, 1, 1},
 #if HELIX_HAS_CAMERA
     {"camera",           "Camera",            "video",            "Live webcam feed",                             "Camera",           nullptr,              nullptr,                               false, 2, 2, 1, 1, 4, 3},
 #endif
@@ -174,6 +176,7 @@ void init_widget_registrations() {
     register_clog_detection_widget();
     register_print_stats_widget();
     register_gcode_console_widget();
+    register_macros_widget();
     register_preheat_widget();
 #if HELIX_HAS_CAMERA
     register_camera_widget();
