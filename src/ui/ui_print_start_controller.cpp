@@ -413,7 +413,10 @@ void PrintStartController::show_color_mismatch_warning(
     message += "\n";
     message += lv_tr("Load the required filaments or start anyway?");
 
-    static char message_buffer[512];
+    // Static buffer for message - must persist during modal lifetime (modal stores pointer).
+    // Safe because we always close any existing dialog first above,
+    // preventing concurrent access to this buffer.
+    static char message_buffer[1024];
     snprintf(message_buffer, sizeof(message_buffer), "%s", message.c_str());
 
     color_mismatch_modal_ = helix::ui::modal_show_confirmation(
