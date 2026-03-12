@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<!-- Copyright (C) 2025-2026 356C LLC -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Timelapse Videos Overlay - Browse, render, and play timelapse recordings -->
+<component>
+  <view name="timelapse_videos_overlay"
+        extends="overlay_panel" width="#overlay_panel_width_full" title="Timelapse Videos" title_tag="Timelapse Videos" bg_color="#screen_bg">
+    <lv_obj name="overlay_content"
+            width="100%" flex_grow="1" style_pad_top="0" style_pad_left="#space_lg" style_pad_right="#space_lg" style_pad_bottom="#space_lg" scrollable="true" flex_flow="column">
+      <!-- ================================================================== -->
+      <!-- RENDER CONTROLS (moved from settings overlay) -->
+      <!-- ================================================================== -->
+      <lv_obj name="render_section"
+              width="100%" height="content" scrollable="false" flex_flow="column"
+              style_pad_top="#space_sm" style_pad_bottom="#space_md">
+        <!-- Frame count display -->
+        <lv_obj width="100%" height="content" scrollable="false" flex_flow="row"
+                style_flex_cross_place="center" style_pad_gap="#space_sm"
+                style_pad_bottom="#space_sm">
+          <icon src="camera" size="xs" variant="secondary"/>
+          <text_small name="frame_count_label" bind_text="timelapse_frame_count" width="content"/>
+          <text_small text=" frames captured" translation_tag=" frames captured" style_text_color="#text_muted"/>
+        </lv_obj>
+        <!-- Render progress bar - hidden when idle -->
+        <lv_obj name="render_progress_container" width="100%" height="content" scrollable="false"
+                style_pad_bottom="#space_sm">
+          <bind_flag_if_eq subject="timelapse_render_status" flag="hidden" ref_value="idle"/>
+          <progress_bar name="render_progress_bar" bind_value="timelapse_render_progress"/>
+          <text_small name="render_status_text" bind_text="timelapse_render_status"
+                      style_text_color="#text_muted" style_pad_top="#space_xs"/>
+        </lv_obj>
+        <!-- Render Now button -->
+        <lv_button name="btn_render_now" width="100%" style_bg_color="#primary"
+                   style_radius="#border_radius" style_pad_all="#space_sm">
+          <event_cb trigger="clicked" callback="on_timelapse_render_now"/>
+          <text_body text="Render Now" translation_tag="Render Now"
+                     style_text_color="#on_primary" style_text_align="center" width="100%"
+                     clickable="false" event_bubble="true"/>
+        </lv_button>
+      </lv_obj>
+      <!-- ================================================================== -->
+      <!-- DIVIDER -->
+      <!-- ================================================================== -->
+      <divider_subtle/>
+      <!-- ================================================================== -->
+      <!-- VIDEO GRID -->
+      <!-- ================================================================== -->
+      <lv_obj name="video_grid_container"
+              width="100%" flex_grow="1" scrollable="true" flex_flow="row_wrap"
+              style_pad_top="#space_md" style_pad_gap="#space_sm"
+              style_flex_main_place="start"/>
+      <!-- Empty state -->
+      <lv_obj name="video_grid_empty"
+              width="100%" height="content" scrollable="false"
+              style_pad_top="#space_xl" hidden="true">
+        <text_small text="No timelapse videos found" translation_tag="No timelapse videos found"
+                    style_text_color="#text_muted" style_text_align="center" width="100%"/>
+      </lv_obj>
+    </lv_obj>
+  </view>
+</component>
