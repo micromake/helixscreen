@@ -159,6 +159,45 @@ TEST_CASE("parse_hex_color: invalid inputs", "[color][parse]") {
 // describe_color Tests
 // ============================================================================
 
+// ============================================================================
+// parse_hex_color optional overload Tests
+// ============================================================================
+
+TEST_CASE("parse_hex_color optional overload", "[color]") {
+    SECTION("parses standard 6-digit hex with #") {
+        auto result = helix::parse_hex_color(std::string("#FF0000"));
+        REQUIRE(result.has_value());
+        REQUIRE(*result == 0xFF0000);
+    }
+    SECTION("parses without # prefix") {
+        auto result = helix::parse_hex_color(std::string("00FF00"));
+        REQUIRE(result.has_value());
+        REQUIRE(*result == 0x00FF00);
+    }
+    SECTION("parses 3-digit shorthand") {
+        auto result = helix::parse_hex_color(std::string("#F00"));
+        REQUIRE(result.has_value());
+        REQUIRE(*result == 0xFF0000);
+    }
+    SECTION("returns nullopt for empty string") {
+        auto result = helix::parse_hex_color(std::string(""));
+        REQUIRE_FALSE(result.has_value());
+    }
+    SECTION("returns nullopt for invalid hex") {
+        auto result = helix::parse_hex_color(std::string("#ZZZZZZ"));
+        REQUIRE_FALSE(result.has_value());
+    }
+    SECTION("handles whitespace") {
+        auto result = helix::parse_hex_color(std::string("  #0000FF  "));
+        REQUIRE(result.has_value());
+        REQUIRE(*result == 0x0000FF);
+    }
+}
+
+// ============================================================================
+// describe_color Tests
+// ============================================================================
+
 TEST_CASE("describe_color: basic colors", "[color][describe]") {
     SECTION("Pure red") {
         std::string name = helix::describe_color(0xFF0000);

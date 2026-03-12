@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 
 /**
@@ -56,6 +57,20 @@ void rgb_to_hsl(uint32_t rgb, float& h, float& s, float& l);
  * @return true if valid, false otherwise
  */
 bool parse_hex_color(const char* input, uint32_t& out_rgb);
+
+/**
+ * @brief Parse hex color string into RGB value (optional-returning overload)
+ *
+ * Convenience wrapper around parse_hex_color(const char*, uint32_t&) that
+ * returns std::optional<uint32_t> instead of using an out-param.
+ *
+ * Accepts: #RRGGBB, RRGGBB, #RGB, RGB, 0xRRGGBB
+ * Case-insensitive, trims leading/trailing whitespace.
+ *
+ * @param hex_str Input string
+ * @return Parsed RGB value (0x00RRGGBB format), or std::nullopt if invalid
+ */
+std::optional<uint32_t> parse_hex_color(const std::string& hex_str);
 
 /**
  * @brief Convert RGB value to #RRGGBB hex string

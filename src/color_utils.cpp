@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <optional>
 
 namespace helix {
 
@@ -220,6 +221,14 @@ bool parse_hex_color(const char* input, uint32_t& out_rgb) {
 
     out_rgb = value;
     return true;
+}
+
+std::optional<uint32_t> parse_hex_color(const std::string& hex_str) {
+    uint32_t rgb = 0;
+    if (parse_hex_color(hex_str.c_str(), rgb)) {
+        return rgb;
+    }
+    return std::nullopt;
 }
 
 std::string color_to_hex_string(uint32_t rgb) {
