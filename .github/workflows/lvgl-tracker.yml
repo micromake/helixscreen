@@ -15,7 +15,7 @@ jobs:
       issues: write
     steps:
       - name: Check LVGL releases and create issue if v9.5+ found
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             // Fetch recent LVGL releases

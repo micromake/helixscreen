@@ -14,7 +14,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
 
@@ -46,7 +46,7 @@ jobs:
             ccache
 
     - name: Cache compiled dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       id: cache-deps
       with:
         path: |
@@ -59,7 +59,7 @@ jobs:
           deps-ubuntu-22.04-
 
     - name: Cache ccache
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ~/.cache/ccache
         key: ccache-ubuntu-22.04-${{ github.sha }}
@@ -114,7 +114,7 @@ jobs:
         echo "Binary verified"
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: helix-screen-ubuntu-22.04
         path: |
@@ -130,7 +130,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
 
@@ -140,7 +140,7 @@ jobs:
         sudo apt-get install -y libsdl2-2.0-0 libfmt-dev libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libpng16-16 libjpeg8
 
     - name: Download build artifacts
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         name: helix-screen-ubuntu-22.04
         path: build/bin/
@@ -175,7 +175,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
 
@@ -185,7 +185,7 @@ jobs:
         # node/npm usually pre-installed on GitHub Actions macOS runners
 
     - name: Cache compiled dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       id: cache-deps
       with:
         path: |
@@ -198,7 +198,7 @@ jobs:
           deps-macos-14-
 
     - name: Cache ccache
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ~/Library/Caches/ccache
         key: ccache-macos-14-${{ github.sha }}
@@ -243,7 +243,7 @@ jobs:
         echo "Binary verified"
 
     - name: Upload binary
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: helix-screen-macos-14
         path: build/bin/helix-screen
@@ -256,12 +256,12 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
 
     - name: Set up JDK 17
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         distribution: temurin
         java-version: 17
@@ -271,7 +271,7 @@ jobs:
         yes | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;29.0.14206865" || true
 
     - name: Cache Gradle
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           ~/.gradle/caches
@@ -288,7 +288,7 @@ jobs:
       run: ./gradlew assembleDebug
 
     - name: Upload APK
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: helix-screen-android-debug
         path: android/app/build/outputs/apk/debug/*.apk
