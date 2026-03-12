@@ -8,6 +8,7 @@
 #include "nozzle_renderer_a4t.h"
 #include "nozzle_renderer_bambu.h"
 #include "nozzle_renderer_faceted.h"
+#include "nozzle_renderer_jabberwocky.h"
 #include "settings_manager.h"
 
 /// @brief Draw the nozzle matching the user's effective toolhead style setting
@@ -20,6 +21,9 @@ inline void draw_nozzle_for_style(lv_layer_t* layer, int32_t cx, int32_t cy,
             break;
         case helix::ToolheadStyle::A4T:
             draw_nozzle_a4t(layer, cx, cy, filament_color, scale_unit, opa);
+            break;
+        case helix::ToolheadStyle::JABBERWOCKY:
+            draw_nozzle_jabberwocky(layer, cx, cy, filament_color, scale_unit, opa);
             break;
         default:
             draw_nozzle_bambu(layer, cx, cy, filament_color, scale_unit, opa);

@@ -13,6 +13,7 @@
 #include "nozzle_renderer_a4t.h"
 #include "nozzle_renderer_bambu.h"
 #include "nozzle_renderer_faceted.h"
+#include "nozzle_renderer_jabberwocky.h"
 #include "settings_manager.h"
 #include "theme_manager.h"
 
@@ -240,6 +241,9 @@ static void indicator_draw_cb(lv_event_t* e) {
             break;
         case helix::ToolheadStyle::A4T:
             draw_nozzle_a4t(layer, nozzle_cx, nozzle_y, nozzle_color, nozzle_scale);
+            break;
+        case helix::ToolheadStyle::JABBERWOCKY:
+            draw_nozzle_jabberwocky(layer, nozzle_cx, nozzle_y, nozzle_color, nozzle_scale);
             break;
         default:
             draw_nozzle_bambu(layer, nozzle_cx, nozzle_y, nozzle_color, nozzle_scale);
