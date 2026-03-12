@@ -226,6 +226,13 @@ class PrintSelectDetailView : public OverlayBase {
         return filament_mapping_card_.get_mappings();
     }
 
+    /**
+     * @brief Get per-tool gcode info from the mapping card
+     */
+    [[nodiscard]] std::vector<helix::GcodeToolInfo> get_filament_tool_info() const {
+        return filament_mapping_card_.get_tool_info();
+    }
+
     // === Checkbox Access (for prep manager setup) ===
 
     [[nodiscard]] lv_obj_t* get_bed_mesh_checkbox() const {

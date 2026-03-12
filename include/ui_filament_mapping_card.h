@@ -62,6 +62,11 @@ class FilamentMappingCard {
     [[nodiscard]] std::vector<helix::ToolMapping> get_mappings() const { return mappings_; }
 
     /**
+     * @brief Get per-tool gcode info (colors, materials)
+     */
+    [[nodiscard]] std::vector<helix::GcodeToolInfo> get_tool_info() const { return tool_info_; }
+
+    /**
      * @brief Get per-tool mapped colors (RGB values from chosen slots)
      *
      * Returns a vector of uint32_t colors, one per tool. For auto/unmapped
