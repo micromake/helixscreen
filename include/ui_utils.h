@@ -52,22 +52,6 @@ lv_coord_t ui_get_responsive_header_height(lv_coord_t screen_height);
 const char* ui_brightness_to_lightbulb_icon(int brightness);
 
 // ============================================================================
-// Color Utilities
-// ============================================================================
-
-/**
- * @brief Calculate perceptual color distance between two RGB colors
- *
- * Uses weighted Euclidean distance with human perception weights
- * (R=0.30, G=0.59, B=0.11 based on luminance).
- *
- * @param color1 First color as 0xRRGGBB
- * @param color2 Second color as 0xRRGGBB
- * @return Perceptual distance (0 = identical, larger = more different)
- */
-int ui_color_distance(uint32_t color1, uint32_t color2);
-
-// ============================================================================
 // List/Empty State Visibility
 // ============================================================================
 

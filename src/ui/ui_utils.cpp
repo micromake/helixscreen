@@ -5,8 +5,6 @@
 
 #include "theme_manager.h"
 
-#include <cmath>
-
 // ============================================================================
 // Responsive Layout
 // ============================================================================
@@ -81,26 +79,3 @@ const char* ui_brightness_to_lightbulb_icon(int brightness) {
     return "lightbulb_on"; // 100%
 }
 
-// ============================================================================
-// Color Utilities
-// ============================================================================
-
-int ui_color_distance(uint32_t color1, uint32_t color2) {
-    int r1 = (color1 >> 16) & 0xFF;
-    int g1 = (color1 >> 8) & 0xFF;
-    int b1 = color1 & 0xFF;
-
-    int r2 = (color2 >> 16) & 0xFF;
-    int g2 = (color2 >> 8) & 0xFF;
-    int b2 = color2 & 0xFF;
-
-    // Weighted distance - green is most perceptible to human eye
-    int dr = r1 - r2;
-    int dg = g1 - g2;
-    int db = b1 - b2;
-
-    // Weights: R=0.30, G=0.59, B=0.11 (standard luminance)
-    // Squared for distance calculation, then sqrt
-    int dist_sq = (dr * dr * 30 + dg * dg * 59 + db * db * 11) / 100;
-    return static_cast<int>(std::sqrt(static_cast<double>(dist_sq)));
-}

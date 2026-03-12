@@ -6,7 +6,6 @@
 #include "gcode_geometry_builder.h"
 
 #include "color_utils.h"
-#include "ui_utils.h"
 
 #include "config.h"
 #include "geometry_budget_manager.h"

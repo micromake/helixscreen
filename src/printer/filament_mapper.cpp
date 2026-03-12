@@ -17,9 +17,8 @@ int FilamentMapper::color_distance(uint32_t a, uint32_t b) {
     int g2 = (b >> 8) & 0xFF;
     int b2 = b & 0xFF;
 
-    // Weighted distance — green is most perceptible to human eye.
+    // Weighted RGB distance using standard luminance coefficients.
     // Weights: R=0.30, G=0.59, B=0.11 (standard luminance)
-    // Matches ui_color_distance() in ui_utils.cpp.
     int dr = r1 - r2;
     int dg = g1 - g2;
     int db = b1 - b2;
