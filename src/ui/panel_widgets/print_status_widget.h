@@ -58,6 +58,9 @@ class PrintStatusWidget : public PanelWidget {
     lv_obj_t* print_card_thumb_compact_ = nullptr; // Compact thumbnail
     lv_obj_t* library_row_last_ = nullptr;        // Print Last row (for graying out)
     lv_obj_t* compact_row_last_ = nullptr;        // Compact Print Last row (for graying out)
+    lv_obj_t* icon_files_ = nullptr;              // Library row icons (hidden at 2x2)
+    lv_obj_t* icon_last_ = nullptr;
+    lv_obj_t* icon_recent_ = nullptr;
 
     // Compact mode and state tracking
     bool is_compact_ = false;

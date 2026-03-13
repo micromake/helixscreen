@@ -72,6 +72,9 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     print_card_thumb_compact_ = lv_obj_find_by_name(widget_obj_, "print_card_thumb_compact");
     library_row_last_ = lv_obj_find_by_name(widget_obj_, "library_row_last");
     compact_row_last_ = lv_obj_find_by_name(widget_obj_, "compact_row_last");
+    icon_files_ = lv_obj_find_by_name(widget_obj_, "icon_files");
+    icon_last_ = lv_obj_find_by_name(widget_obj_, "icon_last");
+    icon_recent_ = lv_obj_find_by_name(widget_obj_, "icon_recent");
 
     // Set up observers (after widget references are cached and widget_obj_ is set)
     print_state_observer_ =
@@ -187,6 +190,9 @@ void PrintStatusWidget::detach() {
     print_card_thumb_compact_ = nullptr;
     library_row_last_ = nullptr;
     compact_row_last_ = nullptr;
+    icon_files_ = nullptr;
+    icon_last_ = nullptr;
+    icon_recent_ = nullptr;
 
     if (widget_obj_) {
         lv_obj_set_user_data(widget_obj_, nullptr);
@@ -233,6 +239,17 @@ void PrintStatusWidget::on_size_changed(int colspan, int rowspan, int /*width_px
         lv_obj_set_height(print_card_info_, LV_PCT(100));
         lv_obj_set_width(print_card_info_, LV_SIZE_CONTENT);
         lv_obj_set_style_flex_grow(print_card_info_, 1, 0);
+    }
+
+    // Hide library row icons at 2x2 — too easy to fat-finger at that size
+    lv_obj_t* icons[] = {icon_files_, icon_last_, icon_recent_};
+    for (auto* icon : icons) {
+        if (!icon)
+            continue;
+        if (use_column)
+            lv_obj_add_flag(icon, LV_OBJ_FLAG_HIDDEN);
+        else
+            lv_obj_remove_flag(icon, LV_OBJ_FLAG_HIDDEN);
     }
 
     spdlog::debug("[PrintStatusWidget] on_size_changed {}x{} -> {} (compact={})", colspan, rowspan,
