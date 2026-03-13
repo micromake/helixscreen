@@ -9,23 +9,27 @@
         style_bg_color="#card_bg" style_border_width="0" style_pad_all="0" style_pad_gap="0" flex_flow="column"
         clickable="true">
     <event_cb trigger="clicked" callback="on_print_select_detail_backdrop"/>
-    <!-- HEADER BAR (full width at top) -->
-    <header_bar name="detail_header"
-                title="Print File" title_tag="Print File" back_button_callback="on_print_detail_back_clicked"/>
     <!-- CONTENT AREA (two columns) -->
     <lv_obj name="content_container"
             width="100%" flex_grow="1" style_pad_left="#space_lg" style_pad_right="#space_lg" style_pad_top="0"
             style_pad_bottom="#space_lg" flex_flow="row" style_pad_gap="#space_md" scrollable="false">
 
       <!-- ================================================================== -->
-      <!-- LEFT SECTION: File card with reactive bindings (5/9 width)        -->
-      <!-- NOTE: Can't reuse print_file_card here because it uses props ($) -->
-      <!-- for static data, but detail view needs bindings (bind_*) for     -->
-      <!-- reactive updates when user selects different files.              -->
+      <!-- LEFT SECTION: Header + File card (5/9 width)                     -->
+      <!-- Header is scoped to left column so right section extends to top  -->
       <!-- ================================================================== -->
-      <ui_card name="detail_card"
-               height="100%" flex_grow="5" style_radius="#border_radius" style_pad_all="0" style_clip_corner="true"
-               style_margin_left="#space_sm">
+      <lv_obj name="left_column"
+              height="100%" flex_grow="5" style_pad_all="0" style_pad_gap="0" flex_flow="column"
+              style_margin_left="#space_sm" scrollable="false">
+        <!-- HEADER BAR (left column only) -->
+        <header_bar name="detail_header"
+                    title="Print File" title_tag="Print File" back_button_callback="on_print_detail_back_clicked"/>
+        <!-- File card with reactive bindings                                -->
+        <!-- NOTE: Can't reuse print_file_card here because it uses props ($) -->
+        <!-- for static data, but detail view needs bindings (bind_*) for     -->
+        <!-- reactive updates when user selects different files.              -->
+        <ui_card name="detail_card"
+                 width="100%" flex_grow="1" style_radius="#border_radius" style_pad_all="0" style_clip_corner="true">
         <!-- Pre-rendered gradient background (source updated by C++ on theme switch) -->
         <!-- Hidden in 3D mode (value=1) so 3D viewer has clean black background -->
         <lv_image name="gradient_bg" width="100%" height="100%" src="A:assets/images/gradient-panel-medium-dark.bin">
@@ -137,7 +141,8 @@
             </lv_obj>
           </lv_obj>
         </lv_obj>
-      </ui_card>
+        </ui_card>
+      </lv_obj>
 
       <!-- ================================================================== -->
       <!-- RIGHT SECTION: Options and buttons (4/9 width)                    -->
