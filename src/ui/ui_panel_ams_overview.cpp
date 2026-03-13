@@ -746,6 +746,17 @@ void AmsOverviewPanel::show_overview() {
 
     detail_unit_index_ = -1;
 
+    // Restore header to overview mode: show title, hide detail elements
+    lv_obj_t* title = lv_obj_find_by_name(panel_, "header_title");
+    if (title)
+        lv_obj_remove_flag(title, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_t* logo = lv_obj_find_by_name(panel_, "detail_logo");
+    if (logo)
+        lv_obj_add_flag(logo, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_t* name_label = lv_obj_find_by_name(panel_, "detail_unit_name");
+    if (name_label)
+        lv_obj_add_flag(name_label, LV_OBJ_FLAG_HIDDEN);
+
     if (DisplaySettingsManager::instance().get_animations_enabled()) {
         // Zoom-out animation: scale down + fade out, then swap visibility
         // Transform pivot is still set from the zoom-in (card center position)
@@ -802,16 +813,23 @@ void AmsOverviewPanel::show_overview() {
 }
 
 void AmsOverviewPanel::update_detail_header(const AmsUnit& unit, const AmsSystemInfo& info) {
-    // Update logo
+    // Hide overview title, show detail elements in main header
+    lv_obj_t* title = lv_obj_find_by_name(panel_, "header_title");
+    if (title)
+        lv_obj_add_flag(title, LV_OBJ_FLAG_HIDDEN);
+
+    // Update and show logo
     lv_obj_t* logo = lv_obj_find_by_name(panel_, "detail_logo");
     if (logo) {
         ams_draw::apply_logo(logo, unit, info);
+        lv_obj_remove_flag(logo, LV_OBJ_FLAG_HIDDEN);
     }
 
-    // Update name
+    // Update and show name
     lv_obj_t* name = lv_obj_find_by_name(panel_, "detail_unit_name");
     if (name) {
         lv_label_set_text(name, ams_draw::get_unit_display_name(unit, detail_unit_index_).c_str());
+        lv_obj_remove_flag(name, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -942,12 +960,15 @@ static void ensure_overview_registered() {
     helix::ui::AmsDryerCard::register_callbacks_static();
     helix::ui::init_ams_tool_text_observers();
 
-    // Register back button callback for detail view
+    // Register context-aware back button callback for header
+    // Detail mode: return to overview. Overview mode: close the overlay.
     lv_xml_register_event_cb(nullptr, "on_ams_overview_back_clicked", [](lv_event_t* e) {
         LV_UNUSED(e);
         AmsOverviewPanel* panel = g_overview_panel_instance.load();
-        if (panel) {
+        if (panel && panel->is_in_detail_mode()) {
             panel->show_overview();
+        } else {
+            NavigationManager::instance().go_back();
         }
     });
 
