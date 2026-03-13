@@ -27,6 +27,8 @@ Timelapse video browser, USB mouse support, runtime CJK fonts, and filament syst
 - Icon codepoint sort order in font generation
 - Print file detail header bar layout on narrow breakpoints
 - Timelapse switch background transparency on options card
+- Crash from deferred MacrosPanel rebuild and unguarded CameraStream callbacks
+- Duplicate linker symbols for input device scanner in Pi fbdev builds
 
 ### Changed
 - Timelapse graduated from beta — feature gates removed
