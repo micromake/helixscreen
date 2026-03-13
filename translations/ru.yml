@@ -14,10 +14,12 @@ translations:
   + Add Preset: + Добавить пресет
   + Add Printer: + Добавить принтер
   + New: + Новый
+  +0.5 Hz: ''
   '- Check [resonance_tester] in printer.cfg': '- Проверьте блок [resonance_tester] в printer.cfg'
   '- Ensure ADXL345 is connected': '- Убедитесь, что ADXL345 подключен'
   '- Try Measure Noise first': '- Сначала попробуйте измерить шум акселерометра'
   --°C: --°C
+  -0.5 Hz: ''
   0 = computed: '0 = вычислено'
   0 slots: '{0} Слотов'
   0.4-2mm direct drive, 4-6mm bowden: 0.4-2мм для директа, 4-6мм для боудена
@@ -156,6 +158,7 @@ translations:
   Bed is Level!: Стол выровнен!
   Bed °C: Стол °C
   'Bed:': 'Стол:'
+  Belt tension looks good!: ''
   Beta: Бета
   'Beta features: OFF': 'Beta-функции: ВЫКЛ'
   'Beta features: ON': 'Beta-функции: ВКЛ'
@@ -170,6 +173,8 @@ translations:
   Border Width: Толщина границы
   Border transparency (0 = invisible, 255 = solid): Прозрачность границы (0 = невидимая, 255 = сплошная)
   Both: Оба
+  Both belts are overtightened.: ''
+  Both belts need tightening.: ''
   Brightness: Яркость
   Brightness level when LEDs turn on at startup: Уровень яркости при включении LED при запуске
   Brother QL: Brother QL
@@ -534,6 +539,7 @@ translations:
   Gear sync: Синхронизация шестерни
   Get help and share feedback: Получить помощь и поделиться отзывом
   'Ghost:': 'Тень:'
+  Good: ''
   Got it: Понятно
   Gray: Серый
   Guides and reference: Руководства и справка
@@ -682,6 +688,8 @@ translations:
   Location: Расположение
   Lock screen after idle timeout: Блокировать экран после простоя
   Locked during print: Заблокировано во время печати
+  Loosen Path A belt.: ''
+  Loosen Path B belt.: ''
   'Lot # (optional)': 'Партия # (необязательно)'
   Lot/Batch Nr: Nr. партии/серии
   M to toggle: M для переключения
@@ -734,6 +742,7 @@ translations:
   Max speed through corners (mm/s): Макс. скорость на поворотах (мм/с)
   Maximum acceleration (mm/s²): Максимальное ускорение (мм/с²)
   Maximum toolhead speed (mm/s): Максимальная скорость печатающей головки (мм/с)
+  Measure and compare belt path frequencies: ''
   Measured: Измерено
   Measuring thermal response...: Измерение тепловой реакции...
   Memory (MB): Память (МБ)
@@ -764,6 +773,7 @@ translations:
   Name: Название
   Name (optional): Название (необязательно)
   Named actions in the LED control panel (long-press).: Именованные действия в панели управления LED (долгое нажатие).
+  Needs adjustment: ''
   Net Weight (g): Вес нетто (г)
   Network: Сеть
   Network Address: Сетевой адрес
@@ -858,6 +868,7 @@ translations:
   Optimizes temperature control for stable, consistent heating.: Оптимизирует контроль температуры для стабильного и равномерного нагрева.
   Or Enter Manually: Или введите вручную
   Oscillating around target...: Колебания вокруг цели...
+  Out of range: ''
   Output Mode: Режим вывода
   P: Д
   PA: PA
@@ -1287,6 +1298,8 @@ translations:
   This will restart Klipper.: Это перезапустит Klipper.
   Thorough: Тщательно
   Thumbnail Only: Только миниатюра
+  Tighten Path A belt.: ''
+  Tighten Path B belt.: ''
   Time: Время
   Time Format: Формат времени
   Time to wait before escalating to emergency stop: Время ожидания перед эскалацией до аварийной остановки

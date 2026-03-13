@@ -14,10 +14,12 @@ translations:
   + Add Preset: + Aggiungi preset
   + Add Printer: + Aggiungi stampante
   + New: + Nuovo
+  +0.5 Hz: ''
   '- Check [resonance_tester] in printer.cfg': '- Controllare [resonance_tester] in printer.cfg'
   '- Ensure ADXL345 is connected': '- Assicurarsi che ADXL345 sia collegato'
   '- Try Measure Noise first': '- Provare prima Misura rumore'
   --°C: --°C
+  -0.5 Hz: ''
   0 = computed: '0 = calcolato'
   0 slots: '{0} Slot'
   0.4-2mm direct drive, 4-6mm bowden: 0,4-2mm direct drive, 4-6mm bowden
@@ -156,6 +158,7 @@ translations:
   Bed is Level!: Piano livellato!
   Bed °C: Piano °C
   'Bed:': 'Piano:'
+  Belt tension looks good!: ''
   Beta: Beta
   'Beta features: OFF': 'Funzioni Beta: OFF'
   'Beta features: ON': 'Funzioni Beta: ON'
@@ -170,6 +173,8 @@ translations:
   Border Width: Larghezza bordo
   Border transparency (0 = invisible, 255 = solid): Trasparenza bordo (0 = invisibile, 255 = solido)
   Both: Entrambi
+  Both belts are overtightened.: ''
+  Both belts need tightening.: ''
   Brightness: Luminosità
   Brightness level when LEDs turn on at startup: "Livello di luminosità quando i LED si accendono all'avvio"
   Brother QL: Brother QL
@@ -534,6 +539,7 @@ translations:
   Gear sync: Sincronizzazione ingranaggio
   Get help and share feedback: Ottieni aiuto e condividi feedback
   'Ghost:': 'Ghost:'
+  Good: ''
   Got it: Capito
   Gray: Grigio
   Guides and reference: Guide e riferimenti
@@ -682,6 +688,8 @@ translations:
   Location: Posizione
   Lock screen after idle timeout: Blocca schermo dopo inattività
   Locked during print: Bloccato durante la stampa
+  Loosen Path A belt.: ''
+  Loosen Path B belt.: ''
   'Lot # (optional)': 'Lotto # (facoltativo)'
   Lot/Batch Nr: Nr. Lotto/Batch
   M to toggle: M per alternare
@@ -734,6 +742,7 @@ translations:
   Max speed through corners (mm/s): Velocità massima in curva (mm/s)
   Maximum acceleration (mm/s²): Accelerazione massima (mm/s²)
   Maximum toolhead speed (mm/s): Velocità massima testina (mm/s)
+  Measure and compare belt path frequencies: ''
   Measured: Misurato
   Measuring thermal response...: Misurazione risposta termica...
   Memory (MB): Memoria (MB)
@@ -764,6 +773,7 @@ translations:
   Name: Nome
   Name (optional): Nome (facoltativo)
   Named actions in the LED control panel (long-press).: Azioni denominate nel pannello controllo LED (pressione lunga).
+  Needs adjustment: ''
   Net Weight (g): Peso netto (g)
   Network: Rete
   Network Address: Indirizzo di rete
@@ -858,6 +868,7 @@ translations:
   Optimizes temperature control for stable, consistent heating.: Ottimizza il controllo temperatura per un riscaldamento stabile e costante.
   Or Enter Manually: Oppure inserisci manualmente
   Oscillating around target...: Oscillazione intorno al target...
+  Out of range: ''
   Output Mode: Modalità uscita
   P: P
   PA: PA
@@ -1287,6 +1298,8 @@ translations:
   This will restart Klipper.: Questo riavvierà Klipper.
   Thorough: Approfondito
   Thumbnail Only: Solo miniatura
+  Tighten Path A belt.: ''
+  Tighten Path B belt.: ''
   Time: Tempo
   Time Format: Formato ora
   Time to wait before escalating to emergency stop: Tempo di attesa prima di escalation ad arresto di emergenza

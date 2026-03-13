@@ -14,10 +14,12 @@ translations:
   + Add Preset: + Ajouter un préréglage
   + Add Printer: + Ajouter une imprimante
   + New: + Nouveau
+  +0.5 Hz: ''
   '- Check [resonance_tester] in printer.cfg': '- Vérifiez [resonance_tester] dans printer.cfg'
   '- Ensure ADXL345 is connected': '- Assurez-vous que l''ADXL345 est connecté'
   '- Try Measure Noise first': '- Essayez d''abord Mesurer le bruit'
   --°C: --°C
+  -0.5 Hz: ''
   0 = computed: '0 = calculé'
   0 slots: 0 emplacements
   0.4-2mm direct drive, 4-6mm bowden: 0.4-2mm entraînement direct, 4-6mm bowden
@@ -156,6 +158,7 @@ translations:
   Bed is Level!: Le plateau est niveau !
   Bed °C: Plateau °C
   'Bed:': 'Plateau :'
+  Belt tension looks good!: ''
   Beta: Bêta
   'Beta features: OFF': 'Fonctionnalités Beta : OFF'
   'Beta features: ON': 'Fonctionnalités Beta : ON'
@@ -170,6 +173,8 @@ translations:
   Border Width: Largeur de la bordure
   Border transparency (0 = invisible, 255 = solid): Transparence de la bordure (0 = invisible, 255 = solide)
   Both: Les deux
+  Both belts are overtightened.: ''
+  Both belts need tightening.: ''
   Brightness: Luminosité
   Brightness level when LEDs turn on at startup: "Niveau de luminosité lorsque les LED s'allument au démarrage"
   Brother QL: Brother QL
@@ -534,6 +539,7 @@ translations:
   Gear sync: Synchro engrenage
   Get help and share feedback: Obtenir de l'aide et partager vos retours
   'Ghost:': 'Fantôme :'
+  Good: ''
   Got it: Compris
   Gray: Gris
   Guides and reference: Guides et référence
@@ -682,6 +688,8 @@ translations:
   Location: Emplacement
   Lock screen after idle timeout: "Verrouiller l'écran après inactivité"
   Locked during print: Verrouillé pendant l'impression
+  Loosen Path A belt.: ''
+  Loosen Path B belt.: ''
   'Lot # (optional)': 'Lot # (facultatif)'
   Lot/Batch Nr: N° de lot
   M to toggle: M pour basculer
@@ -734,6 +742,7 @@ translations:
   Max speed through corners (mm/s): Vitesse max dans les virages (mm/s)
   Maximum acceleration (mm/s²): Accélération maximale (mm/s²)
   Maximum toolhead speed (mm/s): Vitesse maximale de la tête d'outil (mm/s)
+  Measure and compare belt path frequencies: ''
   Measured: Mesuré
   Measuring thermal response...: Mesure de la réponse thermique...
   Memory (MB): Mémoire (Mo)
@@ -764,6 +773,7 @@ translations:
   Name: Nom
   Name (optional): Nom (facultatif)
   Named actions in the LED control panel (long-press).: Actions nommées dans le panneau de commande LED (appui long).
+  Needs adjustment: ''
   Net Weight (g): Poids net (g)
   Network: Réseau
   Network Address: Adresse réseau
@@ -858,6 +868,7 @@ translations:
   Optimizes temperature control for stable, consistent heating.: Optimise le contrôle de température pour un chauffage stable et constant.
   Or Enter Manually: Ou entrer manuellement
   Oscillating around target...: Oscillation autour de la cible...
+  Out of range: ''
   Output Mode: Mode de sortie
   P: P
   PA: PA
@@ -1287,6 +1298,8 @@ translations:
   This will restart Klipper.: Cela redémarrera Klipper.
   Thorough: Approfondi
   Thumbnail Only: Miniature uniquement
+  Tighten Path A belt.: ''
+  Tighten Path B belt.: ''
   Time: Temps
   Time Format: Format de l'heure
   Time to wait before escalating to emergency stop: Temps d'attente avant d'escalader vers l'arrêt d'urgence

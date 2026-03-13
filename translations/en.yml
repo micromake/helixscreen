@@ -14,10 +14,12 @@ translations:
   + Add Preset: + Add Preset
   + Add Printer: + Add Printer
   + New: + New
+  +0.5 Hz: +0.5 Hz
   '- Check [resonance_tester] in printer.cfg': '- Check [resonance_tester] in printer.cfg'
   '- Ensure ADXL345 is connected': '- Ensure ADXL345 is connected'
   '- Try Measure Noise first': '- Try Measure Noise first'
   --°C: --°C
+  -0.5 Hz: -0.5 Hz
   0 = computed: 0 = computed
   0 slots: 0 slots
   0.4-2mm direct drive, 4-6mm bowden: 0.4-2mm direct drive, 4-6mm bowden
@@ -80,6 +82,7 @@ translations:
   About: About
   Accel to Decel: Accel to Decel
   Acceleration to deceleration limit (mm/s²): Acceleration to deceleration limit (mm/s²)
+  Accelerometer: Accelerometer
   Accept: Accept
   'Accepted Z Position: 0.000': 'Accepted Z Position: 0.000'
   Action Required: Action Required
@@ -142,6 +145,7 @@ translations:
   BLTouch Controls: BLTouch Controls
   BLUETOOTH PRINTERS: BLUETOOTH PRINTERS
   Back: Back
+  Back to Results: Back to Results
   Bed: Bed
   Bed Heater: Bed Heater
   Bed Level: Bed Level
@@ -156,6 +160,9 @@ translations:
   Bed is Level!: Bed is Level!
   Bed °C: Bed °C
   'Bed:': 'Bed:'
+  Belt Tension: Belt Tension
+  Belt Tension Check: Belt Tension Check
+  Belt tension looks good!: Belt tension looks good!
   Beta: Beta
   'Beta features: OFF': 'Beta features: OFF'
   'Beta features: ON': 'Beta features: ON'
@@ -170,6 +177,8 @@ translations:
   Border Width: Border Width
   Border transparency (0 = invisible, 255 = solid): Border transparency (0 = invisible, 255 = solid)
   Both: Both
+  Both belts are overtightened.: Both belts are overtightened.
+  Both belts need tightening.: Both belts need tightening.
   Brightness: Brightness
   Brightness level when LEDs turn on at startup: Brightness level when LEDs turn on at startup
   Brother QL: Brother QL
@@ -261,6 +270,7 @@ translations:
   Color: Color
   Color Mismatch: Color Mismatch
   Compact: Compact
+  Comparison: Comparison
   Complete: Complete
   Complete!: Complete!
   Completed: Completed
@@ -322,6 +332,7 @@ translations:
   Creating spool...: Creating spool...
   Current / Target: Current / Target
   Current Configuration: Current Configuration
+  Current Frequency: Current Frequency
   Current Mesh: Current Mesh
   Current Temperature: Current Temperature
   Current Version: Current Version
@@ -368,6 +379,7 @@ translations:
   Dev: Dev
   Dev channel requires dev_url in config: Dev channel requires dev_url in config
   Device name is required: Device name is required
+  'Difference between Path A and B. Ideally under 5 Hz; over 15 Hz needs adjustment.': 'Difference between Path A and B. Ideally under 5 Hz; over 15 Hz needs adjustment.'
   Disable: Disable
   Disable Motors?: Disable Motors?
   Disable the security PIN: Disable the security PIN
@@ -527,6 +539,7 @@ translations:
   Found %zu printers: Found %zu printers
   Found 1 printer: Found 1 printer
   Framerate: Framerate
+  Frequency Delta: Frequency Delta
   Front: Front
   G-code Console: G-code Console
   G-code Preview: G-code Preview
@@ -534,6 +547,7 @@ translations:
   Gear sync: Gear sync
   Get help and share feedback: Get help and share feedback
   'Ghost:': 'Ghost:'
+  Good: Good
   Got it: Got it
   Gray: Gray
   Guides and reference: Guides and reference
@@ -585,6 +599,7 @@ translations:
   Hotend Fan: Hotend Fan
   Hotend Heater: Hotend Heater
   How Z-axis movement is displayed: How Z-axis movement is displayed
+  'How closely the vibration profiles match. Above 90% is excellent; below 70% suggests uneven tension.': 'How closely the vibration profiles match. Above 90% is excellent; below 70% suggests uneven tension.'
   How often to check Spoolman for weight updates: How often to check Spoolman for weight updates
   How the toolhead icon appears: How the toolhead icon appears
   Humidity: Humidity
@@ -631,6 +646,7 @@ translations:
   Keep Printing: Keep Printing
   Keep Required: Keep Required
   Keyboard Test (Gboard-style): Keyboard Test (Gboard-style)
+  Kinematics: Kinematics
   Klipper: Klipper
   'Klipper firmware has disconnected from the host. ': 'Klipper firmware has disconnected from the host. '
   'Klipper has entered an error state. This is typically caused by an MCU ': 'Klipper has entered an error state. This is typically caused by an MCU '
@@ -681,8 +697,12 @@ translations:
   Loading vendors...: Loading vendors...
   Loading...: Loading...
   Location: Location
+  Lock A: Lock A
+  Lock B: Lock B
   Lock screen after idle timeout: Lock screen after idle timeout
   Locked during print: Locked during print
+  Loosen Path A belt.: Loosen Path A belt.
+  Loosen Path B belt.: Loosen Path B belt.
   'Lot # (optional)': 'Lot # (optional)'
   Lot/Batch Nr: Lot/Batch Nr
   M to toggle: M to toggle
@@ -735,7 +755,9 @@ translations:
   Max speed through corners (mm/s): Max speed through corners (mm/s)
   Maximum acceleration (mm/s²): Maximum acceleration (mm/s²)
   Maximum toolhead speed (mm/s): Maximum toolhead speed (mm/s)
+  Measure and compare belt path frequencies: Measure and compare belt path frequencies
   Measured: Measured
+  Measurement Failed: Measurement Failed
   Measuring thermal response...: Measuring thermal response...
   Memory (MB): Memory (MB)
   Mesh Complete: Mesh Complete
@@ -765,6 +787,7 @@ translations:
   Name: Name
   Name (optional): Name (optional)
   Named actions in the LED control panel (long-press).: Named actions in the LED control panel (long-press).
+  Needs adjustment: Needs adjustment
   Net Weight (g): Net Weight (g)
   Network: Network
   Network Address: Network Address
@@ -859,6 +882,7 @@ translations:
   Optimizes temperature control for stable, consistent heating.: Optimizes temperature control for stable, consistent heating.
   Or Enter Manually: Or Enter Manually
   Oscillating around target...: Oscillating around target...
+  Out of range: Out of range
   Output Mode: Output Mode
   P: P
   PA: PA
@@ -884,6 +908,9 @@ translations:
   Part Fan: Part Fan
   Password: Password
   Password cannot be empty: Password cannot be empty
+  Path A: Path A
+  Path B: Path B
+  Path Similarity: Path Similarity
   Pause: Pause
   Paused: Paused
   Paused (attention needed): Paused (attention needed)
@@ -1153,6 +1180,7 @@ translations:
   Share anonymous usage statistics to help us make HelixScreen better. No personal data is ever collected.: Share anonymous usage statistics to help us make HelixScreen better. No personal data is ever collected.
   'Share this code in Discord or support:': 'Share this code in Discord or support:'
   'Shininess:': 'Shininess:'
+  Show Frequency Graph: Show Frequency Graph
   Show Printer Switcher: Show Printer Switcher
   Show detailed print preparation status: Show detailed print preparation status
   Show instead of dimming: Show instead of dimming
@@ -1198,6 +1226,7 @@ translations:
   Start: Start
   Start Anyway: Start Anyway
   Start Calibration: Start Calibration
+  Start Check: Start Check
   Start Print: Start Print
   Start Probing: Start Probing
   Started: Started
@@ -1217,6 +1246,7 @@ translations:
   Stop Print?: Stop Print?
   Stops all motion. Requires firmware restart.: Stops all motion. Requires firmware restart.
   Stow: Stow
+  Strobe LED: Strobe LED
   Success: Success
   Success Rate: Success Rate
   Success!: Success!
@@ -1243,6 +1273,7 @@ translations:
   Tap the crosshair (point %1$d of 3) \xe2\x80\x94 touch %2$d of %3$d: Tap the crosshair (point %1$d of 3) \xe2\x80\x94 touch %2$d of %3$d
   Tap to assign: Tap to assign
   Tap to show keyboard...: Tap to show keyboard...
+  Target Frequency: Target Frequency
   Target Temperature: Target Temperature
   Telemetry Data: Telemetry Data
   Telemetry queue cleared: Telemetry queue cleared
@@ -1251,6 +1282,7 @@ translations:
   Temperatures: Temperatures
   Temporary adjustment for this print, unless saved on Controls panel: Temporary adjustment for this print, unless saved on Controls panel
   Tertiary: Tertiary
+  Test Again: Test Again
   Test Connection: Test Connection
   Test Network: Test Network
   Test Print: Test Print
@@ -1262,6 +1294,8 @@ translations:
   ? The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints.
   : The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints.
   The heater will cycle on and off several times.: The heater will cycle on and off several times.
+  ? 'The motor vibrates the belt while a strobe light flashes at the same frequency. When the belt appears to stand still (frozen), you have found the resonant frequency. Use the buttons below to sweep through frequencies.'
+  : 'The motor vibrates the belt while a strobe light flashes at the same frequency. When the belt appears to stand still (frozen), you have found the resonant frequency. Use the buttons below to sweep through frequencies.'
   'The runout sensor indicates no filament is loaded. ': 'The runout sensor indicates no filament is loaded. '
   'The toolhead sensor indicates filament is already loaded. ': 'The toolhead sensor indicates filament is already loaded. '
   'The toolhead sensor indicates no filament is present. ': 'The toolhead sensor indicates no filament is present. '
@@ -1291,6 +1325,8 @@ translations:
   This will restart Klipper.: This will restart Klipper.
   Thorough: Thorough
   Thumbnail Only: Thumbnail Only
+  Tighten Path A belt.: Tighten Path A belt.
+  Tighten Path B belt.: Tighten Path B belt.
   Time: Time
   Time Format: Time Format
   Time to wait before escalating to emergency stop: Time to wait before escalating to emergency stop
@@ -1331,6 +1367,8 @@ translations:
   Type to preview input field...: Type to preview input field...
   UI Sounds: UI Sounds
   USB: USB
+  ? "Uneven belt tension causes print artifacts like layer shifts, VFAs (vertical fine artifacts), and ringing. This tool vibrates each belt path and measures the resonant frequency — matched frequencies mean balanced tension. For CoreXY, Path A and B should be within a few Hz of each other."
+  : "Uneven belt tension causes print artifacts like layer shifts, VFAs (vertical fine artifacts), and ringing. This tool vibrates each belt path and measures the resonant frequency — matched frequencies mean balanced tension. For CoreXY, Path A and B should be within a few Hz of each other."
   Uninstall HelixPrint Plugin: Uninstall HelixPrint Plugin
   'Uninstall: Coming soon': 'Uninstall: Coming soon'
   Unit: Unit
@@ -1378,6 +1416,8 @@ translations:
   View Timelapse: View Timelapse
   View installed plugins and status: View installed plugins and status
   View print statistics and job history: View print statistics and job history
+  Visual Fine-Tune (Strobe): Visual Fine-Tune (Strobe)
+  Visual Fine-Tuning: Visual Fine-Tuning
   Volume: Volume
   Volume, themes, and UI sounds: Volume, themes, and UI sounds
   WIDTH SENSORS: WIDTH SENSORS

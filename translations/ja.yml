@@ -14,10 +14,12 @@ translations:
   + Add Preset: + プリセットを追加
   + Add Printer: + プリンターを追加
   + New: + 新規
+  +0.5 Hz: ''
   '- Check [resonance_tester] in printer.cfg': '- printer.cfg の [resonance_tester] を確認してください'
   '- Ensure ADXL345 is connected': '- ADXL345 が接続されていることを確認してください'
   '- Try Measure Noise first': '- まず「ノイズ測定」をお試しください'
   --°C: --°C
+  -0.5 Hz: ''
   0 = computed: '0 = 自動計算'
   0 slots: '{0} スロット'
   0.4-2mm direct drive, 4-6mm bowden: 0.4-2mm ダイレクトドライブ、4-6mm ボーデン
@@ -156,6 +158,7 @@ translations:
   Bed is Level!: ベッドが水平です！
   Bed °C: ベッド °C
   'Bed:': 'ベッド:'
+  Belt tension looks good!: ''
   Beta: ベータ
   'Beta features: OFF': 'ベータ機能: OFF'
   'Beta features: ON': 'ベータ機能: ON'
@@ -170,6 +173,8 @@ translations:
   Border Width: 境界線の幅
   Border transparency (0 = invisible, 255 = solid): 境界線の透明度 (0 = 透明、255 = 不透明)
   Both: 両方
+  Both belts are overtightened.: ''
+  Both belts need tightening.: ''
   Brightness: 明るさ
   Brightness level when LEDs turn on at startup: 起動時にLEDが点灯する際の明るさレベル
   Brother QL: Brother QL
@@ -534,6 +539,7 @@ translations:
   Gear sync: ギア同期
   Get help and share feedback: ヘルプとフィードバック
   'Ghost:': 'Ghost:'
+  Good: ''
   Got it: 了解
   Gray: グレー
   Guides and reference: ガイドとリファレンス
@@ -682,6 +688,8 @@ translations:
   Location: 場所
   Lock screen after idle timeout: アイドルタイムアウト後に画面をロック
   Locked during print: 印刷中はロックされています
+  Loosen Path A belt.: ''
+  Loosen Path B belt.: ''
   'Lot # (optional)': ロット番号（オプション）
   Lot/Batch Nr: ロット/バッチ番号
   M to toggle: M で切り替え
@@ -734,6 +742,7 @@ translations:
   Max speed through corners (mm/s): コーナー通過時の最大速度 (mm/s)
   Maximum acceleration (mm/s²): 最大加速度 (mm/s²)
   Maximum toolhead speed (mm/s): ツールヘッドの最大速度 (mm/s)
+  Measure and compare belt path frequencies: ''
   Measured: 測定値
   Measuring thermal response...: 熱応答を測定中...
   Memory (MB): メモリ (MB)
@@ -764,6 +773,7 @@ translations:
   Name: 名前
   Name (optional): 名前（オプション）
   Named actions in the LED control panel (long-press).: LEDコントロールパネルの名前付きアクション（長押し）。
+  Needs adjustment: ''
   Net Weight (g): 正味重量（g）
   Network: ネットワーク
   Network Address: ネットワークアドレス
@@ -858,6 +868,7 @@ translations:
   Optimizes temperature control for stable, consistent heating.: 安定した一貫性のある加熱のために温度制御を最適化します。
   Or Enter Manually: または手動で入力
   Oscillating around target...: 目標値付近で振動中...
+  Out of range: ''
   Output Mode: 出力モード
   P: P
   PA: PA
@@ -1287,6 +1298,8 @@ translations:
   This will restart Klipper.: これにより Klipper が再起動します。
   Thorough: 徹底的
   Thumbnail Only: サムネイルのみ
+  Tighten Path A belt.: ''
+  Tighten Path B belt.: ''
   Time: 時間
   Time Format: 時間形式
   Time to wait before escalating to emergency stop: 緊急停止にエスカレートするまでの待機時間

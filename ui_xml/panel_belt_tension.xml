@@ -139,7 +139,7 @@
         <lv_obj width="100%"
                 height="content" style_bg_color="#screen_bg" style_bg_opa="255" style_radius="#border_radius"
                 style_pad_all="#space_lg" flex_flow="column" style_pad_gap="#space_sm" scrollable="false">
-          <icon src="information" size="md" variant="primary"/>
+          <icon src="info" size="md" variant="primary"/>
           <text_body bind_text="bt_result_recommendation" long_mode="wrap"/>
         </lv_obj>
         <!-- Action buttons -->
@@ -201,7 +201,7 @@
         <lv_obj width="100%"
                 height="content" style_bg_color="#screen_bg" style_bg_opa="255" style_radius="#border_radius"
                 style_pad_all="#space_lg" flex_flow="column" style_pad_gap="#space_sm" scrollable="false">
-          <icon src="information" size="md" variant="primary"/>
+          <icon src="info" size="md" variant="primary"/>
           <text_body bind_text="bt_strobe_instruction" long_mode="wrap"/>
         </lv_obj>
         <!-- Lock buttons -->

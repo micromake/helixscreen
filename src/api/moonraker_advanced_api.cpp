@@ -2329,22 +2329,26 @@ void MoonrakerAdvancedAPI::detect_belt_hardware(BeltHardwareCallback on_complete
                 "printer.objects.query", query_params,
                 [hw, on_complete, on_error](const json& config_response) mutable {
                     try {
-                        const auto& status = config_response["status"];
-                        const auto& configfile = status["configfile"];
-                        const auto& settings = configfile["settings"];
+                        if (config_response.contains("result") &&
+                            config_response["result"].contains("status") &&
+                            config_response["result"]["status"].contains("configfile") &&
+                            config_response["result"]["status"]["configfile"].contains("settings")) {
+                            const auto& settings =
+                                config_response["result"]["status"]["configfile"]["settings"];
 
-                        if (settings.contains("printer") &&
-                            settings["printer"].contains("kinematics")) {
-                            hw.kinematics_name =
-                                settings["printer"]["kinematics"].get<std::string>();
+                            if (settings.contains("printer") &&
+                                settings["printer"].contains("kinematics")) {
+                                hw.kinematics_name =
+                                    settings["printer"]["kinematics"].get<std::string>();
 
-                            if (hw.kinematics_name == "corexy" ||
-                                hw.kinematics_name == "corexz") {
-                                hw.kinematics = helix::calibration::KinematicsType::COREXY;
-                            } else if (hw.kinematics_name == "cartesian") {
-                                hw.kinematics = helix::calibration::KinematicsType::CARTESIAN;
-                            } else {
-                                hw.kinematics = helix::calibration::KinematicsType::UNKNOWN;
+                                if (hw.kinematics_name == "corexy" ||
+                                    hw.kinematics_name == "corexz") {
+                                    hw.kinematics = helix::calibration::KinematicsType::COREXY;
+                                } else if (hw.kinematics_name == "cartesian") {
+                                    hw.kinematics = helix::calibration::KinematicsType::CARTESIAN;
+                                } else {
+                                    hw.kinematics = helix::calibration::KinematicsType::UNKNOWN;
+                                }
                             }
                         }
 

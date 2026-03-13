@@ -14,10 +14,12 @@ translations:
   + Add Preset: + 添加预设
   + Add Printer: + 添加打印机
   + New: + 新建
+  +0.5 Hz: ''
   '- Check [resonance_tester] in printer.cfg': '- 检查 printer.cfg 中的 [resonance_tester]'
   '- Ensure ADXL345 is connected': '- 确保 ADXL345 已连接'
   '- Try Measure Noise first': '- 先尝试测量噪声'
   --°C: --°C
+  -0.5 Hz: ''
   0 = computed: '0 = 自动计算'
   0 slots: '{0} 个料仓'
   0.4-2mm direct drive, 4-6mm bowden: 直驱 0.4-2mm，远程挤出 4-6mm
@@ -156,6 +158,7 @@ translations:
   Bed is Level!: 热床已水平！
   Bed °C: 热床 °C
   'Bed:': 热床：
+  Belt tension looks good!: ''
   Beta: 测试版
   'Beta features: OFF': '测试版功能: 关'
   'Beta features: ON': '测试版功能: 开'
@@ -170,6 +173,8 @@ translations:
   Border Width: 边框宽度
   Border transparency (0 = invisible, 255 = solid): 边框透明度（0 = 不可见，255 = 实心）
   Both: 两者
+  Both belts are overtightened.: ''
+  Both belts need tightening.: ''
   Brightness: 亮度
   Brightness level when LEDs turn on at startup: 启动时 LED 开启的亮度级别
   Brother QL: Brother QL
@@ -534,6 +539,7 @@ translations:
   Gear sync: 齿轮同步
   Get help and share feedback: 获取帮助和反馈
   'Ghost:': 残影：
+  Good: ''
   Got it: 知道了
   Gray: 灰色
   Guides and reference: 指南与参考
@@ -682,6 +688,8 @@ translations:
   Location: 位置
   Lock screen after idle timeout: 空闲超时后锁定屏幕
   Locked during print: 打印期间锁定
+  Loosen Path A belt.: ''
+  Loosen Path B belt.: ''
   'Lot # (optional)': 批号（可选）
   Lot/Batch Nr: 批次号
   M to toggle: 按 M 切换
@@ -734,6 +742,7 @@ translations:
   Max speed through corners (mm/s): 转角最大速度 (mm/s)
   Maximum acceleration (mm/s²): 最大加速度 (mm/s²)
   Maximum toolhead speed (mm/s): 打印头最大速度 (mm/s)
+  Measure and compare belt path frequencies: ''
   Measured: 已测量
   Measuring thermal response...: 正在测量热响应...
   Memory (MB): 内存 (MB)
@@ -764,6 +773,7 @@ translations:
   Name: 名称
   Name (optional): 名称（可选）
   Named actions in the LED control panel (long-press).: LED 控制面板中的命名操作（长按）。
+  Needs adjustment: ''
   Net Weight (g): 净重（克）
   Network: 网络
   Network Address: 网络地址
@@ -858,6 +868,7 @@ translations:
   Optimizes temperature control for stable, consistent heating.: 优化温度控制，实现稳定一致的加热。
   Or Enter Manually: 或手动输入
   Oscillating around target...: 正在围绕目标振荡...
+  Out of range: ''
   Output Mode: 输出模式
   P: 件
   PA: PA
@@ -1287,6 +1298,8 @@ translations:
   This will restart Klipper.: 这将重启 Klipper。
   Thorough: 全面
   Thumbnail Only: 仅缩略图
+  Tighten Path A belt.: ''
+  Tighten Path B belt.: ''
   Time: 时间
   Time Format: 时间格式
   Time to wait before escalating to emergency stop: 升级为紧急停止前的等待时间
