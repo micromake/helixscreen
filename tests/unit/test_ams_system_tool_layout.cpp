@@ -919,3 +919,69 @@ TEST_CASE("SystemToolLayout: MIXED with all hub lanes gives tool_count 1",
     REQUIRE(layout.units.size() == 1);
     CHECK(layout.units[0].tool_count == 1);
 }
+
+// ============================================================================
+// Multi-unit mock regression: single toolhead must produce 1 nozzle
+// ============================================================================
+
+TEST_CASE("SystemToolLayout: multi-unit mock produces 1 physical tool",
+          "[ams][tool_layout]") {
+    // Regression test: multi-unit mock (Box Turtle + Night Owl) both feed
+    // a single T0 toolhead via hub. hub_tool_label must be set so both
+    // units share one physical nozzle position.
+    AmsBackendMock backend(4);
+    backend.set_multi_unit_mode(true);
+
+    auto info = backend.get_system_info();
+
+    auto layout = compute_system_tool_layout(info, &backend);
+
+    // Single toolhead — must be exactly 1 physical tool
+    CHECK(layout.total_physical_tools == 1);
+
+    // Both units should share the same physical nozzle
+    REQUIRE(layout.units.size() == 2);
+    CHECK(layout.units[0].tool_count == 1);
+    CHECK(layout.units[1].tool_count == 1);
+    CHECK(layout.units[0].first_physical_tool == 0);
+    CHECK(layout.units[1].first_physical_tool == 0);
+
+    // Label should be T0
+    REQUIRE(layout.physical_to_virtual_label.size() == 1);
+    CHECK(layout.physical_to_virtual_label[0] == 0);
+}
+
+TEST_CASE("SystemToolLayout: 2 HUB units sharing hub_tool_label=0 merge to 1 nozzle",
+          "[ams][tool_layout]") {
+    // Explicit test: 2 HUB units with hub_tool_label=0 on both must
+    // share a single physical nozzle position.
+    AmsSystemInfo info;
+    info.type = AmsType::AFC;
+
+    for (int u = 0; u < 2; ++u) {
+        AmsUnit unit;
+        unit.unit_index = u;
+        unit.slot_count = (u == 0) ? 4 : 2;
+        unit.first_slot_global_index = (u == 0) ? 0 : 4;
+        unit.topology = PathTopology::HUB;
+        unit.hub_tool_label = 0;
+        for (int s = 0; s < unit.slot_count; ++s) {
+            SlotInfo slot;
+            slot.slot_index = s;
+            slot.global_index = unit.first_slot_global_index + s;
+            slot.mapped_tool = 0;
+            unit.slots.push_back(slot);
+        }
+        info.units.push_back(unit);
+    }
+    info.total_slots = 6;
+
+    auto layout = compute_system_tool_layout(info, nullptr);
+
+    CHECK(layout.total_physical_tools == 1);
+    REQUIRE(layout.units.size() == 2);
+    CHECK(layout.units[0].first_physical_tool == 0);
+    CHECK(layout.units[1].first_physical_tool == 0);
+    CHECK(layout.units[0].tool_count == 1);
+    CHECK(layout.units[1].tool_count == 1);
+}
