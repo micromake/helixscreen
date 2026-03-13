@@ -34,15 +34,22 @@ struct MockInputTree {
         fs::remove_all(base, ec);
     }
 
+    // bustype: "0003"=USB, "0005"=Bluetooth, "0019"=host/platform, ""=omit
     void add_device(int event_num, const std::string& name,
-                    const std::map<std::string, std::string>& caps) {
+                    const std::map<std::string, std::string>& caps,
+                    const std::string& bustype = "0003") {
         std::string dev_path = dev_dir + "/event" + std::to_string(event_num);
         std::ofstream(dev_path).put('x');
 
         std::string sysfs_path = sysfs_dir + "/event" + std::to_string(event_num);
         fs::create_directories(sysfs_path + "/device/capabilities");
+        fs::create_directories(sysfs_path + "/device/id");
 
         std::ofstream(sysfs_path + "/device/name") << name;
+
+        if (!bustype.empty()) {
+            std::ofstream(sysfs_path + "/device/id/bustype") << bustype;
+        }
 
         for (const auto& [cap_name, hex_value] : caps) {
             std::ofstream(sysfs_path + "/device/capabilities/" + cap_name) << hex_value;
@@ -200,6 +207,92 @@ TEST_CASE("find_mouse_device detects USB HID mice via sysfs", "[input]") {
         auto result = find_mouse_device(tree.dev_dir, tree.sysfs_dir);
         REQUIRE_FALSE(result.has_value());
     }
+
+    SECTION("skips MT-only touchscreen (ABS_MT_POSITION_X/Y without legacy ABS_X/Y)") {
+        MockInputTree tree("mouse_mt_only");
+        // Goodix GT911 MT-only: ABS_MT_POSITION_X=53, ABS_MT_POSITION_Y=54
+        // bits 53+54 set = 0x60000000000000 in a 64-bit word, or
+        // in 32-bit: bit 53 = word 1 bit 21, bit 54 = word 1 bit 22
+        // = 0x600000 in word 1 from right
+        tree.add_device(0, "Goodix Capacitive TouchScreen", {
+            {"abs", "600000 0"},  // ABS_MT_POSITION_X(53) + ABS_MT_POSITION_Y(54)
+            {"rel", "0"},
+            {"key", "400 0 0 0 0 0 0 0 0 0 0"}  // BTN_TOUCH(330)
+        });
+
+        auto result = find_mouse_device(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE_FALSE(result.has_value());
+    }
+
+    SECTION("skips device with BTN_TOUCH even without ABS axes") {
+        MockInputTree tree("mouse_btn_touch");
+        // Hypothetical device with REL_X/REL_Y + BTN_LEFT but also BTN_TOUCH
+        tree.add_device(0, "WeirdTouchDevice", {
+            {"abs", "0"},
+            {"rel", "3"},
+            {"key", "400 0 1f0000 0 0 0 0 0 0 0 0"}  // BTN_TOUCH(330) + BTN_LEFT(272)
+        });
+
+        auto result = find_mouse_device(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE_FALSE(result.has_value());
+    }
+
+    SECTION("still detects real mouse when MT-only touchscreen present") {
+        MockInputTree tree("mouse_with_mt_touch");
+        tree.add_device(0, "Goodix Capacitive TouchScreen", {
+            {"abs", "600000 0"},
+            {"rel", "0"},
+            {"key", "400 0 0 0 0 0 0 0 0 0 0"}
+        });
+        tree.add_device(2, "USB Mouse", {
+            {"rel", "3"},
+            {"key", "1f0000 0 0 0 0 0 0 0 0"},
+            {"abs", "0"}
+        });
+
+        auto result = find_mouse_device(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE(result.has_value());
+        REQUIRE(result->name == "USB Mouse");
+    }
+
+    SECTION("skips MCE IR receiver with mouse capabilities (non-USB bus)") {
+        MockInputTree tree("mouse_mce_ir");
+        // Real-world: Allwinner sunxi-ir-tx MCE device has REL_X+Y, BTN_LEFT,
+        // full keyboard keys, but is on the platform bus (0x0019), not USB.
+        tree.add_device(3, "MCE IR Keyboard/Mouse (sunxi-ir-tx)", {
+            {"abs", "0"},
+            {"rel", "3"},
+            {"key", "30000 0 7 ff87207a c14057ff febeffdf ffefffff ffffffff fffffffe"}
+        }, "0019");  // BUS_HOST
+
+        auto result = find_mouse_device(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE_FALSE(result.has_value());
+    }
+
+    SECTION("skips device with no bustype file") {
+        MockInputTree tree("mouse_no_bus");
+        tree.add_device(0, "Virtual Mouse", {
+            {"rel", "3"},
+            {"key", "1f0000 0 0 0 0 0 0 0 0"},
+            {"abs", "0"}
+        }, "");  // No bustype file
+
+        auto result = find_mouse_device(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE_FALSE(result.has_value());
+    }
+
+    SECTION("detects Bluetooth mouse") {
+        MockInputTree tree("mouse_bt");
+        tree.add_device(0, "BT Mouse", {
+            {"rel", "3"},
+            {"key", "1f0000 0 0 0 0 0 0 0 0"},
+            {"abs", "0"}
+        }, "0005");  // BUS_BLUETOOTH
+
+        auto result = find_mouse_device(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE(result.has_value());
+        REQUIRE(result->name == "BT Mouse");
+    }
 }
 
 TEST_CASE("find_keyboard_device detects USB HID keyboards via sysfs", "[input]") {
@@ -224,7 +317,7 @@ TEST_CASE("find_keyboard_device detects USB HID keyboards via sysfs", "[input]")
             {"key", "0 0 0 0 0 100000 0 0 0"},
             {"rel", "0"},
             {"abs", "0"}
-        });
+        }, "0019");
 
         auto result = find_keyboard_device(tree.dev_dir, tree.sysfs_dir);
         REQUIRE_FALSE(result.has_value());
@@ -236,12 +329,12 @@ TEST_CASE("find_keyboard_device detects USB HID keyboards via sysfs", "[input]")
             {"key", "0"},
             {"abs", "3"},
             {"rel", "0"}
-        });
+        }, "0018");
         tree.add_device(1, "Power Button", {
             {"key", "100000"},
             {"abs", "0"},
             {"rel", "0"}
-        });
+        }, "0019");
         tree.add_device(2, "USB Keyboard", {
             {"key", "10000 40000000"},
             {"abs", "0"},
@@ -270,5 +363,17 @@ TEST_CASE("find_keyboard_device detects USB HID keyboards via sysfs", "[input]")
         auto result = find_keyboard_device(tree.dev_dir, tree.sysfs_dir);
         REQUIRE(result.has_value());
         REQUIRE(result->name == "Logitech K400");
+    }
+
+    SECTION("skips MCE IR device with KEY_A (non-USB bus)") {
+        MockInputTree tree("kb_mce_ir");
+        tree.add_device(3, "MCE IR Keyboard/Mouse (sunxi-ir-tx)", {
+            {"abs", "0"},
+            {"rel", "3"},
+            {"key", "30000 0 7 ff87207a c14057ff febeffdf ffefffff ffffffff fffffffe"}
+        }, "0019");
+
+        auto result = find_keyboard_device(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE_FALSE(result.has_value());
     }
 }

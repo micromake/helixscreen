@@ -38,6 +38,22 @@ std::string read_device_name(const std::string& sysfs_base, int event_num) {
     return "";
 }
 
+// Read /sys/class/input/eventN/device/id/bustype — returns bus type as integer.
+// BUS_USB=3, BUS_BLUETOOTH=5. Returns 0 on failure.
+int read_bus_type(const std::string& sysfs_base, int event_num) {
+    std::string path =
+        sysfs_base + "/event" + std::to_string(event_num) + "/device/id/bustype";
+    std::ifstream file(path);
+    std::string line;
+    if (file.good() && std::getline(file, line)) {
+        return static_cast<int>(std::strtol(line.c_str(), nullptr, 16));
+    }
+    return 0;
+}
+
+constexpr int BUS_USB = 0x03;
+constexpr int BUS_BLUETOOTH = 0x05;
+
 }  // namespace
 
 namespace helix::input {
@@ -111,25 +127,53 @@ std::optional<ScannedDevice> find_mouse_device(const std::string& dev_base,
             continue;
         }
 
-        // Skip touchscreens: devices with ABS_X (bit 0) + ABS_Y (bit 1)
+        std::string name = read_device_name(sysfs_base, event_num);
         std::string abs_caps = read_sysfs_capability(sysfs_base, event_num, "abs");
-        if (check_capability_bit(abs_caps, 0) && check_capability_bit(abs_caps, 1)) {
+        std::string rel_caps = read_sysfs_capability(sysfs_base, event_num, "rel");
+        std::string key_caps = read_sysfs_capability(sysfs_base, event_num, "key");
+
+        spdlog::debug("[InputScanner] Scanning {} ({}) abs=[{}] rel=[{}] key=[{}]",
+                      device_path, name, abs_caps, rel_caps, key_caps);
+
+        // Skip touchscreens:
+        //   - Legacy single-touch: ABS_X (bit 0) + ABS_Y (bit 1)
+        //   - MT-only (e.g. Goodix gt9xxnew_ts): ABS_MT_POSITION_X (bit 53) +
+        //     ABS_MT_POSITION_Y (bit 54) without legacy ABS_X/ABS_Y
+        //   - Any device with BTN_TOUCH (bit 330) — touchscreens, not mice
+        bool has_legacy_abs = check_capability_bit(abs_caps, 0) &&
+                              check_capability_bit(abs_caps, 1);
+        bool has_mt_abs = check_capability_bit(abs_caps, 53) &&
+                          check_capability_bit(abs_caps, 54);
+        bool has_btn_touch = check_capability_bit(key_caps, 330);
+
+        if (has_legacy_abs || has_mt_abs || has_btn_touch) {
+            spdlog::debug("[InputScanner] Skipping {} (touchscreen: legacy_abs={} mt_abs={} "
+                          "btn_touch={})", device_path, has_legacy_abs, has_mt_abs, has_btn_touch);
             continue;
         }
 
         // Require REL_X (bit 0) + REL_Y (bit 1)
-        std::string rel_caps = read_sysfs_capability(sysfs_base, event_num, "rel");
         if (!check_capability_bit(rel_caps, 0) || !check_capability_bit(rel_caps, 1)) {
+            spdlog::debug("[InputScanner] Skipping {} (no REL_X/REL_Y)", device_path);
             continue;
         }
 
         // Require BTN_LEFT (bit 272)
-        std::string key_caps = read_sysfs_capability(sysfs_base, event_num, "key");
         if (!check_capability_bit(key_caps, 272)) {
+            spdlog::debug("[InputScanner] Skipping {} (no BTN_LEFT)", device_path);
             continue;
         }
 
-        std::string name = read_device_name(sysfs_base, event_num);
+        // Only accept USB or Bluetooth devices — excludes SoC-integrated IR
+        // receivers (e.g. MCE IR Keyboard/Mouse on Allwinner), HDMI CEC virtual
+        // devices, and other non-physical "mice" that report mouse capabilities.
+        int bus = read_bus_type(sysfs_base, event_num);
+        if (bus != BUS_USB && bus != BUS_BLUETOOTH) {
+            spdlog::debug("[InputScanner] Skipping {} (bus type 0x{:04x}, not USB/BT)",
+                          device_path, bus);
+            continue;
+        }
+
         spdlog::info("[InputScanner] Found mouse: {} ({})", device_path, name);
         return ScannedDevice{device_path, name, event_num};
     }
@@ -162,6 +206,12 @@ std::optional<ScannedDevice> find_keyboard_device(const std::string& dev_base,
 
         std::string device_path = dev_base + "/" + entry->d_name;
         if (access(device_path.c_str(), R_OK) != 0) {
+            continue;
+        }
+
+        // Only accept USB or Bluetooth devices
+        int bus = read_bus_type(sysfs_base, event_num);
+        if (bus != BUS_USB && bus != BUS_BLUETOOTH) {
             continue;
         }
 
