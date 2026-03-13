@@ -555,7 +555,7 @@
 /*Optionally declare custom fonts here.
  *You can use these fonts as default font too and they will be available globally.
  *E.g. #define LV_FONT_CUSTOM_DECLARE   LV_FONT_DECLARE(my_font_1) LV_FONT_DECLARE(my_font_2)*/
-#define LV_FONT_CUSTOM_DECLARE LV_FONT_DECLARE(noto_sans_14)
+#define LV_FONT_CUSTOM_DECLARE extern lv_font_t noto_sans_14;
 
 /*Always set a default font*/
 #define LV_FONT_DEFAULT &noto_sans_14

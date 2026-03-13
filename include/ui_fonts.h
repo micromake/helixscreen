@@ -16,32 +16,33 @@ LV_FONT_DECLARE(mdi_icons_16); // Metadata icons (small inline)
 LV_FONT_DECLARE(mdi_icons_14); // Metadata icons (small inline for tiny)
 
 // Noto Sans - Regular weight with extended Unicode (©®™€£¥°±•…)
-LV_FONT_DECLARE(noto_sans_10);
-LV_FONT_DECLARE(noto_sans_11);
-LV_FONT_DECLARE(noto_sans_12);
-LV_FONT_DECLARE(noto_sans_14);
-LV_FONT_DECLARE(noto_sans_16);
-LV_FONT_DECLARE(noto_sans_18);
-LV_FONT_DECLARE(noto_sans_20);
-LV_FONT_DECLARE(noto_sans_24);
-LV_FONT_DECLARE(noto_sans_26);
-LV_FONT_DECLARE(noto_sans_28);
+// Declared mutable (not const) so CjkFontManager can set fallback pointers at runtime
+extern lv_font_t noto_sans_10;
+extern lv_font_t noto_sans_11;
+extern lv_font_t noto_sans_12;
+extern lv_font_t noto_sans_14;
+extern lv_font_t noto_sans_16;
+extern lv_font_t noto_sans_18;
+extern lv_font_t noto_sans_20;
+extern lv_font_t noto_sans_24;
+extern lv_font_t noto_sans_26;
+extern lv_font_t noto_sans_28;
 
 // Noto Sans - Light weight with extended Unicode (for text_small)
-LV_FONT_DECLARE(noto_sans_light_10);
-LV_FONT_DECLARE(noto_sans_light_11);
-LV_FONT_DECLARE(noto_sans_light_12);
-LV_FONT_DECLARE(noto_sans_light_14);
-LV_FONT_DECLARE(noto_sans_light_16);
-LV_FONT_DECLARE(noto_sans_light_18);
+extern lv_font_t noto_sans_light_10;
+extern lv_font_t noto_sans_light_11;
+extern lv_font_t noto_sans_light_12;
+extern lv_font_t noto_sans_light_14;
+extern lv_font_t noto_sans_light_16;
+extern lv_font_t noto_sans_light_18;
 
 // Noto Sans - Bold weight with extended Unicode
-LV_FONT_DECLARE(noto_sans_bold_14);
-LV_FONT_DECLARE(noto_sans_bold_16);
-LV_FONT_DECLARE(noto_sans_bold_18);
-LV_FONT_DECLARE(noto_sans_bold_20);
-LV_FONT_DECLARE(noto_sans_bold_24);
-LV_FONT_DECLARE(noto_sans_bold_28);
+extern lv_font_t noto_sans_bold_14;
+extern lv_font_t noto_sans_bold_16;
+extern lv_font_t noto_sans_bold_18;
+extern lv_font_t noto_sans_bold_20;
+extern lv_font_t noto_sans_bold_24;
+extern lv_font_t noto_sans_bold_28;
 
 // Source Code Pro - Monospace (for console/terminal displays)
 LV_FONT_DECLARE(source_code_pro_10);

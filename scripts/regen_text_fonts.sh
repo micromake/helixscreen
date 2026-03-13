@@ -180,6 +180,8 @@ for SIZE in $SIZES_REGULAR; do
         --bpp 4 --format lvgl \
         --no-compress \
         -o "$OUTPUT"
+    # Strip const so CjkFontManager can set fallback pointers at runtime
+    sed -i 's/^const lv_font_t /lv_font_t /' "$OUTPUT"
 done
 
 # Generate Light weight
@@ -196,6 +198,8 @@ for SIZE in $SIZES_LIGHT; do
         --bpp 4 --format lvgl \
         --no-compress \
         -o "$OUTPUT"
+    # Strip const so CjkFontManager can set fallback pointers at runtime
+    sed -i 's/^const lv_font_t /lv_font_t /' "$OUTPUT"
 done
 
 # Generate Bold weight
@@ -212,6 +216,8 @@ for SIZE in $SIZES_BOLD; do
         --bpp 4 --format lvgl \
         --no-compress \
         -o "$OUTPUT"
+    # Strip const so CjkFontManager can set fallback pointers at runtime
+    sed -i 's/^const lv_font_t /lv_font_t /' "$OUTPUT"
 done
 
 # Generate Source Code Pro Monospace (for console/terminal)
