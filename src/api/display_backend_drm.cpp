@@ -421,18 +421,10 @@ lv_indev_t* DisplayBackendDRM::create_input_pointer() {
     }
 
     if (!mouse_) {
-        // Try libinput pointer discovery for mouse (works alongside touchscreen)
-        char* pointer_path = lv_libinput_find_dev(LV_LIBINPUT_CAPABILITY_POINTER, false);
-        if (pointer_path) {
-            mouse_ = lv_libinput_create(LV_INDEV_TYPE_POINTER, pointer_path);
-            if (mouse_) {
-                spdlog::info("[DRM Backend] Mouse created on {} via libinput", pointer_path);
-            }
-        }
-    }
-
-    if (!mouse_) {
-        // Fall back to sysfs evdev scanning
+        // Use sysfs evdev scanning — libinput's POINTER capability is too broad
+        // (matches HDMI CEC devices like vc4-hdmi which report REL_X/REL_Y but
+        // are not mice). The sysfs scanner checks REL_X+REL_Y+BTN_LEFT and
+        // excludes touchscreens (ABS_X+ABS_Y).
         auto mouse_dev = helix::input::find_mouse_device();
         if (mouse_dev) {
             mouse_ = lv_evdev_create(LV_INDEV_TYPE_POINTER, mouse_dev->path.c_str());
