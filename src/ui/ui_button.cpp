@@ -311,6 +311,8 @@ void* ui_button_create(lv_xml_parser_state_t* state, const char** attrs) {
         style = tm.get_style(StyleRole::ButtonWarning);
     } else if (strcmp(variant_str, "ghost") == 0) {
         style = tm.get_style(StyleRole::ButtonGhost);
+    } else if (strcmp(variant_str, "transparent") == 0) {
+        style = tm.get_style(StyleRole::ButtonTransparent);
     } else if (strcmp(variant_str, "outline") == 0) {
         style = tm.get_style(StyleRole::ButtonOutline);
     } else {

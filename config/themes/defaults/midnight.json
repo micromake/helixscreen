@@ -23,5 +23,7 @@
   "border_opacity": 40,
   "shadow_intensity": 0,
   "shadow_opa": 0,
-  "shadow_offset_y": 2
+  "shadow_offset_y": 2,
+  "handle_style": "bar",
+  "handle_color": "text"
 }

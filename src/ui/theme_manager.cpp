@@ -128,6 +128,7 @@ struct theme_palette_t {
 
 // Forward declarations for theme infrastructure
 static void init_extra_styles(const theme_palette_t* palette, int border_radius);
+static void update_handle_styles(const theme_palette_t* palette, int border_radius);
 static void helix_theme_apply(lv_theme_t* theme, lv_obj_t* obj);
 
 /**
@@ -281,6 +282,75 @@ lv_color_t theme_manager_get_contrast_color(lv_color_t bg_color) {
 // ============================================================================
 
 /**
+ * @brief Update handle/knob styles from current theme properties
+ *
+ * Called on initial setup and on every theme switch to apply handle_style
+ * and handle_color from the active theme. Switch knobs always stay round.
+ */
+static void update_handle_styles(const theme_palette_t* palette, int border_radius) {
+    bool bar_knob = (active_theme.properties.handle_style == "bar");
+    int32_t slider_knob_radius = bar_knob ? 2 : LV_RADIUS_CIRCLE;
+
+    // Resolve handle color token to palette color
+    lv_color_t knob_color = palette->primary;
+    const auto& hc = active_theme.properties.handle_color;
+    if (hc == "text")
+        knob_color = palette->text;
+    else if (hc == "secondary")
+        knob_color = palette->secondary;
+    else if (hc == "tertiary")
+        knob_color = palette->tertiary;
+
+    // Switch knob: handle_color applies, but always round (no bar style)
+    lv_style_set_bg_color(&switch_knob_style, knob_color);
+
+    // Slider track/indicator colors
+    lv_style_set_bg_color(&slider_track_style, palette->border);
+    lv_style_set_radius(&slider_track_style, border_radius);
+    lv_style_set_bg_color(&slider_indicator_style, palette->primary);
+
+    // Slider knob: both handle_color and handle_style apply
+    lv_style_set_bg_color(&slider_knob_style, knob_color);
+    lv_style_set_border_color(&slider_knob_style, palette->border);
+    lv_style_set_border_width(&slider_knob_style, bar_knob ? 0 : 1);
+    lv_style_set_radius(&slider_knob_style, slider_knob_radius);
+    if (bar_knob) {
+        lv_style_set_pad_left(&slider_knob_style, -4);
+        lv_style_set_pad_right(&slider_knob_style, -4);
+        lv_style_set_pad_top(&slider_knob_style, 8);
+        lv_style_set_pad_bottom(&slider_knob_style, 8);
+    } else {
+        // Reset to defaults when switching away from bar style
+        lv_style_set_pad_left(&slider_knob_style, LV_DPX(6));
+        lv_style_set_pad_right(&slider_knob_style, LV_DPX(6));
+        lv_style_set_pad_top(&slider_knob_style, LV_DPX(6));
+        lv_style_set_pad_bottom(&slider_knob_style, LV_DPX(6));
+    }
+
+    // Slider knob shadow: functional depth cue
+    int knob_shadow_w =
+        active_theme.properties.shadow_intensity > 0 ? active_theme.properties.shadow_intensity : 4;
+    int knob_shadow_opa =
+        active_theme.properties.shadow_opa > 0 ? active_theme.properties.shadow_opa : LV_OPA_30;
+    lv_style_set_shadow_width(&slider_knob_style, knob_shadow_w);
+    lv_style_set_shadow_color(&slider_knob_style, lv_color_black());
+    lv_style_set_shadow_opa(&slider_knob_style, static_cast<lv_opa_t>(knob_shadow_opa));
+
+    // Update dropdown accent and other palette-dependent colors
+    dropdown_accent_color = palette->secondary;
+    lv_style_set_text_color(&checkbox_text_style, palette->text);
+    lv_style_set_bg_color(&checkbox_box_style, palette->elevated_bg);
+    lv_style_set_border_color(&checkbox_box_style, palette->border);
+    lv_style_set_bg_color(&checkbox_indicator_style, palette->primary);
+    lv_style_set_border_color(&checkbox_indicator_style, palette->primary);
+    uint8_t cb_lum = lv_color_luminance(palette->primary);
+    lv_style_set_text_color(&checkbox_indicator_style,
+                            (cb_lum > 140) ? lv_color_black() : lv_color_white());
+    lv_style_set_bg_color(&switch_track_style, palette->border);
+    lv_style_set_bg_color(&switch_indicator_style, palette->secondary);
+}
+
+/**
  * @brief Initialize the extra widget-specific styles
  *
  * These are styles for widget parts not covered by the StyleRole enum.
@@ -328,38 +398,26 @@ static void init_extra_styles(const theme_palette_t* palette, int border_radius)
     lv_style_set_bg_opa(&switch_indicator_style, LV_OPA_COVER);
 
     lv_style_init(&switch_knob_style);
-    lv_style_set_bg_color(&switch_knob_style, palette->primary);
     lv_style_set_bg_opa(&switch_knob_style, LV_OPA_COVER);
+    lv_style_set_radius(&switch_knob_style, LV_RADIUS_CIRCLE);
 
     // Slider styles
     lv_style_init(&slider_track_style);
-    lv_style_set_bg_color(&slider_track_style, palette->border);
     lv_style_set_bg_opa(&slider_track_style, LV_OPA_COVER);
-    lv_style_set_radius(&slider_track_style, border_radius);
 
     lv_style_init(&slider_indicator_style);
-    lv_style_set_bg_color(&slider_indicator_style, palette->primary);
     lv_style_set_bg_opa(&slider_indicator_style, LV_OPA_COVER);
 
     lv_style_init(&slider_knob_style);
-    lv_style_set_bg_color(&slider_knob_style, palette->primary);
     lv_style_set_bg_opa(&slider_knob_style, LV_OPA_COVER);
-    lv_style_set_border_color(&slider_knob_style, palette->border);
-    lv_style_set_border_width(&slider_knob_style, 1);
-    // Slider knob shadow is functional (depth cue), not decorative.
-    // Use theme shadow_intensity if set, otherwise keep sensible defaults.
-    int knob_shadow_w =
-        active_theme.properties.shadow_intensity > 0 ? active_theme.properties.shadow_intensity : 4;
-    int knob_shadow_opa =
-        active_theme.properties.shadow_opa > 0 ? active_theme.properties.shadow_opa : LV_OPA_30;
-    lv_style_set_shadow_width(&slider_knob_style, knob_shadow_w);
-    lv_style_set_shadow_color(&slider_knob_style, lv_color_black());
-    lv_style_set_shadow_opa(&slider_knob_style, static_cast<lv_opa_t>(knob_shadow_opa));
 
     lv_style_init(&slider_disabled_style);
     lv_style_set_opa(&slider_disabled_style, LV_OPA_50);
 
     extra_styles_initialized = true;
+
+    // Apply theme-dependent handle styles (also called on theme switch)
+    update_handle_styles(palette, border_radius);
 }
 
 // Forward declaration — full definition is below with palette apply functions
@@ -583,6 +641,11 @@ static void theme_update_colors(bool is_dark) {
     tm.set_palettes(light_pal, dark_pal);
 
     tm.set_dark_mode(is_dark);
+
+    // Update handle/knob styles from new theme properties and palette
+    const theme_palette_t& current_pal = is_dark ? dark_theme_pal : light_theme_pal;
+    update_handle_styles(&current_pal, props.border_radius);
+
     spdlog::debug("[Theme] Updated colors, dark_mode={}", is_dark);
 }
 

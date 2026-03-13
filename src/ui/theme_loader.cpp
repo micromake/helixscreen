@@ -222,6 +222,8 @@ ThemeData parse_theme_json(const std::string& json_str, const std::string& filen
         theme.properties.shadow_intensity = json.value("shadow_intensity", 0);
         theme.properties.shadow_opa = json.value("shadow_opa", 0);
         theme.properties.shadow_offset_y = json.value("shadow_offset_y", 2);
+        theme.properties.handle_style = json.value("handle_style", "round");
+        theme.properties.handle_color = json.value("handle_color", "primary");
 
     } catch (const nlohmann::json::exception& e) {
         spdlog::error("[ThemeLoader] Failed to parse {}: {}", filename, e.what());
@@ -318,6 +320,8 @@ bool save_theme_to_file(const ThemeData& theme, const std::string& filepath) {
     json["shadow_intensity"] = theme.properties.shadow_intensity;
     json["shadow_opa"] = theme.properties.shadow_opa;
     json["shadow_offset_y"] = theme.properties.shadow_offset_y;
+    json["handle_style"] = theme.properties.handle_style;
+    json["handle_color"] = theme.properties.handle_color;
 
     // Write with pretty formatting
     std::ofstream file(filepath);
