@@ -310,6 +310,12 @@ Your selection is saved to the `display.printer_image` config key and persists a
 
 ## Usage
 
+### Can I use a USB mouse or keyboard?
+
+**Yes.** HelixScreen automatically detects USB mice and keyboards connected at startup. Both work alongside the touchscreen — you don't have to choose one or the other. A small white cursor appears when a mouse is detected. Combo devices like the Logitech K400 (keyboard + trackpad) also work.
+
+Devices must be plugged in before HelixScreen starts. If auto-detection doesn't find your device, set `HELIX_MOUSE_DEVICE` or `HELIX_KEYBOARD_DEVICE` in `helixscreen.env` to the device path (run `cat /proc/bus/input/devices` to find it).
+
 ### How do I calibrate my touchscreen?
 
 If taps register in the wrong location:

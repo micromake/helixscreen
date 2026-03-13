@@ -138,6 +138,27 @@ The keyboard appears automatically for text input:
 
 ---
 
+## USB Mouse & Keyboard
+
+HelixScreen automatically detects USB mice and keyboards when plugged in at startup:
+
+- **USB Mouse**: Works alongside the touchscreen — both are active simultaneously. A small white cursor dot appears on screen when a mouse is detected.
+- **USB Keyboard**: Detected automatically. Useful for text entry fields like Wi-Fi passwords or console commands.
+- **Combo devices** (e.g., Logitech K400 keyboard with trackpad): Both keyboard and trackpad functions work automatically.
+
+Devices must be connected before HelixScreen starts. Hot-plugging is not currently supported — restart HelixScreen after connecting a new device.
+
+**Manual override:** If auto-detection doesn't find your device, you can specify the path directly:
+```bash
+# In helixscreen.env
+HELIX_MOUSE_DEVICE=/dev/input/event4
+HELIX_KEYBOARD_DEVICE=/dev/input/event5
+```
+
+To find your device path, run `cat /proc/bus/input/devices` and look for your device name.
+
+---
+
 ## Simulator Shortcuts
 
 When using the SDL2 desktop simulator:

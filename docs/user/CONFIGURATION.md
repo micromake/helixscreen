@@ -1272,6 +1272,8 @@ These can be set in the systemd service file or before running the binary:
 |----------|-------------|
 | `HELIX_DRM_DEVICE` | Override DRM device path (e.g., `/dev/dri/card1`) |
 | `HELIX_TOUCH_DEVICE` | Override touch input device (e.g., `/dev/input/event1`) |
+| `HELIX_MOUSE_DEVICE` | Override USB mouse device (e.g., `/dev/input/event4`) |
+| `HELIX_KEYBOARD_DEVICE` | Override USB keyboard device (e.g., `/dev/input/event5`) |
 | `HELIX_DISPLAY_BACKEND` | Override display backend (`drm`, `fbdev`, `sdl`) |
 | `HELIX_GCODE_MODE` | Override G-code render mode (`3D` or `2D`) |
 | `HELIX_GCODE_STREAMING` | Override G-code streaming mode |
