@@ -126,6 +126,31 @@ static json build_mock_file_list_response(const std::string& root,
         return response;
     }
 
+    // Mock accelerometer CSV data files for belt tension / input shaper calibration
+    if (root == "config" && path == "data_store") {
+        result_array.push_back(
+            {{"path", "raw_data_belt_path_a-20260310_120000.csv"},
+             {"size", 2048},
+             {"modified", 1773158400.0}});
+        result_array.push_back(
+            {{"path", "raw_data_belt_path_b-20260310_120001.csv"},
+             {"size", 2048},
+             {"modified", 1773158401.0}});
+        result_array.push_back(
+            {{"path", "raw_data_x-20260310_115000.csv"},
+             {"size", 4096},
+             {"modified", 1773154800.0}});
+        result_array.push_back(
+            {{"path", "raw_data_y-20260310_115001.csv"},
+             {"size", 4096},
+             {"modified", 1773154801.0}});
+
+        json response = {{"result", result_array}};
+        spdlog::debug("[MoonrakerClientMock] Returning {} mock data_store files",
+                      result_array.size());
+        return response;
+    }
+
     if (path.empty() || path == "gcodes" || path == "gcodes/") {
         // Root directory - scan real files from test gcode directory
         auto filenames = scan_mock_gcode_files();
@@ -338,6 +363,57 @@ void register_file_handlers(std::unordered_map<std::string, MethodHandler>& regi
             err.method = "server.files.metascan";
             error_cb(err);
         }
+        return true;
+    };
+
+    // server.files.get_file - Download file content (used for accelerometer CSV data)
+    registry["server.files.get_file"] =
+        [](MoonrakerClientMock* self, const json& params, std::function<void(const json&)> success_cb,
+           std::function<void(const MoonrakerError&)> error_cb) -> bool {
+        (void)self;
+        if (!success_cb) {
+            return true;
+        }
+
+        std::string filename;
+        if (params.contains("filename")) {
+            filename = params["filename"].get<std::string>();
+        }
+
+        if (filename.empty()) {
+            if (error_cb) {
+                MoonrakerError err;
+                err.type = MoonrakerErrorType::VALIDATION_ERROR;
+                err.message = "Missing filename parameter";
+                err.method = "server.files.get_file";
+                error_cb(err);
+            }
+            return true;
+        }
+
+        // Generate mock CSV content for accelerometer data files
+        std::string csv_content;
+        if (filename.find("raw_data_") != std::string::npos &&
+            filename.find(".csv") != std::string::npos) {
+            csv_content =
+                "#time,accel_x,accel_y,accel_z\n"
+                "0.000000,0.1,0.2,9.8\n"
+                "0.001000,0.3,0.5,9.7\n"
+                "0.002000,-0.1,0.4,9.8\n"
+                "0.003000,0.2,-0.3,9.9\n"
+                "0.004000,0.5,0.1,9.7\n"
+                "0.005000,-0.2,0.6,9.8\n"
+                "0.006000,0.4,0.3,9.7\n"
+                "0.007000,0.1,-0.2,9.9\n"
+                "0.008000,-0.3,0.4,9.8\n"
+                "0.009000,0.2,0.5,9.7\n";
+        } else {
+            csv_content = "mock file content for: " + filename;
+        }
+
+        json response = {{"result", csv_content}};
+        spdlog::debug("[MoonrakerClientMock] Returning mock file content for: {}", filename);
+        success_cb(response);
         return true;
     };
 

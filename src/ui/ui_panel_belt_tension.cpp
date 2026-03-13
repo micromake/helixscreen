@@ -282,6 +282,18 @@ void BeltTensionPanel::set_view_state(ViewState state) {
 
     // Update subject - XML bindings handle visibility automatically
     lv_subject_set_int(&s_belt_tension_state, static_cast<int>(state));
+
+    // Show restart action button in header only when results are displayed
+    if (overlay_root_) {
+        lv_obj_t* action_btn = lv_obj_find_by_name(overlay_root_, "action_button");
+        if (action_btn) {
+            if (state == ViewState::RESULTS) {
+                lv_obj_remove_flag(action_btn, LV_OBJ_FLAG_HIDDEN);
+            } else {
+                lv_obj_add_flag(action_btn, LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+    }
 }
 
 // ============================================================================

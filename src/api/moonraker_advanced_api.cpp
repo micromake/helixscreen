@@ -2483,7 +2483,22 @@ void MoonrakerAdvancedAPI::download_accel_csv(
             std::string best_file;
 
             try {
-                for (const auto& file : response) {
+                if (!response.contains("result")) {
+                    spdlog::error("[MoonrakerAPI] File list response missing 'result' field");
+                    if (on_error)
+                        on_error(MoonrakerError{MoonrakerErrorType::JSON_RPC_ERROR, 0,
+                                                "File list response missing 'result' field"});
+                    return;
+                }
+                const auto& result = response["result"];
+                if (!result.is_array()) {
+                    spdlog::error("[MoonrakerAPI] File list 'result' is not an array");
+                    if (on_error)
+                        on_error(MoonrakerError{MoonrakerErrorType::JSON_RPC_ERROR, 0,
+                                                "File list 'result' is not an array"});
+                    return;
+                }
+                for (const auto& file : result) {
                     std::string filename = file.value("path", "");
                     if (filename.find(target_prefix) != std::string::npos &&
                         filename.find(".csv") != std::string::npos) {
@@ -2518,7 +2533,19 @@ void MoonrakerAdvancedAPI::download_accel_csv(
                 "server.files.get_file", dl_params,
                 [on_complete, on_error](const json& file_response) {
                     try {
-                        std::string csv_data = file_response.get<std::string>();
+                        std::string csv_data;
+                        if (file_response.contains("result")) {
+                            const auto& result = file_response["result"];
+                            if (result.is_string()) {
+                                csv_data = result.get<std::string>();
+                            } else {
+                                csv_data = result.dump();
+                            }
+                        } else if (file_response.is_string()) {
+                            csv_data = file_response.get<std::string>();
+                        } else {
+                            csv_data = file_response.dump();
+                        }
                         if (on_complete)
                             on_complete(csv_data);
                     } catch (const std::exception& e) {
