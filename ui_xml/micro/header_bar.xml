@@ -57,7 +57,7 @@
       <event_cb trigger="clicked" callback="$back_button_callback"/>
       <icon src="back" size="lg" variant="text" clickable="false" event_bubble="true"/>
       <text_heading name="header_title"
-                    text="$title" translation_tag="$title_tag" flex_grow="1" style_text_align="left"
+                    text="$title" translation_tag="$title_tag" text_transform="uppercase" flex_grow="1" style_text_align="left"
                     clickable="false" event_bubble="true" scrollable="false"/>
     </lv_obj>
     <!-- Secondary action button (left of primary, hidden by default) -->

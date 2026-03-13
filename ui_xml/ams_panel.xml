@@ -32,7 +32,7 @@
           <!-- Title: "Multi-Filament:" -->
           <text_heading name="header_title"
                         text="Multi-Filament:" translation_tag="Multi-Filament:"
-                        long_mode="dots" style_text_align="left"
+                        text_transform="uppercase" long_mode="dots" style_text_align="left"
                         clickable="false" event_bubble="true" scrollable="false"/>
           <!-- System logo (bound to ams_system_logo subject) -->
           <lv_image name="system_logo" width="20" height="20"
@@ -40,7 +40,7 @@
                     clickable="false" event_bubble="true"/>
           <!-- System name (bound to ams_system_name subject) -->
           <text_heading name="system_name_label" bind_text="ams_system_name"
-                        long_mode="dots" clickable="false" event_bubble="true" scrollable="false"/>
+                        text_transform="uppercase" long_mode="dots" clickable="false" event_bubble="true" scrollable="false"/>
         </lv_obj>
       </lv_obj>
       <!-- Left column content (unit visualization + path canvas) -->
