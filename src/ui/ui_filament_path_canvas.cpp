@@ -1549,7 +1549,7 @@ static void draw_parallel_topology(lv_event_t* e, FilamentPathData* data) {
             int32_t label_len = (int32_t)strlen(tool_label);
             int32_t badge_w = LV_MAX(24, label_len * (font_h * 3 / 5) + 6);
             int32_t badge_h = font_h + 4;
-            int32_t badge_top = toolhead_y + tool_scale * 3 + 4;
+            int32_t badge_top = toolhead_y + tool_scale * 4 + 6;
             int32_t badge_left = slot_x - badge_w / 2;
 
             // Badge background (rounded rect)
@@ -1826,7 +1826,7 @@ static void draw_mixed_topology(lv_event_t* e, FilamentPathData* data) {
                     int32_t label_len = (int32_t)strlen(tool_label);
                     int32_t badge_w = LV_MAX(24, label_len * (font_h * 3 / 5) + 6);
                     int32_t badge_h = font_h + 4;
-                    int32_t badge_top = toolhead_y + tool_scale * 3 + 4;
+                    int32_t badge_top = toolhead_y + tool_scale * 4 + 6;
                     int32_t badge_left = hub_cx - badge_w / 2;
 
                     lv_area_t badge_area = {badge_left, badge_top, badge_left + badge_w,
