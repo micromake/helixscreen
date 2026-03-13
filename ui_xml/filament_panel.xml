@@ -45,7 +45,7 @@
                   height="content" style_pad_all="0" scrollable="false"
                   flex_flow="row" style_flex_main_place="start" style_flex_cross_place="center" style_pad_gap="#space_sm">
             <icon src="thermometer" size="sm" variant="secondary"/>
-            <text_body text="Temperature" translation_tag="Temperature" style_translate_y="2"/>
+            <text_body text="Temperature" translation_tag="Temperature" text_transform="uppercase" style_translate_y="2"/>
           </lv_obj>
 
           <!-- Nozzle Row: Current / Target (entire row tappable) -->
@@ -121,7 +121,7 @@
                 height="content" style_pad_all="0" scrollable="false"
                 flex_flow="row" style_flex_main_place="start" style_flex_cross_place="center" style_pad_gap="#space_sm">
           <icon src="filament" size="sm" variant="secondary"/>
-          <text_body bind_text="filament_card_title" translation_tag="Multi-Filament" style_translate_y="2"/>
+          <text_body bind_text="filament_card_title" translation_tag="Multi-Filament" text_transform="uppercase" style_translate_y="2"/>
         </lv_obj>
 
         <!-- AMS mini status + action widget row -->
@@ -188,7 +188,7 @@
               width="100%" height="content" style_pad_all="0" scrollable="false"
               flex_flow="column" style_pad_gap="#space_md">
         <!-- Material Selection Header -->
-        <text_body text="Material" translation_tag="Material" align="left_mid"/>
+        <text_body text="Material" translation_tag="Material" text_transform="uppercase" align="left_mid"/>
         <!-- Material Preset Buttons (2x2 Grid: PLA, PETG, ABS, TPU) -->
         <lv_obj name="preset_grid"
                 width="100%" height="content" style_pad_all="0"
@@ -256,7 +256,7 @@
               width="100%" height="content" style_pad_all="0" scrollable="false"
               flex_flow="column" style_pad_gap="#space_sm">
         <!-- Filament Operations Header -->
-        <text_body text="Operations" translation_tag="Operations" align="left_mid"/>
+        <text_body text="Operations" translation_tag="Operations" text_transform="uppercase" align="left_mid"/>
         <!-- Load/Unload/Purge Row (macro-based, no length selector) -->
         <lv_obj width="100%"
                 height="#button_height" style_pad_all="0" scrollable="false"

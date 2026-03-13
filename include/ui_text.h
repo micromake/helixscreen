@@ -58,3 +58,14 @@ void ui_text_init();
  * @param opa    Stroke opacity (0-255, use LV_OPA_COVER for full opacity)
  */
 void ui_text_set_stroke(lv_obj_t* label, int32_t width, lv_color_t color, lv_opa_t opa);
+
+/**
+ * Apply a text transform to a label
+ *
+ * Currently supports "uppercase" which converts text to uppercase at render time.
+ * Works with bind_text subject bindings and translations.
+ *
+ * @param label     Label widget
+ * @param transform Transform name: "uppercase" (or nullptr/empty to remove)
+ */
+void ui_text_apply_transform(lv_obj_t* label, const char* transform);

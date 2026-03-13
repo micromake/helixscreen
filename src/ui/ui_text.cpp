@@ -165,9 +165,16 @@ static void ui_text_apply(lv_xml_parser_state_t* state, const char** attrs) {
     // Apply label properties (text, long_mode, etc.) and base object properties
     lv_xml_label_apply(state, attrs);
 
-    // Apply stroke attributes (stroke_width, stroke_color, stroke_opa)
     lv_obj_t* label = static_cast<lv_obj_t*>(lv_xml_state_get_item(state));
+
+    // Apply stroke attributes (stroke_width, stroke_color, stroke_opa)
     apply_stroke_attrs(label, attrs);
+
+    // Apply text transform (uppercase) — works with bind_text and translations
+    const char* transform = lv_xml_get_value_of(attrs, "text_transform");
+    if (transform) {
+        ui_text_apply_transform(label, transform);
+    }
 }
 
 /**
@@ -287,6 +294,15 @@ void ui_text_init() {
     spdlog::trace(
         "[ui_text] Registered semantic text widgets: text_heading, text_body, text_muted, "
         "text_small, text_xs, text_tiny, text_button");
+}
+
+void ui_text_apply_transform(lv_obj_t* label, const char* transform) {
+    if (!label || !transform)
+        return;
+
+    if (strcmp(transform, "uppercase") == 0) {
+        lv_label_set_text_transform_upper(label, true);
+    }
 }
 
 void ui_text_set_stroke(lv_obj_t* label, int32_t width, lv_color_t color, lv_opa_t opa) {

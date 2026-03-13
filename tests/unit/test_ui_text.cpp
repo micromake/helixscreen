@@ -14,6 +14,7 @@
 #include "../../include/ui_text.h"
 
 #include <spdlog/spdlog.h>
+#include <string>
 
 #include "../catch_amalgamated.hpp"
 #include "../ui_test_utils.h"
@@ -149,6 +150,63 @@ TEST_CASE("ui_text_set_stroke edge cases", "[ui_text][stroke][edge]") {
     SECTION("Full opacity makes stroke fully visible") {
         ui_text_set_stroke(label, 2, lv_color_black(), LV_OPA_COVER);
         REQUIRE(lv_obj_get_style_text_outline_stroke_opa(label, LV_PART_MAIN) == LV_OPA_COVER);
+    }
+
+    lv_obj_delete(label);
+}
+
+// ============================================================================
+// Text Transform Tests
+// ============================================================================
+
+TEST_CASE("text_transform uppercase via event callback", "[ui_text][transform]") {
+    TextTest fixture;
+
+    lv_obj_t* label = lv_label_create(fixture.get_screen());
+
+    SECTION("Uppercases ASCII text") {
+        lv_label_set_text(label, "Hello World");
+        ui_text_apply_transform(label, "uppercase");
+
+        REQUIRE(std::string(lv_label_get_text(label)) == "HELLO WORLD");
+    }
+
+    SECTION("Already uppercase text is unchanged") {
+        lv_label_set_text(label, "ALREADY UPPER");
+        ui_text_apply_transform(label, "uppercase");
+
+        REQUIRE(std::string(lv_label_get_text(label)) == "ALREADY UPPER");
+    }
+
+    SECTION("Mixed case and numbers") {
+        lv_label_set_text(label, "Test 123 mixedCase");
+        ui_text_apply_transform(label, "uppercase");
+
+        REQUIRE(std::string(lv_label_get_text(label)) == "TEST 123 MIXEDCASE");
+    }
+
+    SECTION("Empty text does not crash") {
+        lv_label_set_text(label, "");
+        REQUIRE_NOTHROW(ui_text_apply_transform(label, "uppercase"));
+    }
+
+    SECTION("No transform without attribute") {
+        lv_label_set_text(label, "Hello");
+        REQUIRE(std::string(lv_label_get_text(label)) == "Hello");
+    }
+
+    SECTION("Text set after transform is also uppercased") {
+        ui_text_apply_transform(label, "uppercase");
+        lv_label_set_text(label, "new text");
+
+        REQUIRE(std::string(lv_label_get_text(label)) == "NEW TEXT");
+    }
+
+    SECTION("Accented Latin characters are uppercased") {
+        ui_text_apply_transform(label, "uppercase");
+        lv_label_set_text(label, "caf\xC3\xA9 na\xC3\xAFve");  // café naïve
+
+        REQUIRE(std::string(lv_label_get_text(label)) == "CAF\xC3\x89 NA\xC3\x8FVE");  // CAFÉ NAÏVE
     }
 
     lv_obj_delete(label);

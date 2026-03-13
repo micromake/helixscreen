@@ -15,7 +15,7 @@
               style_pad_left="#space_sm" style_pad_right="#space_sm" style_pad_top="#space_xs"
               style_pad_bottom="0" style_pad_gap="#space_xxs"
               clickable="false" event_bubble="true">
-        <text_small text="Print Library" translation_tag="Print Library" variant="muted"
+        <text_small text="Print Library" translation_tag="Print Library" text_transform="uppercase" variant="muted"
                     clickable="false" event_bubble="true"/>
         <divider_horizontal/>
       </lv_obj>
