@@ -1,6 +1,7 @@
 locale: de
 translations:
   ' elapsed · ': ' vergangen · '
+  ' frames': ''
   ' frames captured': ' Bilder aufgenommen'
   ' left': ' übrig'
   '%lu days ago': 'vor %lu Tagen'
@@ -108,6 +109,7 @@ translations:
   Animations: Animationen
   Anonymous data to help improve HelixScreen: Anonyme Daten zur Verbesserung von HelixScreen
   Anonymous stats — no personal data, ever.: Anonyme Statistiken — niemals persönliche Daten.
+  AntHead: ''
   Any notes...: Notizen...
   App Background: App-Hintergrund
   Apply: Anwenden
@@ -172,6 +174,7 @@ translations:
   Brother QL: Brother QL
   Brother QL (Bluetooth): Brother QL (Bluetooth)
   Browse: Durchsuchen
+  Browse and play recorded timelapses: ''
   'Browse guides, configuration references, and troubleshooting ': 'Anleitungen, Konfigurationsreferenzen und Fehlerbehebung durchsuchen '
   Buffer Status: Pufferstatus
   Bundle Uploaded: Paket hochgeladen
@@ -750,6 +753,7 @@ translations:
   : Bewegt den Druckkopf, um Vibrationsfrequenzen auf jeder Achse zu messen. Dauert 2-3 Minuten. Der Drucker wird Geräusche machen — das ist normal.
   Multi Filament System Overview: Multi-Filament-System Übersicht
   Multi-Filament: Multi-Filament
+  Multi-Filament Overview: ''
   'Multi-Filament:': 'Multi-Filament:'
   Multi-Material: Multi-Material
   My Custom Theme: Mein benutzerdefiniertes Thema
@@ -997,6 +1001,7 @@ translations:
   Record Timelapse: Zeitraffer aufnehmen
   Record timelapses of your prints: Zeitraffer Ihrer Drucke aufnehmen
   Recorded Videos: Aufgezeichnete Videos
+  Recorded timelapses will appear here: ''
   Recording Mode: Aufnahmemodus
   Recover: Wiederherstellen
   Recovering AFC system...: AFC-Wiederherstellung...
@@ -1014,6 +1019,7 @@ translations:
   Rename: Umbenennen
   Rename Mesh Profile: Netzprofil umbenennen
   Render Now: Jetzt rendern
+  Rendering timelapse...: ''
   Report saved to crash_report.txt: Bericht in crash_report.txt gespeichert
   Reprint: Erneut drucken
   Require confirmation before emergency stop: Bestätigung vor Notaus erforderlich
@@ -1286,6 +1292,7 @@ translations:
   Timelapse: Zeitraffer
   Timelapse Available: Zeitraffer verfügbar
   Timelapse Settings: Zeitraffer-Einstellungen
+  Timelapse Videos: ''
   Timelapse plugin installed successfully!: Zeitraffer-Plugin erfolgreich installiert!
   Timelapse plugin installed!: Zeitraffer-Plugin installiert!
   Timelapse plugin is already installed!: Zeitraffer-Plugin ist bereits installiert!

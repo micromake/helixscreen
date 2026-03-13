@@ -1,6 +1,7 @@
 locale: fr
 translations:
   ' elapsed · ': ' écoulé · '
+  ' frames': ''
   ' frames captured': ' images capturées'
   ' left': ' restant'
   '%lu days ago': 'il y a %lu jours'
@@ -108,6 +109,7 @@ translations:
   Animations: Animations
   Anonymous data to help improve HelixScreen: Données anonymes pour améliorer HelixScreen
   Anonymous stats — no personal data, ever.: Statistiques anonymes — jamais de données personnelles.
+  AntHead: ''
   Any notes...: Des notes...
   App Background: Arrière-plan de l'application
   Apply: Appliquer
@@ -172,6 +174,7 @@ translations:
   Brother QL: Brother QL
   Brother QL (Bluetooth): Brother QL (Bluetooth)
   Browse: Parcourir
+  Browse and play recorded timelapses: ''
   'Browse guides, configuration references, and troubleshooting ': 'Parcourez les guides, références de configuration et dépannage '
   Buffer Status: 'État du tampon'
   Bundle Uploaded: Bundle téléversé
@@ -750,6 +753,7 @@ translations:
   : Déplace la tête d'impression pour mesurer les fréquences de vibration sur chaque axe. Prend 2-3 minutes. L'imprimante fera du bruit — c'est normal.
   Multi Filament System Overview: Vue d'ensemble du système multi-filament
   Multi-Filament: Multi-filament
+  Multi-Filament Overview: ''
   'Multi-Filament:': 'Multi-filament :'
   Multi-Material: Multi-matériau
   My Custom Theme: Mon thème personnalisé
@@ -997,6 +1001,7 @@ translations:
   Record Timelapse: Enregistrer le timelapse
   Record timelapses of your prints: Enregistrer des timelapses de vos impressions
   Recorded Videos: Vidéos enregistrées
+  Recorded timelapses will appear here: ''
   Recording Mode: Mode d'enregistrement
   Recover: Récupérer
   Recovering AFC system...: Récupération du système AFC...
@@ -1014,6 +1019,7 @@ translations:
   Rename: Renommer
   Rename Mesh Profile: Renommer le profil de maillage du plateau
   Render Now: Rendre maintenant
+  Rendering timelapse...: ''
   Report saved to crash_report.txt: Rapport enregistré dans crash_report.txt
   Reprint: Réimprimer
   Require confirmation before emergency stop: Demander confirmation avant l'arrêt d'urgence
@@ -1286,6 +1292,7 @@ translations:
   Timelapse: Timelapse
   Timelapse Available: Timelapse disponible
   Timelapse Settings: Paramètres du timelapse
+  Timelapse Videos: ''
   Timelapse plugin installed successfully!: Plugin timelapse installé avec succès !
   Timelapse plugin installed!: Plugin timelapse installé !
   Timelapse plugin is already installed!: Le plugin timelapse est déjà installé !

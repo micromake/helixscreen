@@ -1,6 +1,7 @@
 locale: zh
 translations:
   ' elapsed · ': ' 已用 · '
+  ' frames': ''
   ' frames captured': ' 帧已捕获'
   ' left': ' 剩余'
   '%lu days ago': '%lu天前'
@@ -108,6 +109,7 @@ translations:
   Animations: 动画
   Anonymous data to help improve HelixScreen: 匿名数据以帮助改进 HelixScreen
   Anonymous stats — no personal data, ever.: 匿名统计 — 绝不收集个人数据。
+  AntHead: ''
   Any notes...: 备注...
   App Background: 应用背景
   Apply: 应用
@@ -172,6 +174,7 @@ translations:
   Brother QL: Brother QL
   Brother QL (Bluetooth): Brother QL（蓝牙）
   Browse: 浏览
+  Browse and play recorded timelapses: ''
   'Browse guides, configuration references, and troubleshooting ': 浏览指南、配置参考和故障排除
   Buffer Status: '缓冲区状态'
   Bundle Uploaded: 捆绑包已上传
@@ -750,6 +753,7 @@ translations:
   : 移动打印头以测量每个轴上的振动频率。需要 2-3 分钟。打印机会发出噪音——这是正常的。
   Multi Filament System Overview: 多耗材系统概览
   Multi-Filament: 多耗材
+  Multi-Filament Overview: ''
   'Multi-Filament:': 多耗材：
   Multi-Material: 多材料
   My Custom Theme: 我的自定义主题
@@ -997,6 +1001,7 @@ translations:
   Record Timelapse: 录制延时摄影
   Record timelapses of your prints: 录制打印延时摄影
   Recorded Videos: 已录制视频
+  Recorded timelapses will appear here: ''
   Recording Mode: 录制模式
   Recover: 恢复
   Recovering AFC system...: AFC系统恢复中...
@@ -1014,6 +1019,7 @@ translations:
   Rename: 重命名
   Rename Mesh Profile: 重命名网格配置
   Render Now: 立即渲染
+  Rendering timelapse...: ''
   Report saved to crash_report.txt: 报告已保存到 crash_report.txt
   Reprint: 重新打印
   Require confirmation before emergency stop: 紧急停止前需要确认
@@ -1286,6 +1292,7 @@ translations:
   Timelapse: 延时摄影
   Timelapse Available: 延时摄影可用
   Timelapse Settings: 延时摄影设置
+  Timelapse Videos: ''
   Timelapse plugin installed successfully!: 延时摄影插件安装成功！
   Timelapse plugin installed!: 延时摄影插件已安装！
   Timelapse plugin is already installed!: 延时摄影插件已安装！

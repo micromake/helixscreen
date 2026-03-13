@@ -1,6 +1,7 @@
 locale: it
 translations:
   ' elapsed · ': ' trascorso · '
+  ' frames': ''
   ' frames captured': ' fotogrammi acquisiti'
   ' left': ' rimanente'
   '%lu days ago': '%lu giorni fa'
@@ -108,6 +109,7 @@ translations:
   Animations: Animazioni
   Anonymous data to help improve HelixScreen: Dati anonimi per migliorare HelixScreen
   Anonymous stats — no personal data, ever.: Statistiche anonime — mai dati personali.
+  AntHead: ''
   Any notes...: Note...
   App Background: Sfondo applicazione
   Apply: Applica
@@ -172,6 +174,7 @@ translations:
   Brother QL: Brother QL
   Brother QL (Bluetooth): Brother QL (Bluetooth)
   Browse: Sfoglia
+  Browse and play recorded timelapses: ''
   'Browse guides, configuration references, and troubleshooting ': 'Consulta guide, riferimenti di configurazione e risoluzione dei problemi '
   Buffer Status: 'Stato buffer'
   Bundle Uploaded: Bundle caricato
@@ -750,6 +753,7 @@ translations:
   : Muove la testina per misurare le frequenze di vibrazione su ogni asse. Richiede 2-3 minuti. La stampante farà rumore — è normale.
   Multi Filament System Overview: Panoramica sistema multi-filamento
   Multi-Filament: Multi-filamento
+  Multi-Filament Overview: ''
   'Multi-Filament:': 'Multi-filamento:'
   Multi-Material: Multi-materiale
   My Custom Theme: Il mio tema personalizzato
@@ -997,6 +1001,7 @@ translations:
   Record Timelapse: Registra timelapse
   Record timelapses of your prints: Registra timelapse delle tue stampe
   Recorded Videos: Video registrati
+  Recorded timelapses will appear here: ''
   Recording Mode: Modalità registrazione
   Recover: Recupera
   Recovering AFC system...: Recupero sistema AFC...
@@ -1014,6 +1019,7 @@ translations:
   Rename: Rinomina
   Rename Mesh Profile: Rinomina profilo mesh
   Render Now: Renderizza ora
+  Rendering timelapse...: ''
   Report saved to crash_report.txt: Report salvato in crash_report.txt
   Reprint: Ristampa
   Require confirmation before emergency stop: Richiedi conferma prima dell'arresto di emergenza
@@ -1286,6 +1292,7 @@ translations:
   Timelapse: Timelapse
   Timelapse Available: Timelapse disponibile
   Timelapse Settings: Impostazioni timelapse
+  Timelapse Videos: ''
   Timelapse plugin installed successfully!: Plugin timelapse installato con successo!
   Timelapse plugin installed!: Plugin timelapse installato!
   Timelapse plugin is already installed!: Plugin timelapse già installato!

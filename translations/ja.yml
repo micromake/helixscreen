@@ -1,6 +1,7 @@
 locale: ja
 translations:
   ' elapsed · ': ' 経過 · '
+  ' frames': ''
   ' frames captured': ' フレームをキャプチャしました'
   ' left': ' 残り'
   '%lu days ago': '%lu日前'
@@ -108,6 +109,7 @@ translations:
   Animations: アニメーション
   Anonymous data to help improve HelixScreen: HelixScreen改善のための匿名データ
   Anonymous stats — no personal data, ever.: 匿名の統計情報 — 個人データは一切収集しません。
+  AntHead: ''
   Any notes...: メモ...
   App Background: アプリ背景
   Apply: 適用
@@ -172,6 +174,7 @@ translations:
   Brother QL: Brother QL
   Brother QL (Bluetooth): Brother QL (Bluetooth)
   Browse: 参照
+  Browse and play recorded timelapses: ''
   'Browse guides, configuration references, and troubleshooting ': 'ガイド、設定リファレンス、トラブルシューティングを参照 '
   Buffer Status: 'バッファーステータス'
   Bundle Uploaded: バンドルをアップロードしました
@@ -750,6 +753,7 @@ translations:
   : プリントヘッドを移動させて各軸の振動周波数を測定します。2〜3分かかります。プリンターから音がしますが、これは正常です。
   Multi Filament System Overview: マルチフィラメントシステム概要
   Multi-Filament: マルチフィラメント
+  Multi-Filament Overview: ''
   'Multi-Filament:': マルチフィラメント：
   Multi-Material: マルチマテリアル
   My Custom Theme: マイカスタムテーマ
@@ -997,6 +1001,7 @@ translations:
   Record Timelapse: タイムラプスを録画
   Record timelapses of your prints: 印刷のタイムラプスを録画
   Recorded Videos: 録画された動画
+  Recorded timelapses will appear here: ''
   Recording Mode: 録画モード
   Recover: 回復
   Recovering AFC system...: AFCシステムを復旧中...
@@ -1014,6 +1019,7 @@ translations:
   Rename: 名前を変更
   Rename Mesh Profile: メッシュプロファイルの名前を変更
   Render Now: 今すぐレンダリング
+  Rendering timelapse...: ''
   Report saved to crash_report.txt: crash_report.txt にレポートを保存しました
   Reprint: 再印刷
   Require confirmation before emergency stop: 緊急停止前に確認を求める
@@ -1286,6 +1292,7 @@ translations:
   Timelapse: タイムラプス
   Timelapse Available: タイムラプス利用可能
   Timelapse Settings: タイムラプス設定
+  Timelapse Videos: ''
   Timelapse plugin installed successfully!: タイムラプスプラグインのインストール成功！
   Timelapse plugin installed!: タイムラプスプラグインをインストールしました！
   Timelapse plugin is already installed!: タイムラプスプラグインは既にインストール済みです！

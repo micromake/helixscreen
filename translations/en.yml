@@ -1,6 +1,7 @@
 locale: en
 translations:
   ' elapsed · ': ' elapsed · '
+  ' frames': ' frames'
   ' frames captured': ' frames captured'
   ' left': ' left'
   '%lu days ago': '%lu days ago'
@@ -108,6 +109,7 @@ translations:
   Animations: Animations
   Anonymous data to help improve HelixScreen: Anonymous data to help improve HelixScreen
   Anonymous stats — no personal data, ever.: Anonymous stats — no personal data, ever.
+  AntHead: AntHead
   Any notes...: Any notes...
   App Background: App Background
   Apply: Apply
@@ -172,6 +174,7 @@ translations:
   Brother QL: Brother QL
   Brother QL (Bluetooth): Brother QL (Bluetooth)
   Browse: Browse
+  Browse and play recorded timelapses: Browse and play recorded timelapses
   'Browse guides, configuration references, and troubleshooting ': 'Browse guides, configuration references, and troubleshooting '
   Buffer Status: Buffer Status
   Bundle Uploaded: Bundle Uploaded
@@ -751,6 +754,7 @@ translations:
   : Moves the print head to measure vibration frequencies on each axis. Takes 2-3 minutes. The printer will make noise — this is normal.
   Multi Filament System Overview: Multi Filament System Overview
   Multi-Filament: Multi-Filament
+  Multi-Filament Overview: Multi-Filament Overview
   'Multi-Filament:': 'Multi-Filament:'
   Multi-Material: Multi-Material
   My Custom Theme: My Custom Theme
@@ -934,9 +938,9 @@ translations:
   Print File: Print File
   Print Files: Print Files
   Print History: Print History
-  Print Last: Print Last
   Print Hours: Print Hours
   Print Label: Print Label
+  Print Last: Print Last
   Print Objects: Print Objects
   Print Speed: Print Speed
   Print Status: Print Status
@@ -1001,6 +1005,7 @@ translations:
   Record Timelapse: Record Timelapse
   Record timelapses of your prints: Record timelapses of your prints
   Recorded Videos: Recorded Videos
+  Recorded timelapses will appear here: Recorded timelapses will appear here
   Recording Mode: Recording Mode
   Recover: Recover
   Recovering AFC system...: Recovering AFC system...
@@ -1018,6 +1023,7 @@ translations:
   Rename: Rename
   Rename Mesh Profile: Rename Mesh Profile
   Render Now: Render Now
+  Rendering timelapse...: Rendering timelapse...
   Report saved to crash_report.txt: Report saved to crash_report.txt
   Reprint: Reprint
   Require confirmation before emergency stop: Require confirmation before emergency stop
@@ -1290,6 +1296,7 @@ translations:
   Timelapse: Timelapse
   Timelapse Available: Timelapse Available
   Timelapse Settings: Timelapse Settings
+  Timelapse Videos: Timelapse Videos
   Timelapse plugin installed successfully!: Timelapse plugin installed successfully!
   Timelapse plugin installed!: Timelapse plugin installed!
   Timelapse plugin is already installed!: Timelapse plugin is already installed!

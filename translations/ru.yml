@@ -1,6 +1,7 @@
 locale: ru
 translations:
   ' elapsed · ': ' истёк · '
+  ' frames': ''
   ' frames captured': ' кадров захвачено'
   ' left': ' осталось'
   '%lu days ago': '%lu дн. назад'
@@ -108,6 +109,7 @@ translations:
   Animations: Анимации
   Anonymous data to help improve HelixScreen: Анонимные данные для улучшения HelixScreen
   Anonymous stats — no personal data, ever.: Анонимная статистика — никаких личных данных.
+  AntHead: ''
   Any notes...: Заметки...
   App Background: Фон приложения
   Apply: Применить
@@ -172,6 +174,7 @@ translations:
   Brother QL: Brother QL
   Brother QL (Bluetooth): Brother QL (Bluetooth)
   Browse: Обзор
+  Browse and play recorded timelapses: ''
   'Browse guides, configuration references, and troubleshooting ': 'Руководства, справочники по настройке и устранение неполадок '
   Buffer Status: 'Статус буфера'
   Bundle Uploaded: Пакет отправлен
@@ -750,6 +753,7 @@ translations:
   : Перемещает печатающую головку для измерения частот вибрации по каждой оси. Занимает 2-3 минуты. Принтер будет шуметь — это нормально.
   Multi Filament System Overview: Обзор мульти-филаментной системы
   Multi-Filament: Мульти-филамент
+  Multi-Filament Overview: ''
   'Multi-Filament:': 'Мульти-филамент:'
   Multi-Material: Мульти-материал
   My Custom Theme: Моя тема
@@ -997,6 +1001,7 @@ translations:
   Record Timelapse: Записать таймлапс
   Record timelapses of your prints: Записывайте таймлапсы ваших печатей
   Recorded Videos: Записанные видео
+  Recorded timelapses will appear here: ''
   Recording Mode: Режим записи
   Recover: Восстановить
   Recovering AFC system...: Восстановление системы AFC...
@@ -1014,6 +1019,7 @@ translations:
   Rename: Переименовать
   Rename Mesh Profile: Переименовать профиль сетки
   Render Now: Отрендерить сейчас
+  Rendering timelapse...: ''
   Report saved to crash_report.txt: Отчёт сохранён в crash_report.txt
   Reprint: Повторить печать
   Require confirmation before emergency stop: Требовать подтверждение перед аварийной остановкой
@@ -1286,6 +1292,7 @@ translations:
   Timelapse: Таймлапс
   Timelapse Available: Таймлапс доступен
   Timelapse Settings: Настройки таймлапса
+  Timelapse Videos: ''
   Timelapse plugin installed successfully!: Плагин таймлапса успешно установлен!
   Timelapse plugin installed!: Плагин таймлапса установлен!
   Timelapse plugin is already installed!: Плагин таймлапса уже установлен!
