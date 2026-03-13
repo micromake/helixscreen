@@ -1436,6 +1436,7 @@ void theme_manager_preview(const helix::ThemeData& theme, bool is_dark) {
  * Check if a font is one of the MDI icon fonts (forward declaration)
  */
 static bool is_icon_font(const lv_font_t* font);
+static bool is_muted_text_font(const lv_font_t* font);
 
 /**
  * Helper to update button label text with contrast-aware color
@@ -1489,8 +1490,10 @@ static void apply_button_text_contrast(lv_obj_t* btn) {
                     lv_obj_set_style_text_color(child, text_color, LV_PART_MAIN);
                 }
             } else {
-                // Regular label: always apply contrast
-                lv_obj_set_style_text_color(child, text_color, LV_PART_MAIN);
+                // Regular label: use muted color for muted-style fonts, contrast for others
+                const lv_font_t* font = lv_obj_get_style_text_font(child, LV_PART_MAIN);
+                lv_obj_set_style_text_color(
+                    child, is_muted_text_font(font) ? current_muted : text_color, LV_PART_MAIN);
             }
         }
         // Also check nested containers (some buttons have container > label structure)
@@ -1505,7 +1508,9 @@ static void apply_button_text_contrast(lv_obj_t* btn) {
                         lv_obj_set_style_text_color(nested, text_color, LV_PART_MAIN);
                     }
                 } else {
-                    lv_obj_set_style_text_color(nested, text_color, LV_PART_MAIN);
+                    lv_obj_set_style_text_color(
+                        nested, is_muted_text_font(nested_font) ? current_muted : text_color,
+                        LV_PART_MAIN);
                 }
             }
         }

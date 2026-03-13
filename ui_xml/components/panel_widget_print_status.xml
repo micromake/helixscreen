@@ -40,7 +40,7 @@
             <event_cb trigger="clicked" callback="library_files_cb"/>
             <icon src="folder" size="sm" variant="primary" clickable="false" event_bubble="true"/>
             <text_small text="Print Files" translation_tag="Print Files"
-                        clickable="false" event_bubble="true"/>
+                        style_text_color="#text" clickable="false" event_bubble="true"/>
           </lv_obj>
           <!-- Print Last row -->
           <lv_obj name="library_row_last" width="100%" height="content"
@@ -50,7 +50,7 @@
             <event_cb trigger="clicked" callback="library_last_cb"/>
             <icon src="clock" size="sm" variant="primary" clickable="false" event_bubble="true"/>
             <text_small name="library_last_label" text="Reprint Last" translation_tag="Reprint Last"
-                        clickable="false" event_bubble="true"/>
+                        style_text_color="#text" clickable="false" event_bubble="true"/>
           </lv_obj>
           <!-- Recent row -->
           <lv_obj name="library_row_recent" width="100%" height="content"
@@ -60,7 +60,7 @@
             <event_cb trigger="clicked" callback="library_recent_cb"/>
             <icon src="star" size="sm" variant="primary" clickable="false" event_bubble="true"/>
             <text_small text="Recent Prints" translation_tag="Recent Prints"
-                        clickable="false" event_bubble="true"/>
+                        style_text_color="#text" clickable="false" event_bubble="true"/>
           </lv_obj>
         </lv_obj>
       </lv_obj>
@@ -83,7 +83,7 @@
         <event_cb trigger="clicked" callback="library_files_cb"/>
         <icon src="folder" size="sm" variant="primary" clickable="false" event_bubble="true"/>
         <text_small text="Print Files" translation_tag="Print Files"
-                    clickable="false" event_bubble="true"/>
+                    style_text_color="#text" clickable="false" event_bubble="true"/>
       </lv_obj>
       <!-- Print Last row -->
       <lv_obj name="compact_row_last" width="100%" height="content"
@@ -93,7 +93,7 @@
         <event_cb trigger="clicked" callback="library_last_cb"/>
         <icon src="clock" size="sm" variant="primary" clickable="false" event_bubble="true"/>
         <text_small name="compact_last_label" text="Reprint Last" translation_tag="Reprint Last"
-                    clickable="false" event_bubble="true"/>
+                    style_text_color="#text" clickable="false" event_bubble="true"/>
       </lv_obj>
     </lv_obj>
     <!-- PREPARING STATE: Progress + message (hidden when print_start_phase == 0/IDLE) -->
