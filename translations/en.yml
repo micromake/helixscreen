@@ -243,6 +243,7 @@ translations:
   Checking accelerometer...: Checking accelerometer...
   Checking for plugin...: Checking for plugin...
   Checking slots...: Checking slots...
+  Checking Spoolman server...: Checking Spoolman server...
   Checking timelapse plugin...: Checking timelapse plugin...
   Choose 12-hour or 24-hour time display: Choose 12-hour or 24-hour time display
   Choose Saved Spool: Choose Saved Spool
@@ -297,6 +298,7 @@ translations:
   Connected: Connected
   Connected (%s): Connected (%s)
   Connected (no discovery): Connected (no discovery)
+  Connected to: Connected to
   'Connected to ': 'Connected to '
   Connected! Discovering printer...: Connected! Discovering printer...
   Connected, discovering...: Connected, discovering...
@@ -323,6 +325,8 @@ translations:
   Corner roundness (0 = sharp, 40 = very round): Corner roundness (0 = sharp, 40 = very round)
   Correction (Ki): Correction (Ki)
   Could not check webcam status.\nCheck printer connection.: Could not check webcam status.\nCheck printer connection.
+  Could not reach Spoolman at: Could not reach Spoolman at
+  Could not verify Spoolman status. Moonraker may still be restarting.: Could not verify Spoolman status. Moonraker may still be restarting.
   Crash report sent — thank you!: Crash report sent — thank you!
   Create New Filament: Create New Filament
   Create New Vendor: Create New Vendor
@@ -452,6 +456,7 @@ translations:
   Enter a name to save this profile: Enter a name to save this profile
   Enter password: Enter password
   Enter printer IP address first: Enter printer IP address first
+  Enter the IP address and port of your Spoolman server.: Enter the IP address and port of your Spoolman server.
   Error: Error
   Error state: Error state
   Escalate to emergency stop if cancel doesn't respond: Escalate to emergency stop if cancel doesn't respond
@@ -494,15 +499,20 @@ translations:
   Failed to open history: Failed to open history
   Failed to open history list: Failed to open history list
   Failed to open wizard: Failed to open wizard
+  Failed to read config.: Failed to read config.
+  Failed to read config. Check connection.: Failed to read config. Check connection.
+  Failed to read moonraker.conf.: Failed to read moonraker.conf.
   Failed to render label: Failed to render label
   Failed to reset theme: Failed to reset theme
   Failed to restart Moonraker.: Failed to restart Moonraker.
   Failed to save changes to Spoolman: Failed to save changes to Spoolman
+  Failed to save config.: Failed to save config.
   Failed to save configuration: Failed to save configuration
   Failed to save spool: Failed to save spool
   Failed to save theme file: Failed to save theme file
   Failed to set active spool: Failed to set active spool
   Failed to update configuration.\nCheck printer connection.: Failed to update configuration.\nCheck printer connection.
+  Failed to update moonraker.conf.: Failed to update moonraker.conf.
   Failed to update phase tracking: Failed to update phase tracking
   Fan Calibration: Fan Calibration
   Fan Transfer: Fan Transfer
@@ -608,6 +618,7 @@ translations:
   Hyperlapse: Hyperlapse
   IMPORT FROM USB: IMPORT FROM USB
   'IP:': 'IP:'
+  IP Address / Hostname: IP Address / Hostname
   Icon: Icon
   Idle: Idle
   Ignore: Ignore
@@ -771,6 +782,7 @@ translations:
   Modified: Modified
   Month: Month
   Moonraker: Moonraker
+  Moonraker restarted but Spoolman not connected. Check server.: Moonraker restarted but Spoolman not connected. Check server.
   Moonraker restarting...\nWaiting for reconnection...: Moonraker restarting...\nWaiting for reconnection...
   More points = more accurate, but takes longer.: More points = more accurate, but takes longer.
   Motion: Motion
@@ -856,6 +868,7 @@ translations:
   Not calibrated: Not calibrated
   Not connected: Not connected
   Not connected to printer: Not connected to printer
+  Not connected to printer.: Not connected to printer.
   Not yet calibrated: Not yet calibrated
   Notes: Notes
   Notes (optional): Notes (optional)
@@ -934,6 +947,8 @@ translations:
   Placed: Placed
   Play a test beep: Play a test beep
   Please enter a theme name: Please enter a theme name
+  Please enter a valid port (1-65535).: Please enter a valid port (1-65535).
+  Please enter an IP address or hostname.: Please enter an IP address or hostname.
   Please wait while the printer homes and probes.: Please wait while the printer homes and probes.
   Please wait while the printer probes each screw position.: Please wait while the printer probes each screw position.
   Plugin already installed: Plugin already installed
@@ -1053,7 +1068,9 @@ translations:
   Remaining: Remaining
   Remaining (g): Remaining (g)
   Remaining Weight (g): Remaining Weight (g)
+  Remove: Remove
   Remove PIN: Remove PIN
+  Remove Spoolman?: Remove Spoolman?
   Remove plugin from printer: Remove plugin from printer
   Rename: Rename
   Rename Mesh Profile: Rename Mesh Profile
@@ -1175,6 +1192,7 @@ translations:
   Sensor Temperature: Sensor Temperature
   Sensors: Sensors
   Separate on/off macros. HelixScreen tracks the state.: Separate on/off macros. HelixScreen tracks the state.
+  Server Setup: Server Setup
   'Set ': 'Set '
   Set Active: Set Active
   Set PIN: Set PIN
@@ -1224,7 +1242,10 @@ translations:
   Spool saved: Spool saved
   Spool wt (g): Spool wt (g)
   Spoolman: Spoolman
+  Spoolman connected!: Spoolman connected!
+  Spoolman found! Configuring...: Spoolman found! Configuring...
   Spoolman has no spools configured: Spoolman has no spools configured
+  Spoolman removed.: Spoolman removed.
   Spoolman unavailable — filament weights may be stale: Spoolman unavailable — filament weights may be stale
   Square Corner Velocity: Square Corner Velocity
   Stable: Stable
@@ -1329,6 +1350,7 @@ translations:
   : This will collect system info, logs, settings, and printer data to help diagnose issues. No passwords or sensitive data will be included.
   This will immediately halt all printer operations. The printer will require a restart to resume.: This will immediately halt all printer operations. The printer will require a restart to resume.
   This will remove all entries from the display.: This will remove all entries from the display.
+  This will remove the Spoolman configuration from Moonraker and restart the service.: This will remove the Spoolman configuration from Moonraker and restart the service.
   This will reset all settings to defaults. This action cannot be undone.: This will reset all settings to defaults. This action cannot be undone.
   This will restart Klipper firmware. Any active operations will be interrupted.: This will restart Klipper firmware. Any active operations will be interrupted.
   This will restart Klipper.: This will restart Klipper.
@@ -1433,6 +1455,7 @@ translations:
   Volume, themes, and UI sounds: Volume, themes, and UI sounds
   WIDTH SENSORS: WIDTH SENSORS
   WLED: WLED
+  Waiting for Moonraker...: Waiting for Moonraker...
   Waiting for bed to reach temperature for accurate calibration.: Waiting for bed to reach temperature for accurate calibration.
   Warm Bed: Warm Bed
   Warming Bed...: Warming Bed...
