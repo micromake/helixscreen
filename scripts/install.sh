@@ -3314,6 +3314,10 @@ ensure_moonraker_asvc() {
     local fs
     fs=$(file_sudo "$asvc")
     log_info "Adding helixscreen to $asvc..."
+    # Ensure file ends with a newline before appending (#408)
+    if [ -s "$asvc" ] && [ "$(tail -c 1 "$asvc" | wc -l)" -eq 0 ]; then
+        echo "" | $fs tee -a "$asvc" >/dev/null
+    fi
     echo "helixscreen" | $fs tee -a "$asvc" >/dev/null
     log_success "Added helixscreen to Moonraker service allowlist"
 }
