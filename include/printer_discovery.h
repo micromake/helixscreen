@@ -448,10 +448,38 @@ class PrinterDiscovery {
 
         for (const auto& [key, value] : config.items()) {
             if (key == "adxl345" || key.rfind("adxl345 ", 0) == 0 || key == "lis2dw" ||
-                key.rfind("lis2dw ", 0) == 0 || key == "mpu9250" || key.rfind("mpu9250 ", 0) == 0 ||
-                key == "resonance_tester") {
+                key.rfind("lis2dw ", 0) == 0 || key == "mpu9250" ||
+                key.rfind("mpu9250 ", 0) == 0 || key == "lis3dh" ||
+                key.rfind("lis3dh ", 0) == 0 || key == "icm20948" ||
+                key.rfind("icm20948 ", 0) == 0 || key == "resonance_tester") {
                 has_accelerometer_ = true;
                 spdlog::debug("[PrinterDiscovery] Accelerometer detected from config: {}", key);
+            }
+
+            // Beacon RevH has an onboard LIS2DW accelerometer.
+            // Detect from accel-specific config fields in the [beacon] section.
+            if (key == "beacon" && value.is_object()) {
+                if (value.contains("accel_scale") || value.contains("accel_axes_map")) {
+                    has_accelerometer_ = true;
+                    spdlog::debug(
+                        "[PrinterDiscovery] Beacon onboard accelerometer detected from config");
+                }
+            }
+
+            // Also detect accelerometers referenced by resonance_tester
+            // (e.g., accel_chip: beacon for Beacon RevH probes)
+            if (key == "resonance_tester" && value.is_object()) {
+                for (const auto& field : {"accel_chip", "accel_chip_x", "accel_chip_y"}) {
+                    if (value.contains(field) && value[field].is_string()) {
+                        const auto& chip = value[field].get<std::string>();
+                        if (chip == "beacon" || chip.rfind("beacon ", 0) == 0) {
+                            has_accelerometer_ = true;
+                            spdlog::debug("[PrinterDiscovery] Beacon accelerometer detected via "
+                                          "resonance_tester {}",
+                                          field);
+                        }
+                    }
+                }
             }
 
             // screws_tilt_adjust doesn't implement get_status() in Klipper,

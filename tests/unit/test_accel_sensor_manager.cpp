@@ -214,6 +214,102 @@ TEST_CASE_METHOD(AccelSensorTestFixture, "AccelSensorManager - config-based disc
         mgr().discover_from_config(config_keys);
         REQUIRE_FALSE(mgr().has_sensors());
     }
+
+    SECTION("Discovers LIS3DH from config keys") {
+        json config_keys = {{"lis3dh", json::object()}};
+        mgr().discover_from_config(config_keys);
+
+        REQUIRE(mgr().sensor_count() == 1);
+        auto configs = mgr().get_sensors();
+        REQUIRE(configs[0].klipper_name == "lis3dh");
+        REQUIRE(configs[0].type == AccelSensorType::LIS3DH);
+    }
+
+    SECTION("Discovers named LIS3DH from config keys") {
+        json config_keys = {{"lis3dh toolhead", json::object()}};
+        mgr().discover_from_config(config_keys);
+
+        REQUIRE(mgr().sensor_count() == 1);
+        auto configs = mgr().get_sensors();
+        REQUIRE(configs[0].klipper_name == "lis3dh toolhead");
+        REQUIRE(configs[0].sensor_name == "toolhead");
+        REQUIRE(configs[0].type == AccelSensorType::LIS3DH);
+    }
+
+    SECTION("Discovers ICM20948 from config keys") {
+        json config_keys = {{"icm20948", json::object()}};
+        mgr().discover_from_config(config_keys);
+
+        REQUIRE(mgr().sensor_count() == 1);
+        auto configs = mgr().get_sensors();
+        REQUIRE(configs[0].klipper_name == "icm20948");
+        REQUIRE(configs[0].type == AccelSensorType::ICM20948);
+    }
+
+    SECTION("Discovers Beacon onboard accelerometer via accel_scale") {
+        json config_keys = {{"beacon", {{"accel_scale", "16g"}, {"serial", "/dev/ttyUSB0"}}}};
+        mgr().discover_from_config(config_keys);
+
+        REQUIRE(mgr().sensor_count() == 1);
+        auto configs = mgr().get_sensors();
+        REQUIRE(configs[0].klipper_name == "beacon");
+        REQUIRE(configs[0].sensor_name == "beacon");
+        REQUIRE(configs[0].type == AccelSensorType::LIS2DW);
+    }
+
+    SECTION("Discovers Beacon onboard accelerometer via accel_axes_map") {
+        json config_keys = {{"beacon", {{"accel_axes_map", "x,y,z"}}}};
+        mgr().discover_from_config(config_keys);
+
+        REQUIRE(mgr().sensor_count() == 1);
+        auto configs = mgr().get_sensors();
+        REQUIRE(configs[0].klipper_name == "beacon");
+        REQUIRE(configs[0].type == AccelSensorType::LIS2DW);
+    }
+
+    SECTION("Beacon without accel fields is not discovered as accelerometer") {
+        json config_keys = {{"beacon", {{"serial", "/dev/serial/by-id/usb-beacon"}}}};
+        mgr().discover_from_config(config_keys);
+
+        REQUIRE_FALSE(mgr().has_sensors());
+    }
+
+    SECTION("Discovers Beacon accelerometer via resonance_tester accel_chip") {
+        json config_keys = {
+            {"resonance_tester", {{"accel_chip", "beacon"}, {"probe_points", "100,100,20"}}}};
+        mgr().discover_from_config(config_keys);
+
+        REQUIRE(mgr().sensor_count() == 1);
+        auto configs = mgr().get_sensors();
+        REQUIRE(configs[0].klipper_name == "beacon");
+        REQUIRE(configs[0].type == AccelSensorType::LIS2DW);
+    }
+
+    SECTION("Discovers Beacon accelerometer via resonance_tester accel_chip_x") {
+        json config_keys = {{"resonance_tester", {{"accel_chip_x", "beacon"}}}};
+        mgr().discover_from_config(config_keys);
+
+        REQUIRE(mgr().sensor_count() == 1);
+        auto configs = mgr().get_sensors();
+        REQUIRE(configs[0].klipper_name == "beacon");
+    }
+
+    SECTION("Beacon accel_scale takes priority over resonance_tester fallback") {
+        // Both beacon config and resonance_tester reference beacon —
+        // should only register once
+        json config_keys = {{"beacon", {{"accel_scale", "16g"}}},
+                            {"resonance_tester", {{"accel_chip", "beacon"}}}};
+        mgr().discover_from_config(config_keys);
+
+        // Should have exactly 1 beacon sensor, not 2
+        int beacon_count = 0;
+        for (const auto& s : mgr().get_sensors()) {
+            if (s.klipper_name == "beacon") {
+                beacon_count++;
+            }
+        }
+        REQUIRE(beacon_count == 1);
+    }
 }
 
 // NOTE: The old discover(vector<string>) tests have been removed because:

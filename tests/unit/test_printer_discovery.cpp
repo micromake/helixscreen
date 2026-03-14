@@ -857,6 +857,66 @@ TEST_CASE("PrinterDiscovery detects accelerometers from config keys", "[printer_
         REQUIRE(hw.has_accelerometer());
     }
 
+    SECTION("detects lis3dh") {
+        json config = {{"lis3dh", json::object()}};
+        hw.parse_config_keys(config);
+        REQUIRE(hw.has_accelerometer());
+    }
+
+    SECTION("detects named lis3dh") {
+        json config = {{"lis3dh toolhead", json::object()}};
+        hw.parse_config_keys(config);
+        REQUIRE(hw.has_accelerometer());
+    }
+
+    SECTION("detects icm20948") {
+        json config = {{"icm20948", json::object()}};
+        hw.parse_config_keys(config);
+        REQUIRE(hw.has_accelerometer());
+    }
+
+    SECTION("detects named icm20948") {
+        json config = {{"icm20948 bed", json::object()}};
+        hw.parse_config_keys(config);
+        REQUIRE(hw.has_accelerometer());
+    }
+
+    SECTION("detects Beacon onboard accelerometer via accel_scale") {
+        json config = {{"beacon", {{"accel_scale", "16g"}}}};
+        hw.parse_config_keys(config);
+        REQUIRE(hw.has_accelerometer());
+    }
+
+    SECTION("detects Beacon onboard accelerometer via accel_axes_map") {
+        json config = {{"beacon", {{"accel_axes_map", "x,y,z"}}}};
+        hw.parse_config_keys(config);
+        REQUIRE(hw.has_accelerometer());
+    }
+
+    SECTION("beacon without accel fields does not set accelerometer flag") {
+        json config = {{"beacon", {{"serial", "/dev/serial/by-id/usb-beacon"}}}};
+        hw.parse_config_keys(config);
+        REQUIRE_FALSE(hw.has_accelerometer());
+    }
+
+    SECTION("detects beacon accelerometer via resonance_tester accel_chip") {
+        json config = {{"resonance_tester", {{"accel_chip", "beacon"}}}};
+        hw.parse_config_keys(config);
+        REQUIRE(hw.has_accelerometer());
+    }
+
+    SECTION("detects beacon accelerometer via resonance_tester accel_chip_x") {
+        json config = {{"resonance_tester", {{"accel_chip_x", "beacon"}}}};
+        hw.parse_config_keys(config);
+        REQUIRE(hw.has_accelerometer());
+    }
+
+    SECTION("detects beacon accelerometer via resonance_tester accel_chip_y") {
+        json config = {{"resonance_tester", {{"accel_chip_y", "beacon"}}}};
+        hw.parse_config_keys(config);
+        REQUIRE(hw.has_accelerometer());
+    }
+
     SECTION("does not detect unrelated config keys") {
         json config = {{"extruder", json::object()}, {"heater_bed", json::object()}};
         hw.parse_config_keys(config);

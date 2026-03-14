@@ -74,6 +74,54 @@ void AccelSensorManager::discover_from_config(const nlohmann::json& config_keys)
                       sensor_name, accel_type_to_string(type));
     }
 
+    // Detect Beacon onboard accelerometer
+    // Beacon RevH has a LIS2DW that registers as accel chip "beacon"
+    if (config_keys.contains("beacon") && config_keys["beacon"].is_object()) {
+        const auto& beacon_cfg = config_keys["beacon"];
+        if (beacon_cfg.contains("accel_scale") || beacon_cfg.contains("accel_axes_map")) {
+            AccelSensorConfig config("beacon", "beacon", AccelSensorType::LIS2DW);
+            sensors_.push_back(config);
+
+            if (states_.find("beacon") == states_.end()) {
+                AccelSensorState state;
+                state.available = true;
+                states_["beacon"] = state;
+            } else {
+                states_["beacon"].available = true;
+            }
+
+            spdlog::debug("[AccelSensorManager] Discovered Beacon onboard accelerometer (LIS2DW)");
+        }
+    }
+
+    // Fallback: detect beacon accelerometer via resonance_tester config
+    if (states_.find("beacon") == states_.end() && config_keys.contains("resonance_tester") &&
+        config_keys["resonance_tester"].is_object()) {
+        const auto& rt_cfg = config_keys["resonance_tester"];
+        bool beacon_referenced = false;
+        for (const auto& field : {"accel_chip", "accel_chip_x", "accel_chip_y"}) {
+            if (rt_cfg.contains(field) && rt_cfg[field].is_string()) {
+                const auto& chip = rt_cfg[field].get<std::string>();
+                if (chip == "beacon" || chip.rfind("beacon ", 0) == 0) {
+                    beacon_referenced = true;
+                    break;
+                }
+            }
+        }
+        if (beacon_referenced) {
+            AccelSensorConfig config("beacon", "beacon", AccelSensorType::LIS2DW);
+            sensors_.push_back(config);
+
+            AccelSensorState state;
+            state.available = true;
+            states_["beacon"] = state;
+
+            spdlog::debug(
+                "[AccelSensorManager] Discovered Beacon accelerometer via resonance_tester "
+                "reference");
+        }
+    }
+
     // Mark sensors that disappeared as unavailable
     for (auto& [name, state] : states_) {
         bool found = false;
