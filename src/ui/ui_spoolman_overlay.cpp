@@ -109,6 +109,7 @@ void SpoolmanOverlay::register_callbacks() {
 
     // Server setup callbacks
     lv_xml_register_event_cb(nullptr, "on_spoolman_connect_clicked", on_connect_clicked);
+    lv_xml_register_event_cb(nullptr, "on_spoolman_cancel_setup_clicked", on_cancel_setup_clicked);
     lv_xml_register_event_cb(nullptr, "on_spoolman_change_clicked", on_change_clicked);
     lv_xml_register_event_cb(nullptr, "on_spoolman_remove_clicked", on_remove_clicked);
 
@@ -752,6 +753,12 @@ void SpoolmanOverlay::on_change_clicked(lv_event_t* /*e*/) {
     if (overlay.setup_card_) lv_obj_remove_flag(overlay.setup_card_, LV_OBJ_FLAG_HIDDEN);
     if (overlay.status_card_) lv_obj_add_flag(overlay.status_card_, LV_OBJ_FLAG_HIDDEN);
 
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void SpoolmanOverlay::on_cancel_setup_clicked(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[SpoolmanOverlay] on_cancel_setup_clicked");
+    NavigationManager::instance().go_back();
     LVGL_SAFE_EVENT_CB_END();
 }
 

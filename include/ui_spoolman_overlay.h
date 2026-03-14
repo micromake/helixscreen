@@ -252,6 +252,7 @@ class SpoolmanOverlay : public OverlayBase {
 
     // === Server Setup Callbacks ===
     static void on_connect_clicked(lv_event_t* e);
+    static void on_cancel_setup_clicked(lv_event_t* e);
     static void on_change_clicked(lv_event_t* e);
     static void on_remove_clicked(lv_event_t* e);
 

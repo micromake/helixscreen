@@ -41,11 +41,18 @@
         <!-- Status text (for errors/progress) -->
         <text_small name="setup_status_text" width="100%" text=""
                     style_text_color="#text_muted"/>
-        <!-- Connect button -->
-        <ui_button name="connect_btn" variant="primary" width="100%"
-                   text="Connect" translation_tag="Connect">
-          <event_cb trigger="clicked" callback="on_spoolman_connect_clicked"/>
-        </ui_button>
+        <!-- Action buttons -->
+        <lv_obj width="100%" height="content" style_pad_all="0" flex_flow="row"
+                style_pad_gap="#space_sm" scrollable="false">
+          <ui_button name="connect_btn" variant="primary" flex_grow="1"
+                     text="Connect" translation_tag="Connect">
+            <event_cb trigger="clicked" callback="on_spoolman_connect_clicked"/>
+          </ui_button>
+          <ui_button name="cancel_setup_btn" variant="outline" flex_grow="1"
+                     text="Cancel" translation_tag="Cancel">
+            <event_cb trigger="clicked" callback="on_spoolman_cancel_setup_clicked"/>
+          </ui_button>
+        </lv_obj>
       </ui_card>
       <!-- ================================================================== -->
       <!-- Server Status (shown when Spoolman IS configured)                   -->
