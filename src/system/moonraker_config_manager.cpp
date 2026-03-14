@@ -115,18 +115,62 @@ std::string MoonrakerConfigManager::remove_section(
 }
 
 bool MoonrakerConfigManager::has_include_line(const std::string& moonraker_content) {
-    // Stub — implemented in Task 4
-    return false;
+    return has_section(moonraker_content, "include helixscreen.conf");
 }
 
 std::string MoonrakerConfigManager::add_include_line(const std::string& moonraker_content) {
-    // Stub — implemented in Task 4
-    return moonraker_content;
+    if (has_include_line(moonraker_content)) return moonraker_content;
+
+    const std::string include_block = "[include helixscreen.conf]\n\n";
+
+    // Find the first non-comment section header and insert before it
+    std::istringstream stream(moonraker_content);
+    std::string line;
+    size_t pos = 0;
+    while (std::getline(stream, line)) {
+        std::string t = trim(line);
+        if (!t.empty() && t[0] == '[') {
+            // Insert before this section header
+            std::string result = moonraker_content.substr(0, pos);
+            result += include_block;
+            result += moonraker_content.substr(pos);
+            return result;
+        }
+        pos += line.size() + 1; // +1 for '\n'
+    }
+
+    // No section found — append
+    std::string result = moonraker_content;
+    if (!result.empty() && result.back() != '\n') result += '\n';
+    result += include_block;
+    return result;
 }
 
 std::string MoonrakerConfigManager::get_section_value(
     const std::string& content, const std::string& section_name, const std::string& key) {
-    // Stub — implemented in Task 4
+    const std::string target_section = "[" + section_name + "]";
+    std::istringstream stream(content);
+    std::string line;
+    bool in_section = false;
+
+    while (std::getline(stream, line)) {
+        std::string t = trim(line);
+        if (t.empty() || t[0] == '#') continue;
+
+        if (t[0] == '[') {
+            in_section = (t == target_section);
+            continue;
+        }
+
+        if (!in_section) continue;
+
+        // Parse "key : value" with optional whitespace
+        size_t colon = t.find(':');
+        if (colon == std::string::npos) continue;
+        std::string k = trim(t.substr(0, colon));
+        if (k != key) continue;
+        return trim(t.substr(colon + 1));
+    }
     return "";
 }
 
