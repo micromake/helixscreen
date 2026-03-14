@@ -13,11 +13,76 @@
       <!-- Description text -->
       <text_small name="description" width="100%" text="Configure Spoolman integration and weight sync settings." translation_tag="Configure Spoolman integration and weight sync settings."/>
       <!-- ================================================================== -->
+      <!-- Server Setup (shown when Spoolman NOT configured)                   -->
+      <!-- ================================================================== -->
+      <ui_card name="setup_card"
+               width="100%" height="content" style_radius="#border_radius" style_pad_all="#space_md"
+               flex_flow="column" style_pad_gap="#space_sm">
+        <bind_flag_if_eq subject="printer_has_spoolman" flag="hidden" ref_value="1"/>
+        <text_body text="Server Setup" translation_tag="Server Setup"/>
+        <text_small text="Enter the IP address and port of your Spoolman server."
+                    translation_tag="Enter the IP address and port of your Spoolman server."
+                    style_text_color="#text_muted"/>
+        <!-- Host input -->
+        <lv_obj width="100%" height="content" style_pad_all="0" flex_flow="column"
+                style_pad_gap="#space_xs" scrollable="false">
+          <text_small text="IP Address / Hostname" translation_tag="IP Address / Hostname"/>
+          <text_input name="spoolman_host_input"
+                      width="100%" placeholder_text="192.168.1.100" max_length="64"/>
+        </lv_obj>
+        <!-- Port input -->
+        <lv_obj width="100%" height="content" style_pad_all="0" flex_flow="column"
+                style_pad_gap="#space_xs" scrollable="false">
+          <text_small text="Port" translation_tag="Port"/>
+          <text_input name="spoolman_port_input"
+                      width="100%" placeholder_text="7912" max_length="5"
+                      input_mode="number" keyboard_hint="numeric" text="7912"/>
+        </lv_obj>
+        <!-- Status text (for errors/progress) -->
+        <text_small name="setup_status_text" width="100%" text=""
+                    style_text_color="#text_muted"/>
+        <!-- Connect button -->
+        <ui_button name="connect_btn" variant="primary" width="100%"
+                   label="Connect" label_tag="Connect">
+          <event_cb trigger="clicked" callback="on_spoolman_connect_clicked"/>
+        </ui_button>
+      </ui_card>
+      <!-- ================================================================== -->
+      <!-- Server Status (shown when Spoolman IS configured)                   -->
+      <!-- ================================================================== -->
+      <ui_card name="status_card"
+               width="100%" height="content" style_radius="#border_radius" style_pad_all="#space_md"
+               flex_flow="column" style_pad_gap="#space_sm">
+        <bind_flag_if_eq subject="printer_has_spoolman" flag="hidden" ref_value="0"/>
+        <lv_obj width="100%" height="content" style_pad_all="0" flex_flow="row"
+                style_flex_main_place="space_between" style_flex_cross_place="center" scrollable="false">
+          <lv_obj height="content" style_pad_all="0" flex_flow="column"
+                  style_pad_gap="#space_xs" scrollable="false" flex_grow="1">
+            <text_body text="Spoolman Server"/>
+            <text_small name="server_url_text" text="Connected" translation_tag="Connected"
+                        style_text_color="#text_muted"/>
+          </lv_obj>
+          <icon src="check-circle" size="sm" color="#success"/>
+        </lv_obj>
+        <lv_obj width="100%" height="content" style_pad_all="0" flex_flow="row"
+                style_pad_gap="#space_sm" scrollable="false">
+          <ui_button name="change_btn" variant="outline" flex_grow="1"
+                     label="Change" label_tag="Change">
+            <event_cb trigger="clicked" callback="on_spoolman_change_clicked"/>
+          </ui_button>
+          <ui_button name="remove_btn" variant="outline" flex_grow="1"
+                     label="Remove" label_tag="Remove">
+            <event_cb trigger="clicked" callback="on_spoolman_remove_clicked"/>
+          </ui_button>
+        </lv_obj>
+      </ui_card>
+      <!-- ================================================================== -->
       <!-- Sync Enable Row                                                     -->
       <!-- ================================================================== -->
       <ui_card name="sync_card"
                width="100%" height="content" style_radius="#border_radius" style_pad_all="#space_md" flex_flow="row"
                style_flex_main_place="space_between" style_flex_cross_place="center">
+        <bind_flag_if_eq subject="printer_has_spoolman" flag="hidden" ref_value="0"/>
         <!-- Left side: Icon + Label/Description -->
         <lv_obj height="content"
                 style_pad_all="0" flex_flow="row" style_flex_cross_place="center" style_pad_gap="#space_sm"
@@ -40,6 +105,7 @@
       <ui_card name="interval_card"
                width="100%" height="content" style_radius="#border_radius" style_pad_all="#space_md" flex_flow="row"
                style_flex_main_place="space_between" style_flex_cross_place="center">
+        <bind_flag_if_eq subject="printer_has_spoolman" flag="hidden" ref_value="0"/>
         <!-- Left side: Icon + Label/Description -->
         <lv_obj height="content"
                 style_pad_all="0" flex_flow="row" style_flex_cross_place="center" style_pad_gap="#space_sm"
@@ -63,6 +129,7 @@
       <lv_obj name="info_note"
               width="100%" height="content" style_pad_all="#space_sm" style_pad_left="#space_md" flex_flow="row"
               style_flex_main_place="start" style_flex_cross_place="center" style_pad_gap="#space_sm" scrollable="false">
+        <bind_flag_if_eq subject="printer_has_spoolman" flag="hidden" ref_value="0"/>
         <icon src="info" size="sm" variant="secondary"/>
         <text_small width="100%" flex_grow="1"
                     text="Weight data is synced from Spoolman to display remaining filament. Changes are also synced when prints start, pause, or complete." translation_tag="Weight data is synced from Spoolman to display remaining filament. Changes are also synced when prints start, pause, or complete." style_text_color="#text_muted"/>
