@@ -13,7 +13,7 @@
 > No hardcoded colors or spacing. Prefer semantic widgets (ui_card, ui_button, text_*, divider_*) which apply tokens automatically. Don't redundantly specify their built-in defaults (e.g., style_radius on ui_card, button_height on ui_button). See docs/LVGL9_XML_GUIDE.md "Custom Semantic Widgets" for defaults.
 
 ### [L009] [***--|*****] Icon font sync workflow
-- **Uses**: 21 | **Velocity**: 10 | **Learned**: 2025-12-14 | **Last**: 2026-03-12 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 22 | **Velocity**: 11 | **Learned**: 2025-12-14 | **Last**: 2026-03-13 | **Category**: gotcha | **Type**: constraint
 > After adding icon to codepoints.h: add to regen_mdi_fonts.sh, run make regen-fonts, then rebuild. Forgetting any step = missing icon
 
 ### [L011] [***--|***--] No mutex in destructors
@@ -37,7 +37,7 @@
 > Text-only buttons: use `align="center"` on child. Icon+text buttons with flex_flow="row": need ALL THREE flex properties - style_flex_main_place="center" (horizontal), style_flex_cross_place="center" (vertical align items), style_flex_track_place="center" (vertical position of row). Missing track_place causes content to sit at top.
 
 ### [L031] [*****|*****] XML no recompile
-- **Uses**: 100 | **Velocity**: 100.0075 | **Learned**: 2025-12-27 | **Last**: 2026-03-13 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 101.0075 | **Learned**: 2025-12-27 | **Last**: 2026-03-13 | **Category**: gotcha | **Type**: constraint
 > XML files are loaded at RUNTIME - never rebuild after XML-only changes. Just relaunch the app. This includes layout changes, styling, bindings, event callbacks - anything in ui_xml/*.xml. Only rebuild when C++ code changes.
 
 ### [L039] [*----|****-] Unique XML callback names
@@ -179,4 +179,8 @@
 ### [L077] [-----|-----] Dynamic subject observers MUST use SubjectLifetime tokens
 - **Uses**: 0 | **Velocity**: 0 | **Learned**: 2026-02-22 | **Last**: 2026-02-22 | **Category**: gotcha
 > When observing dynamic subjects (per-fan, per-sensor, per-extruder), always use the get_*_subject(name, lifetime) overload and pass the lifetime token to the observer factory function. Without it, lv_subject_deinit() frees the observer but ObserverGuard::reset() calls lv_observer_remove() on freed memory → SEGV. Static singleton subjects don't need tokens.
+
+### [L078] [-----|-----] lv_obj transform_scale invisible without background
+- **Uses**: 0 | **Velocity**: 0 | **Learned**: 2026-03-13 | **Last**: 2026-03-13 | **Category**: gotcha
+> LVGL transform_scale on lv_obj with transparent background only affects the object's own draw (border/bg), not children. Children are separate draw units. Use opacity (lv_style_set_opa) for press feedback on transparent containers like back buttons, since it applies to the entire object layer including children.
 
