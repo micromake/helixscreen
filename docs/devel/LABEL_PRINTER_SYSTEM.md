@@ -90,19 +90,27 @@ HelixScreen supports printing spool labels to thermal label printers via three t
 ### Niimbot (Custom BLE)
 
 - **Transport:** BLE GATT only (Transparent UART service `e7810a71-...`)
-- **Protocol:** Custom binary packets with XOR checksum
+- **Protocol:** Custom binary packets with XOR checksum, bidirectional (write + read)
 - **Packet format:** `[0x55 0x55 CMD LEN DATA... XOR_CHECKSUM 0xAA 0xAA]`
 - **DPI:** 203 (native)
+- **Connection initialization:**
+  1. BLE GATT connect with 1-second settle delay (firmware may discard early writes)
+  2. `Connect` (0xC1) — printer-level session handshake that arms the thermal subsystem
+  3. Read and log Connect response
 - **Print job sequence:**
   1. `SetDensity` (0x21) — density 1-5
   2. `SetLabelType` (0x23) — WithGaps/BlackMark/Continuous/Transparent
   3. `PrintStart` (0x01)
-  4. `PageStart` (0x03)
-  5. `SetPageSize` (0x13) — height + width as u16be
-  6. Image rows: `PrintBitmapRow` (0x85) or `PrintEmptyRow` (0x84)
-  7. `PageEnd` (0xE3)
-  8. `PrintEnd` (0xF3)
+  4. `PrintClear` (0xF0) — required by D110 before PageStart
+  5. `PageStart` (0x03)
+  6. `SetPageSize` (0x13) — height + width as u16be
+  7. `SetQuantity` (0x15) — 1 copy (prevents D110 double-printing)
+  8. Image rows: `PrintBitmapRow` (0x85) or `PrintEmptyRow` (0x84)
+  9. `PageEnd` (0xE3)
+  10. Poll `PrintStatus` (0xA3) until B3 response received
+  11. `PrintEnd` (0xF3) — sent at first B3 response to prevent auto-repeat
 - **Row encoding:** Per-row with 3-chunk or total black pixel count, repeat compression for identical consecutive rows
+- **Persistent connections:** BLE connection is kept alive across prints. Disconnect/reconnect causes blank output on the D110 unless the full initialization sequence (settle + Connect) is repeated.
 - **Models:** B21 (384px/48mm wide), D11/D110 (96px/12mm wide)
 
 ## Brand Detection
@@ -145,9 +153,10 @@ Shared `rfcomm_send()` helper in `bt_print_utils.cpp`:
 ### BLE GATT (Niimbot, Phomemo BLE)
 
 Each backend manages its own BLE connection:
-1. Init BT context → `connect_ble()` with service UUID → sequential `ble_write()` per packet → disconnect → deinit
+1. Init BT context → `connect_ble()` with service UUID → bidirectional `ble_write()`/`ble_read()` per packet
 2. Per-printer mutex serialization
-3. Inter-packet delays: 10ms for image rows, 100ms for commands (Niimbot)
+3. Inter-packet delays: 10ms for image rows (fire-and-forget), 100ms for command packets (read ACK response)
+4. **Niimbot:** Persistent connection kept alive across prints. Connection initialization includes 1-second BLE settle delay and Connect (0xC1) handshake. PrintStatus polling with `ble_read()` confirms print completion before sending PrintEnd.
 
 ## Label Sizes
 
@@ -158,7 +167,7 @@ Each printer family defines its own label size table:
 | `BrotherQLPrinter::supported_sizes_static()` | 720px (62mm) | 300 | 29mm, 62mm, 29x90mm |
 | `PhomemoPrinter::supported_sizes_static()` | varies | 203 | 40x30mm, 50x30mm |
 | `niimbot_b21_sizes()` | 384px (48mm) | 203 | 50x30mm, 40x30mm, 50x50mm |
-| `niimbot_d11_sizes()` | 96px (12mm) | 203 | 15x30mm, 12x40mm |
+| `niimbot_d11_sizes()` | 96px (12mm) | 203 | 12x40mm, 12x22mm, 12x30mm |
 | `niimbot_sizes_for_model(name)` | auto-detect | 203 | Selects B21 or D11 from device name |
 
 ## Testing

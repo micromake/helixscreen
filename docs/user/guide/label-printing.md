@@ -64,7 +64,7 @@ Select the label size that matches your loaded label roll:
 
 **Niimbot B21 sizes:** 50x30mm, 40x30mm, 50x50mm, 40x20mm, 50x80mm (203 DPI)
 
-**Niimbot D11/D110 sizes:** 15x30mm, 12x40mm, 12x30mm, 15x50mm (203 DPI)
+**Niimbot D11/D110 sizes:** 12x40mm, 12x22mm, 12x30mm, 12x50mm, 12x60mm, 12x70mm (203 DPI)
 
 > **Tip:** The size list updates automatically based on the detected printer model. A Niimbot D11 shows different sizes than a B21.
 
@@ -121,6 +121,11 @@ A toast notification confirms success or shows an error message.
 - Niimbot printers use BLE (Bluetooth Low Energy), which requires Bluetooth 4.0 or later
 - Make sure no other app (like the Niimbot phone app) is currently connected to the printer — BLE only allows one connection at a time
 - Power cycle the printer and try again
+
+### Niimbot first print is slow
+
+- The first print after connecting takes a few extra seconds — HelixScreen needs to initialize the BLE connection and warm up the printer's thermal subsystem
+- Subsequent prints are faster because the connection stays alive between jobs
 
 ---
 
