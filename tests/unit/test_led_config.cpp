@@ -318,6 +318,85 @@ TEST_CASE("LedController config: legacy /printer/leds/strip string migration", "
     ctrl.deinit();
 }
 
+TEST_CASE("LedController config: wizard saves both strip and selected_strips", "[led][config]") {
+    auto* cfg = Config::get_instance();
+    REQUIRE(cfg != nullptr);
+
+    // Simulate wizard behavior: saves to both leds/strip (string for dropdown
+    // restore) and leds/selected_strips (array for LedController)
+    cfg->set<std::string>(cfg->df() + "leds/strip", "output_pin LED");
+    nlohmann::json strips = nlohmann::json::array();
+    strips.push_back("output_pin LED");
+    cfg->set(cfg->df() + "leds/selected_strips", strips);
+    cfg->set(cfg->df() + "leds/selected", nlohmann::json());
+    cfg->set("/led/selected_strips", nlohmann::json());
+    cfg->save();
+
+    auto& ctrl = helix::led::LedController::instance();
+    ctrl.deinit();
+    ctrl.init(nullptr, nullptr);
+
+    // selected_strips should read from the canonical array path
+    REQUIRE(ctrl.selected_strips().size() == 1);
+    REQUIRE(ctrl.selected_strips()[0] == "output_pin LED");
+
+    // Cleanup
+    cfg->set<std::string>(cfg->df() + "leds/strip", "");
+    cfg->set(cfg->df() + "leds/selected_strips", nlohmann::json::array());
+    cfg->save();
+
+    ctrl.deinit();
+}
+
+TEST_CASE("LedController config: selected_strips takes priority over legacy strip", "[led][config]") {
+    auto* cfg = Config::get_instance();
+    REQUIRE(cfg != nullptr);
+
+    // Both paths set with different values — selected_strips should win
+    cfg->set<std::string>(cfg->df() + "leds/strip", "neopixel old_led");
+    nlohmann::json strips = nlohmann::json::array();
+    strips.push_back("output_pin NEW_LED");
+    cfg->set(cfg->df() + "leds/selected_strips", strips);
+    cfg->set(cfg->df() + "leds/selected", nlohmann::json());
+    cfg->set("/led/selected_strips", nlohmann::json());
+    cfg->save();
+
+    auto& ctrl = helix::led::LedController::instance();
+    ctrl.deinit();
+    ctrl.init(nullptr, nullptr);
+
+    // Should use selected_strips, NOT the legacy strip value
+    REQUIRE(ctrl.selected_strips().size() == 1);
+    REQUIRE(ctrl.selected_strips()[0] == "output_pin NEW_LED");
+
+    // Cleanup
+    cfg->set<std::string>(cfg->df() + "leds/strip", "");
+    cfg->set(cfg->df() + "leds/selected_strips", nlohmann::json::array());
+    cfg->save();
+
+    ctrl.deinit();
+}
+
+TEST_CASE("LedController config: wizard None selection saves empty array", "[led][config]") {
+    auto* cfg = Config::get_instance();
+    REQUIRE(cfg != nullptr);
+
+    // Simulate wizard saving "None" — empty string and empty array
+    cfg->set<std::string>(cfg->df() + "leds/strip", "");
+    cfg->set(cfg->df() + "leds/selected_strips", nlohmann::json::array());
+    cfg->set(cfg->df() + "leds/selected", nlohmann::json());
+    cfg->set("/led/selected_strips", nlohmann::json());
+    cfg->save();
+
+    auto& ctrl = helix::led::LedController::instance();
+    ctrl.deinit();
+    ctrl.init(nullptr, nullptr);
+
+    REQUIRE(ctrl.selected_strips().empty());
+
+    ctrl.deinit();
+}
+
 TEST_CASE("LedController config: led_on_at_start save/load round-trip", "[led][config]") {
     auto& ctrl = helix::led::LedController::instance();
     ctrl.deinit();
