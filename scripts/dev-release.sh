@@ -204,6 +204,10 @@ if [[ "$DRY_RUN" == "true" ]]; then
     echo "echo '<manifest>' | aws s3 cp - \"s3://${R2_BUCKET_NAME}/${CHANNEL}/manifest.json\" --endpoint-url \"$R2_ENDPOINT\" --content-type \"application/json\""
 
     echo ""
+    echo "# Upload install.sh to bucket root"
+    echo "aws s3 cp \"$REPO_ROOT/scripts/install.sh\" \"s3://${R2_BUCKET_NAME}/install.sh\" --endpoint-url \"$R2_ENDPOINT\" --content-type \"text/x-shellscript\""
+
+    echo ""
     echo -e "${GREEN}Manifest would be available at: ${R2_PUBLIC_URL}/${CHANNEL}/manifest.json${NC}"
 else
     echo ""
@@ -224,6 +228,12 @@ else
     echo "$MANIFEST" | aws s3 cp - "s3://${R2_BUCKET_NAME}/${CHANNEL}/manifest.json" \
         --endpoint-url "$R2_ENDPOINT" \
         --content-type "application/json"
+
+    echo ""
+    echo -e "${GREEN}Uploading install.sh to bucket root...${NC}"
+    aws s3 cp "$REPO_ROOT/scripts/install.sh" "s3://${R2_BUCKET_NAME}/install.sh" \
+        --endpoint-url "$R2_ENDPOINT" \
+        --content-type "text/x-shellscript"
 
     echo ""
     echo -e "${GREEN}✓ Upload complete!${NC}"
