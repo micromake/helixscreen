@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "ui_job_queue_modal.h"
 #include "ui_observer_guard.h"
 #include "ui_runout_guidance_modal.h"
 
@@ -30,6 +31,11 @@ class PrintStatusWidget : public PanelWidget {
         return "print_status";
     }
 
+    // Configuration
+    void set_config(const nlohmann::json& config) override;
+    bool has_edit_configure() const override { return true; }
+    bool on_edit_configure() override;
+
     /// Re-check runout condition after wizard completion
     void trigger_idle_runout_check();
 
@@ -40,6 +46,10 @@ class PrintStatusWidget : public PanelWidget {
     static void library_files_cb(lv_event_t* e);
     static void library_last_cb(lv_event_t* e);
     static void library_recent_cb(lv_event_t* e);
+    static void library_queue_cb(lv_event_t* e);
+
+    /// Configure picker callback
+    static void print_status_picker_backdrop_cb(lv_event_t* e);
 
   private:
     lv_obj_t* widget_obj_ = nullptr;
@@ -61,6 +71,8 @@ class PrintStatusWidget : public PanelWidget {
     lv_obj_t* icon_files_ = nullptr;              // Library row icons (hidden at 2x2)
     lv_obj_t* icon_last_ = nullptr;
     lv_obj_t* icon_recent_ = nullptr;
+    lv_obj_t* library_row_queue_ = nullptr;
+    lv_obj_t* icon_queue_ = nullptr;
 
     // Compact mode and state tracking
     bool is_compact_ = false;
@@ -75,6 +87,7 @@ class PrintStatusWidget : public PanelWidget {
     ObserverGuard print_time_left_observer_;
     ObserverGuard print_thumbnail_path_observer_;
     ObserverGuard filament_runout_observer_;
+    ObserverGuard job_queue_count_observer_;
 
     // Alive guard for async thumbnail callbacks and history observer [L072]
     std::shared_ptr<std::atomic<bool>> alive_ = std::make_shared<std::atomic<bool>>(false);
@@ -85,6 +98,9 @@ class PrintStatusWidget : public PanelWidget {
     // Filament runout modal
     RunoutGuidanceModal runout_modal_;
     bool runout_modal_shown_ = false;
+
+    // Job queue
+    helix::JobQueueModal job_queue_modal_;
 
     // Print card update methods
     [[nodiscard]] std::string get_last_print_thumbnail_path() const;
@@ -102,11 +118,28 @@ class PrintStatusWidget : public PanelWidget {
     void handle_library_files();
     void handle_library_last();
     void handle_library_recent();
+    void handle_library_queue();
+    void update_job_queue_row_visibility();
 
     // Filament runout handling
     void check_and_show_idle_runout_modal();
     void show_idle_runout_modal();
 
+    // Configuration state
+    nlohmann::json config_;
+    bool show_title_ = true;
+    bool show_reprint_last_ = true;
+    bool show_recent_prints_ = true;
+    bool show_job_queue_ = true;
+
+    // Configure picker
+    lv_obj_t* picker_backdrop_ = nullptr;
+    void show_configure_picker();
+    void dismiss_configure_picker();
+    void apply_visibility_config();
+    void apply_picker_state();
+
+    static PrintStatusWidget* s_active_picker_;
 };
 
 } // namespace helix

@@ -4,6 +4,7 @@
 #include "print_status_widget.h"
 
 #include "app_constants.h"
+#include "panel_widget_manager.h"
 #include "ui_event_safety.h"
 #include "ui_nav_manager.h"
 #include "ui_panel_print_select.h"
@@ -36,10 +37,15 @@ void register_print_status_widget() {
     lv_xml_register_event_cb(nullptr, "library_files_cb", PrintStatusWidget::library_files_cb);
     lv_xml_register_event_cb(nullptr, "library_last_cb", PrintStatusWidget::library_last_cb);
     lv_xml_register_event_cb(nullptr, "library_recent_cb", PrintStatusWidget::library_recent_cb);
+    lv_xml_register_event_cb(nullptr, "library_queue_cb", PrintStatusWidget::library_queue_cb);
+    lv_xml_register_event_cb(nullptr, "print_status_picker_backdrop_cb",
+                             PrintStatusWidget::print_status_picker_backdrop_cb);
 }
 } // namespace helix
 
 using namespace helix;
+
+PrintStatusWidget* PrintStatusWidget::s_active_picker_ = nullptr;
 
 PrintStatusWidget::PrintStatusWidget() : printer_state_(get_printer_state()) {}
 
@@ -75,6 +81,8 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     icon_files_ = lv_obj_find_by_name(widget_obj_, "icon_files");
     icon_last_ = lv_obj_find_by_name(widget_obj_, "icon_last");
     icon_recent_ = lv_obj_find_by_name(widget_obj_, "icon_recent");
+    library_row_queue_ = lv_obj_find_by_name(widget_obj_, "library_row_queue");
+    icon_queue_ = lv_obj_find_by_name(widget_obj_, "icon_queue");
 
     // Set up observers (after widget references are cached and widget_obj_ is set)
     print_state_observer_ =
@@ -126,6 +134,18 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
             }
         });
 
+    // Observe job queue count to show/hide queue row
+    auto* jq_count_subj = lv_xml_get_subject(nullptr, "job_queue_count");
+    if (jq_count_subj) {
+        job_queue_count_observer_ =
+            helix::ui::observe_int_sync<PrintStatusWidget>(
+                jq_count_subj, this, [](PrintStatusWidget* self, int /*count*/) {
+                    if (!self->widget_obj_)
+                        return;
+                    self->update_job_queue_row_visibility();
+                });
+    }
+
     // Register history observer to update idle thumbnail when history loads [L072]
     std::weak_ptr<std::atomic<bool>> weak = alive_;
     history_changed_cb_ = [this, weak]() {
@@ -160,10 +180,16 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
                      print_card_thumb_ != nullptr, print_card_active_thumb_ != nullptr);
     }
 
+    // Apply section visibility from config
+    apply_visibility_config();
+
     spdlog::debug("[PrintStatusWidget] Attached");
 }
 
 void PrintStatusWidget::detach() {
+    // Dismiss any open configure picker
+    dismiss_configure_picker();
+
     // Invalidate alive guard FIRST to abort in-flight async fetches
     alive_->store(false);
 
@@ -178,6 +204,7 @@ void PrintStatusWidget::detach() {
     print_time_left_observer_.reset();
     print_thumbnail_path_observer_.reset();
     filament_runout_observer_.reset();
+    job_queue_count_observer_.reset();
 
     // Clear widget references
     print_card_thumb_ = nullptr;
@@ -193,6 +220,8 @@ void PrintStatusWidget::detach() {
     icon_files_ = nullptr;
     icon_last_ = nullptr;
     icon_recent_ = nullptr;
+    library_row_queue_ = nullptr;
+    icon_queue_ = nullptr;
 
     if (widget_obj_) {
         lv_obj_set_user_data(widget_obj_, nullptr);
@@ -242,7 +271,7 @@ void PrintStatusWidget::on_size_changed(int colspan, int rowspan, int /*width_px
     }
 
     // Hide library row icons at 2x2 — too easy to fat-finger at that size
-    lv_obj_t* icons[] = {icon_files_, icon_last_, icon_recent_};
+    lv_obj_t* icons[] = {icon_files_, icon_last_, icon_recent_, icon_queue_};
     for (auto* icon : icons) {
         if (!icon)
             continue;
@@ -365,6 +394,30 @@ void PrintStatusWidget::handle_library_recent() {
     auto* panel = get_print_select_panel(printer_state_, get_moonraker_api());
     if (panel) {
         panel->set_sort_recent();
+    }
+}
+
+void PrintStatusWidget::handle_library_queue() {
+    spdlog::info("[PrintStatusWidget] Library: Job Queue");
+    if (parent_screen_) {
+        job_queue_modal_.show(parent_screen_);
+    }
+}
+
+void PrintStatusWidget::update_job_queue_row_visibility() {
+    if (!library_row_queue_) return;
+
+    // Show only if config allows AND there are jobs in queue
+    bool has_jobs = false;
+    auto* jq_count_subj = lv_xml_get_subject(nullptr, "job_queue_count");
+    if (jq_count_subj) {
+        has_jobs = lv_subject_get_int(jq_count_subj) > 0;
+    }
+
+    if (show_job_queue_ && has_jobs) {
+        lv_obj_remove_flag(library_row_queue_, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(library_row_queue_, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -651,6 +704,278 @@ void PrintStatusWidget::show_idle_runout_modal() {
 }
 
 // ============================================================================
+// Configuration
+// ============================================================================
+
+void PrintStatusWidget::set_config(const nlohmann::json& config) {
+    config_ = config;
+    if (config.contains("show_title") && config["show_title"].is_boolean()) {
+        show_title_ = config["show_title"].get<bool>();
+    }
+    if (config.contains("show_reprint_last") && config["show_reprint_last"].is_boolean()) {
+        show_reprint_last_ = config["show_reprint_last"].get<bool>();
+    }
+    if (config.contains("show_recent_prints") && config["show_recent_prints"].is_boolean()) {
+        show_recent_prints_ = config["show_recent_prints"].get<bool>();
+    }
+    if (config.contains("show_job_queue") && config["show_job_queue"].is_boolean()) {
+        show_job_queue_ = config["show_job_queue"].get<bool>();
+    }
+}
+
+bool PrintStatusWidget::on_edit_configure() {
+    spdlog::info("[PrintStatusWidget] Configure requested - showing section picker");
+    show_configure_picker();
+    return false; // picker handles save internally, no rebuild needed
+}
+
+void PrintStatusWidget::apply_visibility_config() {
+    // Full idle card elements
+    lv_obj_t* library_header = lv_obj_find_by_name(widget_obj_, "library_header");
+    lv_obj_t* library_row_recent = lv_obj_find_by_name(widget_obj_, "library_row_recent");
+
+    if (library_header) {
+        if (show_title_)
+            lv_obj_remove_flag(library_header, LV_OBJ_FLAG_HIDDEN);
+        else
+            lv_obj_add_flag(library_header, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    // Reprint Last rows (both full and compact)
+    if (library_row_last_) {
+        if (show_reprint_last_)
+            lv_obj_remove_flag(library_row_last_, LV_OBJ_FLAG_HIDDEN);
+        else
+            lv_obj_add_flag(library_row_last_, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (compact_row_last_) {
+        if (show_reprint_last_)
+            lv_obj_remove_flag(compact_row_last_, LV_OBJ_FLAG_HIDDEN);
+        else
+            lv_obj_add_flag(compact_row_last_, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    // Recent Prints row
+    if (library_row_recent) {
+        if (show_recent_prints_)
+            lv_obj_remove_flag(library_row_recent, LV_OBJ_FLAG_HIDDEN);
+        else
+            lv_obj_add_flag(library_row_recent, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    // Job Queue row
+    update_job_queue_row_visibility();
+}
+
+void PrintStatusWidget::show_configure_picker() {
+    if (picker_backdrop_ || !parent_screen_) {
+        return;
+    }
+
+    picker_backdrop_ = static_cast<lv_obj_t*>(
+        lv_xml_create(parent_screen_, "print_status_configure_picker", nullptr));
+    if (!picker_backdrop_) {
+        spdlog::error("[PrintStatusWidget] Failed to create configure picker from XML");
+        return;
+    }
+
+    lv_obj_t* option_list = lv_obj_find_by_name(picker_backdrop_, "option_list");
+    if (!option_list) {
+        spdlog::error("[PrintStatusWidget] option_list not found in picker XML");
+        lv_obj_delete_async(picker_backdrop_);
+        picker_backdrop_ = nullptr;
+        return;
+    }
+
+    // Helper to resolve space tokens
+    auto resolve_space = [](const char* name, int fallback) -> int {
+        const char* s = lv_xml_get_const(nullptr, name);
+        return s ? std::atoi(s) : fallback;
+    };
+    int space_sm = resolve_space("space_sm", 6);
+    int space_xs = resolve_space("space_xs", 4);
+    int space_md = resolve_space("space_md", 10);
+
+    // Create checkbox rows for each toggle option
+    struct Option {
+        const char* label;
+        bool checked;
+    };
+    Option options[] = {
+        {"Title", show_title_},
+        {"Reprint Last", show_reprint_last_},
+        {"Recent Prints", show_recent_prints_},
+        {"Job Queue", show_job_queue_},
+    };
+
+    for (const auto& opt : options) {
+        lv_obj_t* row = lv_obj_create(option_list);
+        lv_obj_set_width(row, LV_PCT(100));
+        lv_obj_set_height(row, LV_SIZE_CONTENT);
+        lv_obj_set_style_pad_all(row, space_sm, 0);
+        lv_obj_set_style_pad_gap(row, space_xs, 0);
+        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+                              LV_FLEX_ALIGN_CENTER);
+        lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+
+        lv_obj_t* cb = lv_checkbox_create(row);
+        lv_checkbox_set_text(cb, "");
+        lv_obj_set_style_pad_all(cb, 0, 0);
+        if (opt.checked) {
+            lv_obj_add_state(cb, LV_STATE_CHECKED);
+        }
+        lv_obj_remove_flag(cb, LV_OBJ_FLAG_CLICKABLE);
+
+        lv_obj_t* label = lv_label_create(row);
+        lv_label_set_text(label, opt.label);
+        lv_obj_set_flex_grow(label, 1);
+        lv_obj_set_style_text_font(label, lv_font_get_default(), 0);
+
+        // Click row to toggle checkbox
+        lv_obj_add_event_cb(
+            row,
+            [](lv_event_t* e) {
+                auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+                uint32_t count = lv_obj_get_child_count(target);
+                for (uint32_t i = 0; i < count; ++i) {
+                    lv_obj_t* child = lv_obj_get_child(target, static_cast<int32_t>(i));
+                    if (lv_obj_check_type(child, &lv_checkbox_class)) {
+                        if (lv_obj_has_state(child, LV_STATE_CHECKED)) {
+                            lv_obj_remove_state(child, LV_STATE_CHECKED);
+                        } else {
+                            lv_obj_add_state(child, LV_STATE_CHECKED);
+                        }
+                        break;
+                    }
+                }
+
+                // Apply immediately
+                if (s_active_picker_ && s_active_picker_->picker_backdrop_) {
+                    s_active_picker_->apply_picker_state();
+                }
+            },
+            LV_EVENT_CLICKED, nullptr);
+    }
+
+    s_active_picker_ = this;
+
+    // Self-clearing delete callback
+    lv_obj_add_event_cb(
+        picker_backdrop_,
+        [](lv_event_t* e) {
+            auto* self = static_cast<PrintStatusWidget*>(lv_event_get_user_data(e));
+            if (self) {
+                self->picker_backdrop_ = nullptr;
+                if (s_active_picker_ == self) {
+                    s_active_picker_ = nullptr;
+                }
+            }
+        },
+        LV_EVENT_DELETE, this);
+
+    // Position card near widget
+    lv_obj_t* card = lv_obj_find_by_name(picker_backdrop_, "context_menu");
+    if (card && widget_obj_) {
+        int screen_w = lv_obj_get_width(parent_screen_);
+        int screen_h = lv_obj_get_height(parent_screen_);
+        int card_w = std::clamp(screen_w * 3 / 10, 160, 240);
+
+        lv_obj_set_width(card, card_w);
+        lv_obj_set_style_max_height(card, screen_h * 80 / 100, 0);
+        lv_obj_update_layout(card);
+        int card_h = lv_obj_get_height(card);
+
+        lv_area_t widget_area;
+        lv_obj_get_coords(widget_obj_, &widget_area);
+
+        int card_x = (widget_area.x1 + widget_area.x2) / 2 - card_w / 2;
+        int card_y = widget_area.y2 + space_xs;
+
+        if (card_x < space_md)
+            card_x = space_md;
+        if (card_x + card_w > screen_w - space_md)
+            card_x = screen_w - card_w - space_md;
+        if (card_y + card_h > screen_h - space_md) {
+            card_y = widget_area.y1 - card_h - space_xs;
+            if (card_y < space_md)
+                card_y = space_md;
+        }
+
+        lv_obj_set_pos(card, card_x, card_y);
+    }
+
+    spdlog::debug("[PrintStatusWidget] Configure picker shown");
+}
+
+void PrintStatusWidget::apply_picker_state() {
+    if (!picker_backdrop_) return;
+
+    lv_obj_t* option_list = lv_obj_find_by_name(picker_backdrop_, "option_list");
+    if (!option_list) return;
+
+    // Read checkbox states in order: Title, Reprint Last, Recent Prints, Job Queue
+    bool values[4] = {true, true, true, true};
+    uint32_t count = lv_obj_get_child_count(option_list);
+    for (uint32_t i = 0; i < count && i < 4; ++i) {
+        lv_obj_t* row = lv_obj_get_child(option_list, static_cast<int32_t>(i));
+        uint32_t row_count = lv_obj_get_child_count(row);
+        for (uint32_t j = 0; j < row_count; ++j) {
+            lv_obj_t* child = lv_obj_get_child(row, static_cast<int32_t>(j));
+            if (lv_obj_check_type(child, &lv_checkbox_class)) {
+                values[i] = lv_obj_has_state(child, LV_STATE_CHECKED);
+                break;
+            }
+        }
+    }
+
+    show_title_ = values[0];
+    show_reprint_last_ = values[1];
+    show_recent_prints_ = values[2];
+    show_job_queue_ = values[3];
+
+    // Persist
+    nlohmann::json new_config = config_;
+    new_config["show_title"] = show_title_;
+    new_config["show_reprint_last"] = show_reprint_last_;
+    new_config["show_recent_prints"] = show_recent_prints_;
+    new_config["show_job_queue"] = show_job_queue_;
+    config_ = new_config;
+    save_widget_config(new_config);
+
+    // Apply visibility immediately
+    apply_visibility_config();
+
+    spdlog::info("[PrintStatusWidget] Config updated: title={}, reprint_last={}, recent_prints={}, job_queue={}",
+                 show_title_, show_reprint_last_, show_recent_prints_, show_job_queue_);
+}
+
+void PrintStatusWidget::dismiss_configure_picker() {
+    if (!picker_backdrop_) {
+        return;
+    }
+
+    lv_obj_t* backdrop = picker_backdrop_;
+    picker_backdrop_ = nullptr;
+    s_active_picker_ = nullptr;
+
+    lv_obj_delete_async(backdrop);
+
+    spdlog::debug("[PrintStatusWidget] Configure picker dismissed");
+}
+
+void PrintStatusWidget::print_status_picker_backdrop_cb(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[PrintStatusWidget] print_status_picker_backdrop_cb");
+    (void)e;
+    if (s_active_picker_) {
+        s_active_picker_->apply_picker_state();
+        s_active_picker_->dismiss_configure_picker();
+    }
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+// ============================================================================
 // Static Trampolines
 // ============================================================================
 
@@ -712,6 +1037,18 @@ void PrintStatusWidget::library_recent_cb(lv_event_t* e) {
     auto* self = recover_widget_from_event(e);
     if (self) {
         self->handle_library_recent();
+    }
+
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void PrintStatusWidget::library_queue_cb(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[PrintStatusWidget] library_queue_cb");
+    lv_event_stop_bubbling(e);
+
+    auto* self = recover_widget_from_event(e);
+    if (self) {
+        self->handle_library_queue();
     }
 
     LVGL_SAFE_EVENT_CB_END();

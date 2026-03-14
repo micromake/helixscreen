@@ -62,6 +62,16 @@
             <text_small text="Recent Prints" translation_tag="Recent Prints"
                         style_text_color="#text" clickable="false" event_bubble="true"/>
           </lv_obj>
+          <!-- Job Queue row (shown only when jobs are queued) -->
+          <lv_obj name="library_row_queue" width="100%" height="content"
+                  flex_flow="row" style_pad_all="#space_xxs" style_pad_gap="#space_xs"
+                  style_flex_cross_place="center" style_radius="4"
+                  scrollbar_mode="off" scrollable="false" hidden="true">
+            <event_cb trigger="clicked" callback="library_queue_cb"/>
+            <icon name="icon_queue" src="progress_clock" size="sm" variant="primary" clickable="false" event_bubble="true"/>
+            <text_small name="library_queue_label" text="Job Queue" translation_tag="Job Queue"
+                        style_text_color="#text" clickable="false" event_bubble="true"/>
+          </lv_obj>
         </lv_obj>
       </lv_obj>
     </lv_obj>
