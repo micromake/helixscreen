@@ -32,6 +32,7 @@ class BluetoothLoader {
     helix_bt_ble_read_fn ble_read = nullptr;
     helix_bt_disconnect_fn disconnect = nullptr;
     helix_bt_last_error_fn last_error = nullptr;
+    helix_bt_lzo_compress_fn lzo_compress = nullptr;
 
     // Non-copyable
     BluetoothLoader(const BluetoothLoader&) = delete;

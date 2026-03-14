@@ -119,6 +119,13 @@ typedef const char* (*helix_bt_last_error_fn)(helix_bt_context*);
 #define HELIX_BT_SYM_DISCONNECT     "helix_bt_disconnect"
 #define HELIX_BT_SYM_LAST_ERROR     "helix_bt_last_error"
 
+/// LZO1X-1 compress data. Returns compressed size on success, negative on error.
+/// out_buf must be at least (in_len + in_len/16 + 64 + 3) bytes.
+typedef int (*helix_bt_lzo_compress_fn)(const uint8_t* in, int in_len,
+                                         uint8_t* out, int out_len);
+
+#define HELIX_BT_SYM_LZO_COMPRESS  "helix_bt_lzo_compress"
+
 #ifdef __cplusplus
 }
 #endif

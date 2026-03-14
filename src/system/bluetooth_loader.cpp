@@ -122,6 +122,7 @@ bool BluetoothLoader::try_load() {
     ble_read       = reinterpret_cast<helix_bt_ble_read_fn>(resolve(HELIX_BT_SYM_BLE_READ));
     disconnect     = reinterpret_cast<helix_bt_disconnect_fn>(resolve(HELIX_BT_SYM_DISCONNECT));
     last_error     = reinterpret_cast<helix_bt_last_error_fn>(resolve(HELIX_BT_SYM_LAST_ERROR));
+    lzo_compress   = reinterpret_cast<helix_bt_lzo_compress_fn>(resolve(HELIX_BT_SYM_LZO_COMPRESS));
 
     // Verify required symbols loaded
     if (!init || !deinit) {

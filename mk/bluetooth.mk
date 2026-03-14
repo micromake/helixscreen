@@ -10,6 +10,9 @@ BT_SRCS := $(wildcard src/bluetooth/*.cpp)
 BT_OBJS := $(BT_SRCS:src/bluetooth/%.cpp=$(OBJ_DIR)/bluetooth/%.o)
 BT_SO   := $(BUILD_DIR)/lib/libhelix-bluetooth.so
 
+# miniLZO (LZO1X compression for MakeID protocol, compiled into the BT plugin)
+MINILZO_OBJ := $(OBJ_DIR)/bluetooth/minilzo.o
+
 # --- Dependency detection ---
 # Native: use pkg-config / compile test
 # Cross: check sysroot for libraries
@@ -33,7 +36,7 @@ else
 endif
 
 # Compiler/linker flags for plugin
-BT_CXXFLAGS := $(CXXFLAGS) -fPIC -I$(INC_DIR) $(SPDLOG_INC)
+BT_CXXFLAGS := $(CXXFLAGS) -fPIC -I$(INC_DIR) $(SPDLOG_INC) -isystem lib/minilzo
 ifneq ($(CROSS_COMPILE),)
     BT_LDFLAGS := -shared -lbluetooth -lsystemd
 else
@@ -60,13 +63,17 @@ else
 	@echo "$(YELLOW)Bluetooth plugin: skipped (missing libbluetooth-dev or libsystemd-dev)$(RESET)"
 endif
 
-$(BT_SO): $(BT_OBJS) | $(BUILD_DIR)/lib
+$(BT_SO): $(BT_OBJS) $(MINILZO_OBJ) | $(BUILD_DIR)/lib
 	$(ECHO) "$(GREEN)[LD] $@$(RESET)"
 	$(Q)$(CXX) -o $@ $^ $(BT_LDFLAGS)
 
 $(OBJ_DIR)/bluetooth/%.o: src/bluetooth/%.cpp | $(OBJ_DIR)/bluetooth
 	$(ECHO) "$(CYAN)[CXX] $<$(RESET)"
 	$(Q)$(CXX) $(BT_CXXFLAGS) $(DEPFLAGS) -c $< -o $@
+
+$(MINILZO_OBJ): lib/minilzo/minilzo.c | $(OBJ_DIR)/bluetooth
+	$(ECHO) "$(CYAN)[CC]  $<$(RESET)"
+	$(Q)$(CC) $(CFLAGS) -fPIC -isystem lib/minilzo -c $< -o $@
 
 $(OBJ_DIR)/bluetooth:
 	$(Q)mkdir -p $@
