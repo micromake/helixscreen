@@ -71,7 +71,7 @@ TEST_CASE("AFC default sections have unique IDs", "[defaults][afc]") {
 
 TEST_CASE("AFC default actions count", "[defaults][afc]") {
     auto actions = afc_default_actions();
-    REQUIRE(actions.size() == 25);
+    REQUIRE(actions.size() == 26);
 }
 
 TEST_CASE("AFC default actions have required fields", "[defaults][afc]") {
@@ -103,6 +103,7 @@ TEST_CASE("AFC default actions contain known IDs", "[defaults][afc]") {
     REQUIRE(ids.count("brush") == 1);
     REQUIRE(ids.count("reset_motor") == 1);
     REQUIRE(ids.count("led_toggle") == 1);
+    REQUIRE(ids.count("led_extruder") == 1);
     REQUIRE(ids.count("quiet_mode") == 1);
     REQUIRE(ids.count("hub_cut_enabled") == 1);
     REQUIRE(ids.count("hub_cut_dist") == 1);
@@ -163,6 +164,7 @@ TEST_CASE("AFC default actions have correct section assignments", "[defaults][af
     REQUIRE(find("brush")->section == "maintenance");
     REQUIRE(find("reset_motor")->section == "maintenance");
     REQUIRE(find("led_toggle")->section == "setup");
+    REQUIRE(find("led_extruder")->section == "setup");
     REQUIRE(find("quiet_mode")->section == "setup");
     REQUIRE(find("hub_cut_enabled")->section == "hub");
     REQUIRE(find("hub_cut_dist")->section == "hub");

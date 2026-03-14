@@ -29,9 +29,10 @@ SHARD_TIMEOUT := 300
 # Output is prefixed with [shard N] for clarity
 define run_tests_parallel
 	echo "$(CYAN)Running $(NPROCS) test shards in parallel (timeout=$(SHARD_TIMEOUT)s)...$(RESET)"; \
+	set -o pipefail; \
 	pids=""; \
 	for i in $$(seq 0 $$(($(NPROCS)-1))); do \
-		timeout $(SHARD_TIMEOUT) $(TEST_BIN) $(1) --shard-count $(NPROCS) --shard-index $$i 2>&1 | sed "s/^/[shard $$i] /" & \
+		(timeout $(SHARD_TIMEOUT) $(TEST_BIN) $(1) --shard-count $(NPROCS) --shard-index $$i 2>&1 | sed "s/^/[shard $$i] /") & \
 		pids="$$pids $$!"; \
 	done; \
 	failed=0; \

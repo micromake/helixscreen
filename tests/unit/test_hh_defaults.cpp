@@ -17,7 +17,7 @@ using namespace helix::printer;
 
 TEST_CASE("HH default sections: count", "[ams][hh_defaults]") {
     auto sections = hh_default_sections();
-    REQUIRE(sections.size() == 4);
+    REQUIRE(sections.size() == 5);
 }
 
 TEST_CASE("HH default sections: required fields", "[ams][hh_defaults]") {
@@ -37,6 +37,7 @@ TEST_CASE("HH default sections: known IDs", "[ams][hh_defaults]") {
     }
     REQUIRE(ids.count("setup") == 1);
     REQUIRE(ids.count("speed") == 1);
+    REQUIRE(ids.count("toolhead") == 1);
     REQUIRE(ids.count("accessories") == 1);
     REQUIRE(ids.count("maintenance") == 1);
 }
@@ -63,7 +64,7 @@ TEST_CASE("HH default sections: unique IDs", "[ams][hh_defaults]") {
 
 TEST_CASE("HH default actions: count", "[ams][hh_defaults]") {
     auto actions = hh_default_actions();
-    REQUIRE(actions.size() == 17);
+    REQUIRE(actions.size() == 25);
 }
 
 TEST_CASE("HH default actions: required fields", "[ams][hh_defaults]") {
@@ -95,17 +96,26 @@ TEST_CASE("HH default actions: known IDs", "[ams][hh_defaults]") {
     REQUIRE(ids.count("calibrate_gear") == 1);
     REQUIRE(ids.count("calibrate_gates") == 1);
     REQUIRE(ids.count("led_mode") == 1);
-    REQUIRE(ids.count("calibrate_servo") == 1);
     // Speed
-    REQUIRE(ids.count("gear_load_speed") == 1);
+    REQUIRE(ids.count("gear_from_buffer_speed") == 1);
+    REQUIRE(ids.count("gear_from_spool_speed") == 1);
     REQUIRE(ids.count("gear_unload_speed") == 1);
     REQUIRE(ids.count("selector_speed") == 1);
+    REQUIRE(ids.count("extruder_load_speed") == 1);
+    REQUIRE(ids.count("extruder_unload_speed") == 1);
+    // Toolhead
+    REQUIRE(ids.count("toolhead_sensor_to_nozzle") == 1);
+    REQUIRE(ids.count("toolhead_extruder_to_nozzle") == 1);
+    REQUIRE(ids.count("toolhead_entry_to_extruder") == 1);
+    REQUIRE(ids.count("toolhead_ooze_reduction") == 1);
     // Accessories
     REQUIRE(ids.count("espooler_mode") == 1);
     REQUIRE(ids.count("clog_detection") == 1);
+    REQUIRE(ids.count("sync_to_extruder") == 1);
     // Maintenance
     REQUIRE(ids.count("test_grip") == 1);
     REQUIRE(ids.count("test_load") == 1);
+    REQUIRE(ids.count("test_move") == 1);
     REQUIRE(ids.count("motors_toggle") == 1);
     REQUIRE(ids.count("servo_buzz") == 1);
     REQUIRE(ids.count("reset_servo_counter") == 1);

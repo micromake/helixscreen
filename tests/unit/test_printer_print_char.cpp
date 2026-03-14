@@ -660,6 +660,11 @@ TEST_CASE("Print characterization: print start phases", "[characterization][prin
     PrinterStateTestAccess::reset(state);
     state.init_subjects(false);
 
+    // set_print_start_state guards against non-IDLE phases when print_active_ == 0,
+    // so simulate Moonraker reporting "printing" to make the print active first.
+    json printing = {{"print_stats", {{"state", "printing"}}}};
+    state.update_from_status(printing);
+
     SECTION("set_print_start_state updates all three subjects") {
         state.set_print_start_state(PrintStartPhase::HEATING_BED, "Heating bed...", 30);
 
@@ -742,12 +747,15 @@ TEST_CASE("Print characterization: preparing phase clears outcome",
         REQUIRE(lv_subject_get_int(state.get_print_outcome_subject()) ==
                 static_cast<int>(PrintOutcome::COMPLETE));
 
-        // User starts a new print — PRINT_START fires, entering Preparing phase.
-        // Moonraker state is still "standby" at this point (not yet "printing").
+        // User starts a new print — Moonraker transitions to "printing" before
+        // PRINT_START fires, which sets print_active_=1 and clears the outcome.
+        json printing = {{"print_stats", {{"state", "printing"}}}};
+        state.update_from_status(printing);
+
         state.set_print_start_state(PrintStartPhase::HOMING, "Homing...", 10);
         UpdateQueueTestAccess::drain(helix::ui::UpdateQueue::instance());
 
-        // Outcome should be cleared immediately — cancel button visible during pre-print
+        // Outcome should be cleared — cancel button visible during pre-print
         REQUIRE(lv_subject_get_int(state.get_print_outcome_subject()) ==
                 static_cast<int>(PrintOutcome::NONE));
     }
@@ -757,6 +765,10 @@ TEST_CASE("Print characterization: preparing phase clears outcome",
         state.update_from_status(cancelled);
         REQUIRE(lv_subject_get_int(state.get_print_outcome_subject()) ==
                 static_cast<int>(PrintOutcome::CANCELLED));
+
+        // Moonraker reports "printing" before PRINT_START fires
+        json printing = {{"print_stats", {{"state", "printing"}}}};
+        state.update_from_status(printing);
 
         state.set_print_start_state(PrintStartPhase::HEATING_BED, "Heating bed...", 20);
         UpdateQueueTestAccess::drain(helix::ui::UpdateQueue::instance());
@@ -771,6 +783,10 @@ TEST_CASE("Print characterization: preparing phase clears outcome",
         REQUIRE(lv_subject_get_int(state.get_print_outcome_subject()) ==
                 static_cast<int>(PrintOutcome::ERROR));
 
+        // Moonraker reports "printing" before PRINT_START fires
+        json printing = {{"print_stats", {{"state", "printing"}}}};
+        state.update_from_status(printing);
+
         state.set_print_start_state(PrintStartPhase::INITIALIZING, "Starting...", 5);
         UpdateQueueTestAccess::drain(helix::ui::UpdateQueue::instance());
 
@@ -779,9 +795,13 @@ TEST_CASE("Print characterization: preparing phase clears outcome",
     }
 
     SECTION("phase change within Preparing does NOT re-clear outcome") {
-        // Simulate complete -> preparing
+        // Simulate complete -> new print starts
         json complete = {{"print_stats", {{"state", "complete"}}}};
         state.update_from_status(complete);
+
+        // Moonraker reports "printing" before PRINT_START fires
+        json printing = {{"print_stats", {{"state", "printing"}}}};
+        state.update_from_status(printing);
 
         state.set_print_start_state(PrintStartPhase::HOMING, "Homing...", 10);
         UpdateQueueTestAccess::drain(helix::ui::UpdateQueue::instance());

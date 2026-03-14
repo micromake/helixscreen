@@ -528,6 +528,8 @@ class PrintStartCollectorHeaterFixture : public LVGLTestFixture {
   public:
     PrintStartCollectorHeaterFixture() {
         state_.init_subjects(false);
+        // Mark print as active so set_print_start_state() accepts phase updates
+        lv_subject_set_int(state_.get_print_active_subject(), 1);
         client_ = std::make_unique<MoonrakerClientMock>();
         collector_ = std::make_shared<PrintStartCollector>(*client_, state_);
         collector_->set_profile(PrintStartProfile::load_default());
@@ -609,6 +611,26 @@ class PrintStartCollectorHeaterFixture : public LVGLTestFixture {
      */
     void drain_async_updates() {
         UpdateQueueTestAccess::drain(helix::ui::UpdateQueue::instance());
+    }
+
+    /**
+     * @brief Reset collector's internal state back to IDLE for proactive detection tests
+     *
+     * After start(), the collector's internal current_phase_ is set to INITIALIZING.
+     * state().reset_print_start_state() only resets the PrinterState subject, not
+     * the collector's internal current_phase_. This helper calls collector().reset()
+     * which resets current_phase_ to IDLE, then overrides the INITIALIZING that
+     * reset() queues (when active), and re-enables fallbacks.
+     */
+    void reset_collector_to_idle() {
+        // Ensure print is considered active so set_print_start_state() doesn't
+        // reject non-IDLE phase updates via the print_active_ guard
+        lv_subject_set_int(state_.get_print_active_subject(), 1);
+
+        collector_->reset();
+        drain_async_updates(); // Process reset()'s queued INITIALIZING state
+        state_.reset_print_start_state(); // Override back to IDLE
+        drain_async_updates(); // Process the IDLE update
     }
 
   protected:
@@ -849,11 +871,9 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
     drain_async_updates(); // Process start()'s INITIALIZING state update
     collector().enable_fallbacks();
 
-    // Collector starts in INITIALIZING, we need it in IDLE for proactive detection
-    // Reset state to test proactive detection from IDLE
-    state().reset_print_start_state();
-    drain_async_updates();
-    drain_async_updates();
+    // Reset collector's internal current_phase_ back to IDLE for proactive detection
+    reset_collector_to_idle();
+    collector().enable_fallbacks();
     REQUIRE(get_current_phase() == PrintStartPhase::IDLE);
 
     SECTION("Bed at 25% of target (150/600) triggers HEATING_BED") {
@@ -898,9 +918,8 @@ TEST_CASE_METHOD(
     collector().start();
     drain_async_updates();
     collector().enable_fallbacks();
-    // process_lvgl(10); // Skipped - not needed for fallback logic testing
-    state().reset_print_start_state();
-    drain_async_updates();
+    reset_collector_to_idle();
+    collector().enable_fallbacks();
 
     SECTION("Bed at 50% of target - nozzle heating takes over if nozzle not at target") {
         // Bed target 60C, current 30C (300 decideg) = 50% of target
@@ -935,9 +954,8 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
     collector().start();
     drain_async_updates();
     collector().enable_fallbacks();
-    // process_lvgl(10); // Skipped - not needed for fallback logic testing
-    state().reset_print_start_state();
-    drain_async_updates();
+    reset_collector_to_idle();
+    collector().enable_fallbacks();
 
     SECTION("Bed near target, nozzle far from target triggers HEATING_NOZZLE") {
         // Bed at 55C/60C (near target), nozzle at 50C/210C (far from target)
@@ -986,8 +1004,8 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
     collector().start();
     drain_async_updates();
     collector().enable_fallbacks();
-    state().reset_print_start_state();
-    drain_async_updates();
+    reset_collector_to_idle();
+    collector().enable_fallbacks();
     REQUIRE(get_current_phase() == PrintStartPhase::IDLE);
 
     SECTION("Temp exactly at tolerance boundary is considered heating") {
@@ -1039,9 +1057,8 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
     collector().start();
     drain_async_updates();
     collector().enable_fallbacks();
-    // process_lvgl(10); // Skipped - not needed for fallback logic testing
-    state().reset_print_start_state();
-    drain_async_updates();
+    reset_collector_to_idle();
+    collector().enable_fallbacks();
 
     SECTION("Zero bed target means no bed heating") {
         // Bed target 0, so bed_heating = false (target > 0 && temp < target - tol)
@@ -1084,9 +1101,8 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
     collector().start();
     drain_async_updates();
     collector().enable_fallbacks();
-    // process_lvgl(10); // Skipped - not needed for fallback logic testing
-    state().reset_print_start_state();
-    drain_async_updates();
+    reset_collector_to_idle();
+    collector().enable_fallbacks();
 
     SECTION("Both heaters exactly at target") {
         set_all_temps(600, 600, 2100, 2100);
@@ -1143,8 +1159,8 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
     collector().start();
     drain_async_updates();
     collector().enable_fallbacks();
-    state().reset_print_start_state();
-    drain_async_updates();
+    reset_collector_to_idle();
+    collector().enable_fallbacks();
     REQUIRE(get_current_phase() == PrintStartPhase::IDLE);
 
     SECTION("Proactive detection triggers from IDLE state when heaters heating") {
@@ -1182,9 +1198,8 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
     collector().start();
     drain_async_updates();
     // Do NOT call enable_fallbacks()
-    // process_lvgl(10); // Skipped - not needed for fallback logic testing
-    state().reset_print_start_state();
-    drain_async_updates();
+    reset_collector_to_idle();
+    // Fallbacks remain disabled (reset_collector_to_idle calls reset() which disables them)
 
     // Set heaters heating
     set_all_temps(200, 600, 500, 2100);
@@ -1221,9 +1236,8 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
     collector().start();
     drain_async_updates();
     collector().enable_fallbacks();
-    // process_lvgl(10); // Skipped - not needed for fallback logic testing
-    state().reset_print_start_state();
-    drain_async_updates();
+    reset_collector_to_idle();
+    collector().enable_fallbacks();
 
     SECTION("Real-world temps: 22.5C bed heating to 60C") {
         // 22.5C = 225 decideg, target 60C = 600 decideg
@@ -1285,8 +1299,8 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
     collector().start();
     drain_async_updates();
     collector().enable_fallbacks();
-    state().reset_print_start_state();
-    drain_async_updates();
+    reset_collector_to_idle();
+    collector().enable_fallbacks();
     REQUIRE(get_current_phase() == PrintStartPhase::IDLE);
 
     SECTION("Layer 1 triggers completion") {
@@ -1339,8 +1353,8 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
     collector().start();
     drain_async_updates();
     collector().enable_fallbacks();
-    state().reset_print_start_state();
-    drain_async_updates();
+    reset_collector_to_idle();
+    collector().enable_fallbacks();
     REQUIRE(get_current_phase() == PrintStartPhase::IDLE);
 
     SECTION("2% progress with temps at target triggers COMPLETE") {
@@ -1394,6 +1408,8 @@ class PrintStartCollectorSequentialFixture : public LVGLTestFixture {
   public:
     PrintStartCollectorSequentialFixture() {
         state_.init_subjects(false);
+        // Mark print as active so set_print_start_state() accepts phase updates
+        lv_subject_set_int(state_.get_print_active_subject(), 1);
         client_ = std::make_unique<MoonrakerClientMock>();
         collector_ = std::make_shared<PrintStartCollector>(*client_, state_);
         collector_->set_profile(PrintStartProfile::load("forge_x"));

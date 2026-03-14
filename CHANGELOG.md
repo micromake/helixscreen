@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.98.6] - 2026-03-13
+
+### Added
+- Bluetooth Low Energy (BLE) read support for Niimbot label printers, fixing D110 printing
+- Creality K1C setup guide for installation documentation
+
+### Fixed
+- Modal double-free crash from synchronous deletion during LVGL event processing (#399)
+- Wayland CSD title bar eating SDL content area
+- AMS panel layout with full-height sidebar and text overflow
+- Print status widget spacing and hidden icons at 2x2 breakpoint
+- Theme engine crash when parsing empty palette for single-mode themes
+- Belt tension mock CSV download and results layout
+- Info QR modal icon alignment on small breakpoints
+- Muted text color lost in button auto-contrast and widget label visibility
+- Niimbot protocol packet sequence and blank row handling for D110 compatibility
+- Slot registry not clearing old slot when remapping a tool
+- Test runner silently swallowing shard failures due to pipeline exit code bug
+
+### Changed
+- AMS and micro header titles use uppercase text transform (i18n-safe)
+- Midnight dark theme added to theme selection
+- Theme engine supports handle_style/handle_color properties and transparent button variant
+
 ## [0.98.5] - 2026-03-13
 
 ### Added
@@ -1936,6 +1960,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.98.6]: https://github.com/prestonbrown/helixscreen/compare/v0.98.5...v0.98.6
 [0.98.5]: https://github.com/prestonbrown/helixscreen/compare/v0.98.4...v0.98.5
 [0.98.4]: https://github.com/prestonbrown/helixscreen/compare/v0.98.3...v0.98.4
 [0.98.3]: https://github.com/prestonbrown/helixscreen/compare/v0.98.2...v0.98.3

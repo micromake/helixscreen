@@ -68,9 +68,9 @@
 - **Uses**: 1 | **Velocity**: 0 | **Learned**: 2026-01-08 | **Last**: 2026-01-23 | **Category**: gotcha | **Type**: constraint
 > When using lv_timer_create with object pointer as user_data, wrap in struct that captures alive_guard. Check alive_guard BEFORE dereferencing object pointer to prevent use-after-free if object destroyed during timer delay.
 
-### [L052] [**---|-----] Tag hv::EventLoop tests as slow
-- **Uses**: 7 | **Velocity**: 0 | **Learned**: 2026-01-09 | **Last**: 2026-01-14 | **Category**: gotcha | **Type**: constraint
-> Tests using hv::EventLoop (libhv network operations) MUST be tagged [slow] or they cause parallel test shards to hang indefinitely. This includes fixtures like MoonrakerRobustnessFixture, MoonrakerClientSecurityFixture, NewFeaturesTestFixture, EventTestFixture. The [slow] tag excludes them from default `make test-run` which uses filter `~[.] ~[slow]`.
+### [L052] [***--|****-] Tag thread/network tests as [slow] to prevent hangs
+- **Uses**: 10 | **Velocity**: 2 | **Learned**: 2026-01-09 | **Last**: 2026-03-13 | **Category**: gotcha | **Type**: constraint
+> Tests using threads (std::thread, std::condition_variable, hv::EventLoop) MUST be tagged [slow] or they cause parallel test shards to HANG indefinitely. This is NOT about speed — it's about concurrency issues that deadlock under parallel execution. Known offenders: hv::EventLoop fixtures (MoonrakerRobustnessFixture, MoonrakerClientSecurityFixture, NewFeaturesTestFixture, EventTestFixture), BedMeshRenderThread tests. The [slow] tag excludes them from `make test-run` which uses filter `~[.] ~[slow]`. When the user reports tests hanging, check for untagged thread-based tests FIRST.
 
 ### [L053] [*----|-----] Reset static fixture state in destructor
 - **Uses**: 4 | **Velocity**: 0 | **Learned**: 2026-01-10 | **Last**: 2026-01-10 | **Category**: gotcha | **Type**: constraint

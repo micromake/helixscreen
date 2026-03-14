@@ -79,9 +79,10 @@ TEST_CASE("niimbot_build_print_job - produces correct packet sequence", "[niimbo
 
     auto job = niimbot_build_print_job(bmp, size);
 
-    // Should have: SetDensity, SetLabelType, PrintStart, PageStart, SetPageSize,
-    // (image rows), PageEnd, PrintEnd
-    REQUIRE(job.packets.size() >= 7);
+    // Should have: SetDensity, SetLabelType, PrintStart, PrintClear, PageStart,
+    // SetPageSize, SetQuantity, (image rows), PageEnd
+    // NOTE: PrintEnd is NOT in the packet list — it's sent after polling PrintStatus.
+    REQUIRE(job.packets.size() >= 8);
     REQUIRE(job.total_rows == 4);
 
     // First packet: SetDensity
@@ -93,16 +94,21 @@ TEST_CASE("niimbot_build_print_job - produces correct packet sequence", "[niimbo
     // Third: PrintStart
     REQUIRE(job.packets[2][2] == static_cast<uint8_t>(NiimbotCmd::PrintStart));
 
-    // Fourth: PageStart
-    REQUIRE(job.packets[3][2] == static_cast<uint8_t>(NiimbotCmd::PageStart));
+    // Fourth: PrintClear (required by D110)
+    REQUIRE(job.packets[3][2] == static_cast<uint8_t>(NiimbotCmd::PrintClear));
 
-    // Fifth: SetPageSize
-    REQUIRE(job.packets[4][2] == static_cast<uint8_t>(NiimbotCmd::SetPageSize));
+    // Fifth: PageStart
+    REQUIRE(job.packets[4][2] == static_cast<uint8_t>(NiimbotCmd::PageStart));
 
-    // Last two: PageEnd and PrintEnd
+    // Sixth: SetPageSize
+    REQUIRE(job.packets[5][2] == static_cast<uint8_t>(NiimbotCmd::SetPageSize));
+
+    // Seventh: SetQuantity
+    REQUIRE(job.packets[6][2] == static_cast<uint8_t>(NiimbotCmd::SetQuantity));
+
+    // Last packet: PageEnd (PrintEnd sent separately after status polling)
     size_t n = job.packets.size();
-    REQUIRE(job.packets[n - 2][2] == static_cast<uint8_t>(NiimbotCmd::PageEnd));
-    REQUIRE(job.packets[n - 1][2] == static_cast<uint8_t>(NiimbotCmd::PrintEnd));
+    REQUIRE(job.packets[n - 1][2] == static_cast<uint8_t>(NiimbotCmd::PageEnd));
 }
 
 TEST_CASE("niimbot_build_print_job - blank rows use PrintEmptyRow", "[niimbot][protocol]") {
@@ -113,14 +119,16 @@ TEST_CASE("niimbot_build_print_job - blank rows use PrintEmptyRow", "[niimbot][p
 
     auto job = niimbot_build_print_job(bmp, size);
 
-    // Image rows should be a single PrintEmptyRow with count=10
+    // Image rows should be a single PrintEmptyRow with [row_hi, row_lo, repeat_count]
     bool found_empty = false;
     for (const auto& pkt : job.packets) {
         if (pkt[2] == static_cast<uint8_t>(NiimbotCmd::PrintEmptyRow)) {
             found_empty = true;
-            // Data should be 2 bytes big-endian count = 10
-            REQUIRE(pkt[4] == 0x00);
-            REQUIRE(pkt[5] == 0x0A);
+            // Payload: 3 bytes [row_hi=0x00, row_lo=0x00, count=10]
+            REQUIRE(pkt[3] == 0x03);  // length = 3
+            REQUIRE(pkt[4] == 0x00);  // row high byte
+            REQUIRE(pkt[5] == 0x00);  // row low byte (starting at row 0)
+            REQUIRE(pkt[6] == 0x0A);  // repeat count = 10
         }
     }
     REQUIRE(found_empty);
