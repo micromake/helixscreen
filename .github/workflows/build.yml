@@ -99,7 +99,7 @@ jobs:
         ccache -s
 
     - name: Build tests
-      timeout-minutes: 25
+      timeout-minutes: 40
       env:
         CC: ccache clang
         CXX: ccache clang++
