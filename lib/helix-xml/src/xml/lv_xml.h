@@ -112,6 +112,8 @@ lv_subject_t * lv_xml_get_subject(lv_xml_component_scope_t * scope, const char *
 
 lv_result_t lv_xml_register_const(lv_xml_component_scope_t * scope, const char * name, const char * value);
 
+lv_result_t lv_xml_update_const(lv_xml_component_scope_t * scope, const char * name, const char * value);
+
 const char * lv_xml_get_const(lv_xml_component_scope_t * scope, const char * name);
 
 const char * lv_xml_get_const_silent(lv_xml_component_scope_t * scope, const char * name);

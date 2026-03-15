@@ -299,6 +299,17 @@ const char* theme_manager_get_breakpoint_suffix(int32_t resolution);
 void theme_manager_register_responsive_spacing(lv_display_t* display);
 
 /**
+ * @brief Refresh layout constants after display rotation changes.
+ *
+ * Updates nav_width, overlay widths, spacing tokens, and breakpoint subject
+ * to match the new (rotated) screen dimensions. Uses lv_xml_update_const()
+ * to override previously-registered values.
+ *
+ * @param display LVGL display instance
+ */
+void theme_manager_refresh_layout_constants(lv_display_t* display);
+
+/**
  * @brief Register responsive font constants
  *
  * Selects font sizes based on screen size breakpoints.

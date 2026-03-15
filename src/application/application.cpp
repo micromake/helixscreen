@@ -989,6 +989,9 @@ void Application::run_rotation_probe_and_layout() {
 #endif
 
         if (should_probe) {
+            int32_t pre_w = m_screen_width;
+            int32_t pre_h = m_screen_height;
+
             // Try auto-detecting panel orientation from kernel first.
             // panel_orientation is informational — the kernel does NOT rotate
             // the framebuffer for us. We must apply the rotation ourselves.
@@ -1024,6 +1027,13 @@ void Application::run_rotation_probe_and_layout() {
                 m_display->run_rotation_probe();
                 m_screen_width = m_display->width();
                 m_screen_height = m_display->height();
+            }
+
+            // Rotation changed screen dimensions — refresh theme layout constants
+            // (nav_width, overlay widths, spacing tokens) that were calculated
+            // during Phase 6 with pre-rotation dimensions.
+            if (m_screen_width != pre_w || m_screen_height != pre_h) {
+                theme_manager_refresh_layout_constants(m_display->display());
             }
         }
     }

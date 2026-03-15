@@ -880,6 +880,103 @@ void theme_manager_register_responsive_spacing(lv_display_t* display) {
         nav_width, gap, overlay_width, overlay_width_full);
 }
 
+void theme_manager_refresh_layout_constants(lv_display_t* display) {
+    int32_t hor_res = lv_display_get_horizontal_resolution(display);
+    int32_t ver_res = lv_display_get_vertical_resolution(display);
+
+    lv_xml_component_scope_t* scope = lv_xml_component_get_scope("globals");
+    if (!scope) return;
+
+    // Update nav_width for new horizontal resolution
+    const char* nav_suffix;
+    if (hor_res <= 520)
+        nav_suffix = "_tiny";
+    else if (hor_res <= 900)
+        nav_suffix = "_small";
+    else if (hor_res <= 1100)
+        nav_suffix = "_medium";
+    else
+        nav_suffix = "_large";
+
+    auto nav_tokens = theme_manager_parse_all_xml_for_suffix("ui_xml", "px", nav_suffix);
+    auto nav_it = nav_tokens.find("nav_width");
+    if (nav_it != nav_tokens.end()) {
+        lv_xml_update_const(scope, "nav_width", nav_it->second.c_str());
+    }
+
+    // Update all responsive spacing tokens for new breakpoint
+    const char* size_suffix = theme_manager_get_breakpoint_suffix(ver_res);
+    auto small_tokens = theme_manager_parse_all_xml_for_suffix("ui_xml", "px", "_small");
+    auto medium_tokens = theme_manager_parse_all_xml_for_suffix("ui_xml", "px", "_medium");
+    auto large_tokens = theme_manager_parse_all_xml_for_suffix("ui_xml", "px", "_large");
+    auto tiny_tokens = theme_manager_parse_all_xml_for_suffix("ui_xml", "px", "_tiny");
+    auto xlarge_tokens = theme_manager_parse_all_xml_for_suffix("ui_xml", "px", "_xlarge");
+
+    for (const auto& [base_name, small_val] : small_tokens) {
+        auto medium_it = medium_tokens.find(base_name);
+        auto large_it = large_tokens.find(base_name);
+        if (medium_it == medium_tokens.end() || large_it == large_tokens.end()) continue;
+
+        const char* value = nullptr;
+        if (strcmp(size_suffix, "_tiny") == 0) {
+            auto tiny_it = tiny_tokens.find(base_name);
+            value = (tiny_it != tiny_tokens.end()) ? tiny_it->second.c_str() : small_val.c_str();
+        } else if (strcmp(size_suffix, "_small") == 0) {
+            value = small_val.c_str();
+        } else if (strcmp(size_suffix, "_medium") == 0) {
+            value = medium_it->second.c_str();
+        } else if (strcmp(size_suffix, "_large") == 0) {
+            value = large_it->second.c_str();
+        } else {
+            auto xlarge_it = xlarge_tokens.find(base_name);
+            value = (xlarge_it != xlarge_tokens.end()) ? xlarge_it->second.c_str()
+                                                       : large_it->second.c_str();
+        }
+        lv_xml_update_const(scope, base_name.c_str(), value);
+    }
+
+    // Recalculate overlay widths from updated nav_width and space_lg
+    const char* nav_width_str = lv_xml_get_const(nullptr, "nav_width");
+    int32_t nav_width = nav_width_str ? std::atoi(nav_width_str) : 94;
+
+    const char* space_lg_str = lv_xml_get_const(nullptr, "space_lg");
+    int32_t gap = space_lg_str ? std::atoi(space_lg_str) : 16;
+
+    int32_t overlay_width = hor_res - nav_width - gap;
+    int32_t overlay_width_full = hor_res - nav_width;
+
+    char overlay_width_str[16];
+    char overlay_width_full_str[16];
+    snprintf(overlay_width_str, sizeof(overlay_width_str), "%d", overlay_width);
+    snprintf(overlay_width_full_str, sizeof(overlay_width_full_str), "%d", overlay_width_full);
+
+    lv_xml_update_const(scope, "overlay_panel_width", overlay_width_str);
+    lv_xml_update_const(scope, "overlay_panel_width_full", overlay_width_full_str);
+
+    // Update breakpoint subject
+    int32_t bp_index;
+    if (ver_res <= UI_BREAKPOINT_TINY_MAX)
+        bp_index = 0;
+    else if (ver_res <= UI_BREAKPOINT_SMALL_MAX)
+        bp_index = 1;
+    else if (ver_res <= UI_BREAKPOINT_MEDIUM_MAX)
+        bp_index = 2;
+    else if (ver_res <= UI_BREAKPOINT_LARGE_MAX)
+        bp_index = 3;
+    else
+        bp_index = 4;
+
+    lv_subject_t* bp_subject = lv_xml_get_subject(nullptr, "ui_breakpoint");
+    if (bp_subject) {
+        lv_subject_set_int(bp_subject, bp_index);
+    }
+
+    spdlog::info("[Theme] Layout refreshed after rotation: {}x{} → nav={}px, "
+                 "overlay={}px, overlay_full={}px (breakpoint={})",
+                 hor_res, ver_res, nav_width, overlay_width, overlay_width_full,
+                 bp_index);
+}
+
 /**
  * Register responsive font tokens from all XML files
  *
