@@ -68,6 +68,7 @@ RUN dpkg --add-architecture armhf && apt-get update && apt-get install -y --no-i
     libgles2-mesa-dev:armhf \
     libegl1-mesa-dev:armhf \
     libusb-1.0-0-dev:armhf \
+    libbluetooth-dev:armhf \
     && rm -rf /var/lib/apt/lists/*
 
 # ==============================================================================
